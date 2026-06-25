@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { gameEvents } from "./game/events/EventBus";
 import { createGame } from "./game/main";
 import { EVENTS } from "./shared/constants/events";
-import type { GameScreen, HudState } from "./shared/types/game";
+import type { CharacterId, GameScreen, HudState, SaveData } from "./shared/types/game";
+import { LocalSaveAdapter } from "./game/systems/save/LocalSaveAdapter";
 import { HUD } from "./ui/components/HUD";
 import { MobileControls } from "./ui/components/MobileControls";
 import { OrientationNotice } from "./ui/components/OrientationNotice";
@@ -23,9 +24,12 @@ const initialHud: HudState = {
   progressPercent: 0,
 };
 
+const saveAdapter = new LocalSaveAdapter();
+
 export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
+  const [save, setSave] = useState<SaveData>(() => saveAdapter.load());
 
   useEffect(() => {
     const game = createGame("game-root");
@@ -37,16 +41,32 @@ export function App() {
   useEffect(() => {
     const offHud = gameEvents.on(EVENTS.HUD_UPDATED, setHud);
     const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, setScreen);
+    const offCompleted = gameEvents.on(EVENTS.LEVEL_COMPLETED, () => {
+      setSave(saveAdapter.load());
+    });
     return () => {
       offHud();
       offScreen();
+      offCompleted();
     };
   }, []);
 
-  const startGame = () => gameEvents.emit(EVENTS.START_GAME, undefined);
+  const startGame = (levelId = "meadowOutpost") => {
+    setSave(saveAdapter.load());
+    gameEvents.emit(EVENTS.START_GAME, { levelId });
+  };
+  const selectCharacter = (characterId: CharacterId) => {
+    const currentSave = saveAdapter.load();
+    const nextSave = { ...currentSave, selectedCharacterId: characterId };
+    saveAdapter.save(nextSave);
+    setSave(nextSave);
+  };
   const resumeGame = () => gameEvents.emit(EVENTS.RESUME_GAME, undefined);
   const restartGame = () => gameEvents.emit(EVENTS.RESTART_GAME, undefined);
-  const goToMenu = () => gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+  const goToMenu = () => {
+    setSave(saveAdapter.load());
+    gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+  };
 
   return (
     <main className="app-shell">
@@ -54,7 +74,9 @@ export function App() {
       {(screen === "playing" || screen === "paused") && <HUD hud={hud} />}
       {(screen === "playing" || screen === "paused") && <OrientationNotice />}
       {screen === "playing" && <MobileControls />}
-      {screen === "main-menu" && <MainMenuScreen onStart={startGame} />}
+      {screen === "main-menu" && (
+        <MainMenuScreen save={save} onStartLevel={startGame} onSelectCharacter={selectCharacter} />
+      )}
       {screen === "paused" && (
         <PauseScreen onResume={resumeGame} onRestart={restartGame} onMenu={goToMenu} />
       )}

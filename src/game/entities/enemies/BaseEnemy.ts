@@ -39,6 +39,11 @@ export abstract class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
+    if (this.definition.speed <= 0 || this.patrolDistance <= 0) {
+      this.setVelocityX(0);
+      return;
+    }
+
     if (Math.abs(this.x - this.patrolOriginX) >= this.patrolDistance) {
       this.direction *= -1;
     }

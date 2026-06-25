@@ -1,4 +1,8 @@
 import Phaser from "phaser";
+import amyUrl from "../../assets/characters/amy.png";
+import dunelUrl from "../../assets/characters/dunel.png";
+import sarixUrl from "../../assets/characters/sarix.png";
+import m2Url from "../../assets/enemies/m2.png";
 import playerKnightUrl from "../../assets/player-knight.png";
 import bushUrl from "../../assets/scenery/bush.png";
 import cloudsUrl from "../../assets/scenery/clouds.png";
@@ -30,15 +34,23 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.spritesheet("player", playerKnightUrl, {
+    this.load.spritesheet("character-ruder", playerKnightUrl, {
       frameWidth: 96,
       frameHeight: 80,
+    });
+    this.load.image("character-source-amy", amyUrl);
+    this.load.image("character-source-dunel", dunelUrl);
+    this.load.image("character-source-sarix", sarixUrl);
+    this.load.spritesheet("enemy-m2", m2Url, {
+      frameWidth: 256,
+      frameHeight: 363,
     });
     this.loadSceneryAssets();
   }
 
   create(): void {
-    this.createPlayerAnimations();
+    this.createCharacterAnimations();
+    this.createM2Animations();
     this.createEnemyTexture();
     this.createM1Texture();
     this.createProjectileTexture();
@@ -76,54 +88,222 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image("terrain-surface-rocks", surfaceRocksUrl);
   }
 
-  private createPlayerAnimations(): void {
+  private createCharacterAnimations(): void {
+    this.createPoseSheetTexture("character-amy", "character-source-amy");
+    this.createPoseSheetTexture("character-dunel", "character-source-dunel");
+    this.createPoseSheetTexture("character-sarix", "character-source-sarix");
+
+    for (const textureKey of ["character-ruder", "character-amy", "character-dunel", "character-sarix"]) {
+      this.createPlayerAnimations(textureKey);
+    }
+  }
+
+  private createPlayerAnimations(textureKey: string): void {
     this.anims.create({
-      key: "player-idle",
-      frames: this.anims.generateFrameNumbers("player", { start: 0, end: 3 }),
+      key: `${textureKey}-idle`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 3 }),
       frameRate: 5,
       repeat: -1,
     });
 
     this.anims.create({
-      key: "player-run",
-      frames: this.anims.generateFrameNumbers("player", { start: 4, end: 8 }),
+      key: `${textureKey}-run`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 4, end: 8 }),
       frameRate: 10,
       repeat: -1,
     });
 
     this.anims.create({
-      key: "player-jump",
-      frames: this.anims.generateFrameNumbers("player", { start: 9, end: 12 }),
+      key: `${textureKey}-jump`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 9, end: 12 }),
       frameRate: 8,
       repeat: 0,
     });
 
     this.anims.create({
-      key: "player-fall",
-      frames: this.anims.generateFrameNumbers("player", { start: 13, end: 16 }),
+      key: `${textureKey}-fall`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 13, end: 16 }),
       frameRate: 8,
       repeat: -1,
     });
 
     this.anims.create({
-      key: "player-attack",
-      frames: this.anims.generateFrameNumbers("player", { start: 17, end: 20 }),
+      key: `${textureKey}-attack`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 17, end: 20 }),
       frameRate: 13,
       repeat: 0,
     });
 
     this.anims.create({
-      key: "player-hurt",
-      frames: this.anims.generateFrameNumbers("player", { start: 21, end: 24 }),
+      key: `${textureKey}-hurt`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 21, end: 24 }),
       frameRate: 10,
       repeat: 0,
     });
 
     this.anims.create({
-      key: "player-dead",
-      frames: this.anims.generateFrameNumbers("player", { start: 25, end: 28 }),
+      key: `${textureKey}-dead`,
+      frames: this.anims.generateFrameNumbers(textureKey, { start: 25, end: 28 }),
       frameRate: 7,
       repeat: 0,
+    });
+  }
+
+  private createPoseSheetTexture(textureKey: string, sourceKey: string): void {
+    const frameWidth = 96;
+    const frameHeight = 80;
+    const frameSequence = [
+      "idle",
+      "idle",
+      "idle",
+      "idle",
+      "walk",
+      "run",
+      "walk",
+      "run",
+      "run",
+      "jump",
+      "jump",
+      "jump",
+      "jump",
+      "land",
+      "land",
+      "land",
+      "land",
+      "attack",
+      "attack",
+      "attack",
+      "attack",
+      "hurt",
+      "hurt",
+      "hurt",
+      "hurt",
+      "die",
+      "die",
+      "die",
+      "die",
+    ];
+    const poseCells: Record<string, { col: number; row: number }> = {
+      idle: { col: 0, row: 0 },
+      walk: { col: 1, row: 0 },
+      run: { col: 2, row: 0 },
+      attack: { col: 0, row: 1 },
+      hurt: { col: 2, row: 1 },
+      jump: { col: 0, row: 2 },
+      land: { col: 1, row: 2 },
+      die: { col: 2, row: 2 },
+    };
+    const sourceImage = this.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
+    const sourceWidth = sourceImage.width;
+    const sourceHeight = sourceImage.height;
+    const cellWidth = sourceWidth / 3;
+    const cellHeight = sourceHeight / 3;
+    const canvas = document.createElement("canvas");
+    canvas.width = frameWidth * frameSequence.length;
+    canvas.height = frameHeight;
+    const context = canvas.getContext("2d");
+    const measureCanvas = document.createElement("canvas");
+    const measureContext = measureCanvas.getContext("2d", { willReadFrequently: true });
+
+    if (!context || !measureContext) {
+      return;
+    }
+
+    for (const [frameIndex, poseName] of frameSequence.entries()) {
+      const cell = poseCells[poseName];
+      const labelCrop = Math.floor(cellHeight * 0.18);
+      const sourceX = Math.floor(cell.col * cellWidth);
+      const sourceY = Math.floor(cell.row * cellHeight + labelCrop);
+      const cropWidth = Math.floor(cellWidth);
+      const cropHeight = Math.floor(cellHeight - labelCrop);
+      const bounds = this.findVisibleBounds(sourceImage, measureCanvas, measureContext, {
+        x: sourceX,
+        y: sourceY,
+        width: cropWidth,
+        height: cropHeight,
+      });
+      const paddedBounds = {
+        x: Math.max(sourceX, bounds.x - 8),
+        y: Math.max(sourceY, bounds.y - 8),
+        width: Math.min(sourceX + cropWidth, bounds.x + bounds.width + 8) - Math.max(sourceX, bounds.x - 8),
+        height: Math.min(sourceY + cropHeight, bounds.y + bounds.height + 8) - Math.max(sourceY, bounds.y - 8),
+      };
+      const scale = Math.min(frameWidth / paddedBounds.width, frameHeight / paddedBounds.height, 1.8);
+      const drawWidth = paddedBounds.width * scale;
+      const drawHeight = paddedBounds.height * scale;
+      const drawX = frameIndex * frameWidth + (frameWidth - drawWidth) / 2;
+      const drawY = frameHeight - drawHeight + 2;
+
+      context.drawImage(
+        sourceImage,
+        paddedBounds.x,
+        paddedBounds.y,
+        paddedBounds.width,
+        paddedBounds.height,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight,
+      );
+    }
+
+    const texture = this.textures.addCanvas(textureKey, canvas);
+    if (!texture) {
+      return;
+    }
+
+    for (let frameIndex = 0; frameIndex < frameSequence.length; frameIndex += 1) {
+      texture.add(frameIndex, 0, frameIndex * frameWidth, 0, frameWidth, frameHeight);
+    }
+  }
+
+  private findVisibleBounds(
+    sourceImage: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    context: CanvasRenderingContext2D,
+    area: { x: number; y: number; width: number; height: number },
+  ): { x: number; y: number; width: number; height: number } {
+    canvas.width = area.width;
+    canvas.height = area.height;
+    context.clearRect(0, 0, area.width, area.height);
+    context.drawImage(sourceImage, area.x, area.y, area.width, area.height, 0, 0, area.width, area.height);
+
+    const pixels = context.getImageData(0, 0, area.width, area.height).data;
+    let minX = area.width;
+    let minY = area.height;
+    let maxX = 0;
+    let maxY = 0;
+
+    for (let y = 0; y < area.height; y += 1) {
+      for (let x = 0; x < area.width; x += 1) {
+        const alpha = pixels[(y * area.width + x) * 4 + 3];
+        if (alpha > 8) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    }
+
+    if (minX > maxX || minY > maxY) {
+      return area;
+    }
+
+    return {
+      x: area.x + minX,
+      y: area.y + minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+    };
+  }
+
+  private createM2Animations(): void {
+    this.anims.create({
+      key: "enemy-m2-fly",
+      frames: this.anims.generateFrameNumbers("enemy-m2", { start: 0, end: 3 }),
+      frameRate: 9,
+      repeat: -1,
     });
   }
 

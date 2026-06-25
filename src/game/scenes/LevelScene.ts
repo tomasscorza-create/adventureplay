@@ -5,10 +5,12 @@ import type { LevelDefinition, LevelHazardDefinition, SaveData } from "../../sha
 import { BasicEnemy } from "../entities/enemies/BasicEnemy";
 import type { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { M1Enemy } from "../entities/enemies/M1Enemy";
+import { M2Enemy } from "../entities/enemies/M2Enemy";
 import { MovingHazard } from "../entities/hazards/MovingHazard";
 import { Coin } from "../entities/items/Coin";
 import { Player } from "../entities/player/Player";
 import type { Projectile } from "../entities/projectiles/Projectile";
+import { getCharacterDefinition } from "../data/characters";
 import { levelDefinitions } from "../data/levels";
 import { gameEvents } from "../events/EventBus";
 import { CameraSystem } from "../systems/camera/CameraSystem";
@@ -134,7 +136,8 @@ export class LevelScene extends Phaser.Scene {
 
   private createPlayer(): void {
     const start = this.activeCheckpoint ?? this.level.playerStart;
-    this.player = new Player(this, start.x, start.y, this.save.player);
+    const character = getCharacterDefinition(this.save.selectedCharacterId);
+    this.player = new Player(this, start.x, start.y, this.save.player, character);
     this.cameraSystem.setBounds(this, this.level.worldWidth);
   }
 
@@ -176,6 +179,10 @@ export class LevelScene extends Phaser.Scene {
   private createEnemy(enemy: LevelDefinition["enemies"][number]): BaseEnemy {
     if (enemy.enemyId === "m1") {
       return new M1Enemy(this, enemy.x, enemy.y, enemy.patrolDistance);
+    }
+
+    if (enemy.enemyId === "m2") {
+      return new M2Enemy(this, enemy.x, enemy.y, enemy.patrolDistance);
     }
 
     return new BasicEnemy(this, enemy.x, enemy.y, enemy.enemyId, enemy.patrolDistance);
@@ -248,12 +255,9 @@ export class LevelScene extends Phaser.Scene {
     }
 
     if (input.meleeJustPressed) {
-      const hitEnemies = this.combat.meleeAttack(this.player, this.enemies);
-      for (const enemy of hitEnemies) {
-        if (!enemy.active) {
-          this.handleEnemyDefeated(enemy);
-        }
-      }
+      this.combat.meleeAttack(this, this.player, this.enemies, (enemy) => {
+        this.handleEnemyDefeated(enemy);
+      });
     }
 
     if (input.shootJustPressed) {
@@ -645,7 +649,7 @@ export class LevelScene extends Phaser.Scene {
     this.emitHud();
     if (defeated) {
       this.levelFinished = true;
-      this.scene.start("GameOverScene", { result: "defeat" });
+      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
     }
   }
 
@@ -723,7 +727,7 @@ export class LevelScene extends Phaser.Scene {
     this.save.player.health = 0;
     this.emitHud();
     this.levelFinished = true;
-    this.scene.start("GameOverScene", { result: "defeat" });
+    this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
   }
 
   private respawnPlayerAtSafePoint(): void {
@@ -742,9 +746,19 @@ export class LevelScene extends Phaser.Scene {
       this.save.completedLevels.push(this.level.id);
     }
 
+    if (this.level.nextLevelId && !this.save.unlockedLevels.includes(this.level.nextLevelId)) {
+      this.save.unlockedLevels.push(this.level.nextLevelId);
+    }
+
     this.saveAdapter.save(this.save);
     gameEvents.emit(EVENTS.LEVEL_COMPLETED, { levelId: this.level.id });
     this.emitHud();
+
+    if (this.level.nextLevelId) {
+      this.scene.start("LevelScene", { levelId: this.level.nextLevelId });
+      return;
+    }
+
     this.scene.start("GameOverScene", { result: "victory" });
   }
 
@@ -761,7 +775,7 @@ export class LevelScene extends Phaser.Scene {
       this.levelFinished = true;
       this.save.player.health = 0;
       this.emitHud();
-      this.scene.start("GameOverScene", { result: "defeat" });
+      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
     }
   }
 

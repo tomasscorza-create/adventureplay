@@ -12,6 +12,8 @@ export type PlayerState =
 
 export type SkillId = "stronger-strike" | "quick-steps";
 
+export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
+
 export interface PlayerHudState {
   health: number;
   maxHealth: number;
@@ -38,9 +40,18 @@ export interface PlayerStats extends PlayerHudState {
 
 export interface SaveData {
   player: PlayerStats;
+  selectedCharacterId: CharacterId;
   unlockedLevels: string[];
   completedLevels: string[];
   checkpointId?: string;
+}
+
+export interface CharacterDefinition {
+  id: CharacterId;
+  name: string;
+  textureKey: string;
+  animationPrefix: string;
+  description: string;
 }
 
 export interface EnemyDefinition {
@@ -109,6 +120,7 @@ export interface LevelLifePickup {
 export interface LevelDefinition {
   id: string;
   name: string;
+  nextLevelId?: string;
   worldWidth: number;
   timeLimitSeconds: number;
   autoScrollSpeed: number;

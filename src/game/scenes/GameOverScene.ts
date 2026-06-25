@@ -10,12 +10,12 @@ export class GameOverScene extends Phaser.Scene {
     super("GameOverScene");
   }
 
-  create(data: { result?: "defeat" | "victory" }): void {
+  create(data: { result?: "defeat" | "victory"; restartLevelId?: string }): void {
     this.cameras.main.setBackgroundColor(data.result === "victory" ? "#10291f" : "#23111a");
     gameEvents.emit(EVENTS.SCREEN_CHANGED, data.result === "victory" ? "victory" : "game-over");
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, () => {
-      this.scene.start("LevelScene", { levelId: "meadowOutpost" });
+      this.scene.start("LevelScene", { levelId: data.restartLevelId ?? "meadowOutpost" });
     });
 
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {

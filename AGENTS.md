@@ -10,7 +10,7 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 - Estado de build: `npm run build` pasa correctamente.
 - Servidor usado durante desarrollo: Vite. Si `5173` esta ocupado, usar otro puerto como `5174`.
 - Phaser renderiza el juego real en canvas. React no renderiza el juego frame a frame.
-- React maneja UI externa: menu, HUD, pausa, game over, victoria, controles tactiles y aviso de orientacion.
+- React maneja UI externa: menu, seleccion de personaje, seleccion de modos/regiones/niveles, HUD, pausa, game over, victoria, controles tactiles y aviso de orientacion.
 - El Event Bus conecta Phaser y React sin acoplarlos directamente.
 - El guardado actual usa `localStorage` mediante `LocalSaveAdapter`.
 - El arte actual es placeholder generado en Phaser con texturas simples. No hay arte final todavia.
@@ -19,6 +19,7 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 ## Estructura principal
 
 - `src/App.tsx`: monta Phaser, escucha eventos globales y decide que UI React mostrar.
+- `src/ui/screens/MainMenuScreen.tsx`: flujo React de menu principal, seleccion de personaje, modos, mapa de regiones y seleccion de niveles.
 - `src/main.tsx`: entrada React.
 - `src/styles.css`: layout global, HUD, overlays, controles tactiles, responsive y orientacion.
 - `src/game/main.ts`: crea la instancia Phaser.
@@ -28,6 +29,7 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 - `src/game/entities/`: entidades jugables de Phaser.
 - `src/game/systems/`: sistemas separados por responsabilidad.
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
+- `src/game/data/characters.ts`: datos editables de personajes jugables.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
 - `src/ui/components/`: componentes React reutilizables.
@@ -49,11 +51,16 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 La demo actual permite:
 
 - Abrir menu principal.
-- Iniciar partida.
+- Elegir personaje jugable desde el boton Personaje del menu principal.
+- Abrir seleccion de modo Explorar desde Iniciar juego.
+- Elegir niveles desbloqueados desde Frontera Verde.
 - Mover personaje.
 - Saltar.
 - Atacar cuerpo a cuerpo.
+- Ver una estela visual de espada con ventana breve de dano al atacar.
+- Enfrentar al enemigo basico rojo M0 como obstaculo quieto.
 - Derrotar al monstruo M1 con espada o saltando encima.
+- Esquivar o golpear al ave M2 mientras cruza horizontalmente hacia el jugador.
 - Disparar proyectiles.
 - Recibir dano.
 - Derrotar enemigos.
@@ -62,10 +69,22 @@ La demo actual permite:
 - Recoger monedas.
 - Activar checkpoint.
 - Llegar a la meta.
+- Avanzar del nivel 1 al nivel 2 al completar la meta.
 - Ver victoria.
 - Ver game over.
 - Pausar.
 - Guardar progreso basico en `localStorage`.
+- Guardar el personaje seleccionado en `localStorage`.
+- Ver niveles completados, pendientes, bloqueados y proximamente en la interfaz de exploracion.
+
+## Personajes jugables
+
+- Personaje inicial y fallback: Ruder.
+- Personajes disponibles actuales: Ruder, Amy, Dunel y Sarix.
+- La seleccion se guarda como `selectedCharacterId` dentro de `SaveData`.
+- `src/game/data/characters.ts` define nombre, textura y prefijo de animacion por personaje.
+- `PreloadScene` normaliza los spritesheets de Amy, Dunel y Sarix a la misma grilla jugable 96x80 que Ruder.
+- `Player` recibe un `CharacterDefinition`; no debe volver a depender de una textura fija como `"player"`.
 
 ## Controles actuales
 
@@ -129,6 +148,7 @@ Pendiente antes de Play Store:
 No hardcodear nuevos enemigos, items o niveles dentro de `LevelScene` si pueden vivir como datos.
 
 - Enemigos: `src/game/data/enemies.ts`.
+- Personajes: `src/game/data/characters.ts`.
 - Items: `src/game/data/items.ts`.
 - Niveles: `src/game/data/levels.ts`.
 - Experiencia y habilidades: `src/game/data/progression.ts`.
@@ -139,6 +159,13 @@ Para agregar un enemigo:
 2. Si sirve la IA basica, agregar spawn en `levels.ts`.
 3. Si necesita IA propia, crear clase en `src/game/entities/enemies/` extendiendo `BaseEnemy`.
 
+Para agregar un personaje:
+
+1. Agregar definicion en `characters.ts`.
+2. Cargar su asset en `PreloadScene`.
+3. Crear o normalizar una textura con las animaciones esperadas por `Player`: idle, run, jump, fall, attack, hurt y dead.
+4. Mantener la seleccion a traves de `LocalSaveAdapter`, no con estado temporal de escena.
+
 Para agregar un item:
 
 1. Agregar definicion en `items.ts`.
@@ -148,8 +175,9 @@ Para agregar un item:
 Para agregar un nivel:
 
 1. Agregar definicion en `levels.ts`.
-2. Mantener plataformas, enemigos, monedas, checkpoint y meta como datos.
-3. Mas adelante migrar a Tiled en `src/assets/maps/` sin romper la interfaz de `LevelDefinition`.
+2. Usar `nextLevelId` si completar ese nivel debe encadenar con otro.
+3. Mantener plataformas, enemigos, monedas, checkpoint y meta como datos.
+4. Mas adelante migrar a Tiled en `src/assets/maps/` sin romper la interfaz de `LevelDefinition`.
 
 ## Reglas de arquitectura
 
@@ -186,6 +214,7 @@ Para agregar un nivel:
 - `ProgressionSystem` controla experiencia, subida de nivel y desbloqueo inicial de habilidades.
 - `InventorySystem` controla recoleccion de items/monedas.
 - `LocalSaveAdapter` es la unica capa de persistencia actual.
+- La seleccion de personaje vive en `SaveData.selectedCharacterId`.
 - No escribir directamente en `localStorage` desde escenas, entidades o componentes.
 - Si se agrega Supabase en el futuro, crear otro adapter con una interfaz compatible; no reemplazar de golpe el save local sin migracion.
 - Antes de cambiar estructura de save, pensar en versionado.

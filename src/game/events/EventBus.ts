@@ -2,7 +2,7 @@ import type { GameScreen, HudState } from "../../shared/types/game";
 import { EVENTS } from "../../shared/constants/events";
 
 type GameEventMap = {
-  [EVENTS.START_GAME]: undefined;
+  [EVENTS.START_GAME]: { levelId?: string };
   [EVENTS.RESUME_GAME]: undefined;
   [EVENTS.RESTART_GAME]: undefined;
   [EVENTS.GO_TO_MENU]: undefined;

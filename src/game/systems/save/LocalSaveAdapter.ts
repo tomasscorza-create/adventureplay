@@ -19,6 +19,7 @@ export const defaultSave: SaveData = {
     unlockedSkills: [],
     inventory: [],
   },
+  selectedCharacterId: "ruder",
   unlockedLevels: ["meadowOutpost"],
   completedLevels: [],
 };

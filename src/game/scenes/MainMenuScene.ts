@@ -14,8 +14,8 @@ export class MainMenuScene extends Phaser.Scene {
     this.addBackdrop();
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "main-menu");
 
-    this.unbindStart = gameEvents.on(EVENTS.START_GAME, () => {
-      this.scene.start("LevelScene", { levelId: "meadowOutpost" });
+    this.unbindStart = gameEvents.on(EVENTS.START_GAME, (payload) => {
+      this.scene.start("LevelScene", { levelId: payload?.levelId ?? "meadowOutpost" });
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
