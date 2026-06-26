@@ -755,11 +755,127 @@ export class LevelScene extends Phaser.Scene {
     this.emitHud();
 
     if (this.level.nextLevelId) {
-      this.scene.start("LevelScene", { levelId: this.level.nextLevelId });
+      this.playLevelTransition(this.level.nextLevelId);
       return;
     }
 
     this.scene.start("GameOverScene", { result: "victory" });
+  }
+
+  private playLevelTransition(nextLevelId: string): void {
+    const nextLevel = levelDefinitions[nextLevelId];
+    const nextLabel = nextLevel?.name ?? "Next Level";
+    const durationMs = 4000;
+    const centerX = GAME_WIDTH / 2;
+    const centerY = GAME_HEIGHT / 2;
+
+    this.physics.pause();
+    gameEvents.emit(EVENTS.SCREEN_CHANGED, "level-transition");
+    this.cameras.main.stopFollow();
+    this.cameras.main.fadeOut(520, 8, 16, 24);
+    this.time.delayedCall(520, () => {
+      this.cameras.main.fadeIn(640, 8, 16, 24);
+    });
+
+    const shade = this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x050a10, 0.9)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(220);
+
+    const horizon = this.add
+      .rectangle(centerX, centerY + 60, 0, 3, 0x9be7dc, 0.9)
+      .setScrollFactor(0)
+      .setDepth(221);
+
+    const title = this.add
+      .text(centerX, centerY - 86, "Nivel completado", {
+        color: "#fff4cf",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "34px",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(222)
+      .setAlpha(0);
+
+    const subtitle = this.add
+      .text(centerX, centerY - 36, `Avanzando a ${nextLabel}`, {
+        color: "#9be7dc",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "20px",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(222)
+      .setAlpha(0);
+
+    const progressBack = this.add
+      .rectangle(centerX - 210, centerY + 30, 420, 10, 0x132331, 0.95)
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(222)
+      .setAlpha(0);
+
+    const progressFill = this.add
+      .rectangle(centerX - 210, centerY + 30, 1, 10, 0xf2c45f, 1)
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(223)
+      .setAlpha(0);
+
+    const footer = this.add
+      .text(centerX, centerY + 88, "Preparando el siguiente tramo", {
+        color: "#d9ccb0",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "16px",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(222)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: [title, subtitle, progressBack, progressFill, footer],
+      alpha: 1,
+      duration: 520,
+      ease: "Sine.easeOut",
+    });
+
+    this.tweens.add({
+      targets: horizon,
+      width: 620,
+      alpha: 0.25,
+      duration: durationMs,
+      ease: "Cubic.easeInOut",
+    });
+
+    this.tweens.add({
+      targets: progressFill,
+      displayWidth: 420,
+      duration: durationMs - 520,
+      ease: "Sine.easeInOut",
+    });
+
+    this.tweens.add({
+      targets: shade,
+      alpha: 0.78,
+      duration: 1200,
+      yoyo: true,
+      repeat: 1,
+      ease: "Sine.easeInOut",
+    });
+
+    this.time.delayedCall(durationMs - 520, () => {
+      this.cameras.main.fadeOut(520, 8, 16, 24);
+    });
+
+    this.time.delayedCall(durationMs, () => {
+      this.scene.start("LevelScene", { levelId: nextLevelId });
+    });
   }
 
   private updateLevelTimer(delta: number): void {

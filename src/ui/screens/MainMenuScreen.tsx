@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { playableCharacters } from "../../game/data/characters";
+import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
-import type { CharacterId, SaveData } from "../../shared/types/game";
+import type { CharacterId, InventoryCategoryId, SaveData } from "../../shared/types/game";
 
-type MenuView = "main" | "modes" | "explore" | "characters";
+type MenuView = "main" | "modes" | "explore" | "characters" | "inventory";
 
 interface MainMenuScreenProps {
   save: SaveData;
@@ -20,7 +21,7 @@ interface LevelSlot {
 const levelSlots: LevelSlot[] = [
   { number: 1, levelId: "meadowOutpost", name: "Sendero I" },
   { number: 2, levelId: "meadowOutpost2", name: "Sendero II" },
-  { number: 3, name: "Nivel 3" },
+  { number: 3, levelId: "meadowOutpost3", name: "Sendero III" },
   { number: 4, name: "Nivel 4" },
   { number: 5, name: "Nivel 5" },
   { number: 6, name: "Nivel 6" },
@@ -39,6 +40,35 @@ const regions = [
 
 export function MainMenuScreen({ save, onStartLevel, onSelectCharacter }: MainMenuScreenProps) {
   const [view, setView] = useState<MenuView>("main");
+  const [activeInventoryCategoryId, setActiveInventoryCategoryId] =
+    useState<InventoryCategoryId>("plansKeys");
+
+  const inventoryGroups = useMemo(() => {
+    const itemCountsByCategory = new Map<InventoryCategoryId, Map<string, number>>();
+
+    for (const itemId of save.player.inventory) {
+      const item = itemDefinitions[itemId];
+      if (!item?.inventoryCategory) {
+        continue;
+      }
+
+      const categoryCounts = itemCountsByCategory.get(item.inventoryCategory) ?? new Map<string, number>();
+      categoryCounts.set(itemId, (categoryCounts.get(itemId) ?? 0) + 1);
+      itemCountsByCategory.set(item.inventoryCategory, categoryCounts);
+    }
+
+    return inventoryCategories.map((category) => {
+      const categoryCounts = itemCountsByCategory.get(category.id);
+      const items = categoryCounts
+        ? Array.from(categoryCounts.entries()).map(([itemId, amount]) => ({
+            amount,
+            item: itemDefinitions[itemId],
+          }))
+        : [];
+
+      return { ...category, items };
+    });
+  }, [save.player.inventory]);
 
   const nextPlayableLevelId = useMemo(() => {
     return levelSlots.find((slot) => {
@@ -56,9 +86,12 @@ export function MainMenuScreen({ save, onStartLevel, onSelectCharacter }: MainMe
     <section className="overlay overlay--menu">
       <div className="menu-shell">
         {view === "main" && (
-          <div className="menu-panel menu-panel--compact">
+          <div className="menu-panel menu-panel--compact menu-panel--home">
             <span className="panel__eyebrow">Menu principal</span>
-            <h1>Superjuego</h1>
+            <h1 className="game-title">
+              <span>Adventure </span>
+              <span>Reigns</span>
+            </h1>
             <div className="menu-actions">
               <button className="button" type="button" onClick={() => setView("modes")}>
                 Iniciar juego
@@ -66,6 +99,81 @@ export function MainMenuScreen({ save, onStartLevel, onSelectCharacter }: MainMe
               <button className="button button--secondary" type="button" onClick={() => setView("characters")}>
                 Personaje
               </button>
+              <button className="button button--secondary" type="button" onClick={() => setView("inventory")}>
+                Inventario
+              </button>
+            </div>
+          </div>
+        )}
+
+        {view === "inventory" && (
+          <div className="menu-panel menu-panel--wide menu-panel--inventory">
+            <div className="menu-heading">
+              <div>
+                <span className="panel__eyebrow">Inventario</span>
+                <h2>Bolsa de viaje</h2>
+              </div>
+              <button className="button button--secondary button--small" type="button" onClick={() => setView("main")}>
+                Volver
+              </button>
+            </div>
+
+            <div className="inventory-screen" aria-label="Inventario del jugador">
+              <div className="inventory-screen__summary">
+                <span>{save.player.inventory.length} piezas guardadas</span>
+                <strong>Frontera Verde</strong>
+              </div>
+
+              <div className="inventory-tabs" role="tablist" aria-label="Categorias de inventario">
+                {inventoryGroups.map((category) => {
+                  const isActive = category.id === activeInventoryCategoryId;
+                  return (
+                    <button
+                      className={`inventory-tab${isActive ? " inventory-tab--active" : ""}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      key={category.id}
+                      onClick={() => setActiveInventoryCategoryId(category.id)}
+                    >
+                      <span>{category.name}</span>
+                      <strong>{category.items.length}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {inventoryGroups.map((category) => (
+                <section
+                  className={`inventory-page${category.id === activeInventoryCategoryId ? " inventory-page--active" : ""}`}
+                  key={category.id}
+                  hidden={category.id !== activeInventoryCategoryId}
+                >
+                  <div className="inventory-page__header">
+                    <span>{category.name}</span>
+                    <strong>{category.items.length} / 12</strong>
+                  </div>
+
+                  <div className="inventory-slots">
+                    {category.items.map(({ item, amount }) => (
+                      <article className="inventory-slot inventory-slot--filled" key={item.id}>
+                        <span className="inventory-slot__icon">{item.name.slice(0, 1)}</span>
+                        <span className="inventory-slot__body">
+                          <strong>{item.name}</strong>
+                          <span>{item.description ?? "Pieza recogida durante la aventura."}</span>
+                        </span>
+                        {amount > 1 && <span className="inventory-slot__amount">x{amount}</span>}
+                      </article>
+                    ))}
+
+                    {Array.from({ length: Math.max(0, 6 - category.items.length) }, (_slot, index) => (
+                      <span className="inventory-slot inventory-slot--empty" key={`${category.id}-empty-${index}`}>
+                        Ranura vacia
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              ))}
             </div>
           </div>
         )}

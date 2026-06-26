@@ -1,4 +1,4 @@
-export type GameScreen = "main-menu" | "playing" | "paused" | "game-over" | "victory";
+export type GameScreen = "main-menu" | "playing" | "level-transition" | "paused" | "game-over" | "victory";
 
 export type PlayerState =
   | "idle"
@@ -13,6 +13,8 @@ export type PlayerState =
 export type SkillId = "stronger-strike" | "quick-steps";
 
 export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
+
+export type InventoryCategoryId = "plansKeys" | "toolsWeapons" | "potions";
 
 export interface PlayerHudState {
   health: number;
@@ -69,6 +71,8 @@ export interface ItemDefinition {
   name: string;
   type: "coin" | "resource" | "consumable";
   value: number;
+  inventoryCategory?: InventoryCategoryId;
+  description?: string;
 }
 
 export interface SkillDefinition {

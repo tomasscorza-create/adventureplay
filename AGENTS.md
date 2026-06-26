@@ -52,8 +52,10 @@ La demo actual permite:
 
 - Abrir menu principal.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
+- Abrir inventario del jugador desde el boton Inventario del menu principal.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Elegir niveles desbloqueados desde Frontera Verde.
+- Jugar los niveles 1, 2 y 3 de Frontera Verde.
 - Mover personaje.
 - Saltar.
 - Atacar cuerpo a cuerpo.
@@ -67,14 +69,17 @@ La demo actual permite:
 - Ganar experiencia.
 - Subir de nivel.
 - Recoger monedas.
+- Recoger piezas de inventario en el mapa.
 - Activar checkpoint.
 - Llegar a la meta.
-- Avanzar del nivel 1 al nivel 2 al completar la meta.
+- Avanzar del nivel 1 al nivel 2 y del nivel 2 al nivel 3 al completar la meta.
+- Ver una transicion visual de 4 segundos antes de cargar el siguiente nivel.
 - Ver victoria.
 - Ver game over.
 - Pausar.
 - Guardar progreso basico en `localStorage`.
 - Guardar el personaje seleccionado en `localStorage`.
+- Guardar piezas recogidas en el inventario persistente.
 - Ver niveles completados, pendientes, bloqueados y proximamente en la interfaz de exploracion.
 
 ## Personajes jugables
@@ -85,6 +90,16 @@ La demo actual permite:
 - `src/game/data/characters.ts` define nombre, textura y prefijo de animacion por personaje.
 - `PreloadScene` normaliza los spritesheets de Amy, Dunel y Sarix a la misma grilla jugable 96x80 que Ruder.
 - `Player` recibe un `CharacterDefinition`; no debe volver a depender de una textura fija como `"player"`.
+
+## Inventario
+
+- El menu principal solo muestra accesos a secciones; el inventario se abre desde el boton Inventario.
+- La pantalla Inventario tiene tabs superiores para mirar una categoria a la vez.
+- El inventario usa `save.player.inventory` y se guarda con `LocalSaveAdapter`.
+- Las categorias actuales son: Planos y llaves, Herramientas y armas, Pociones.
+- `src/game/data/items.ts` define `inventoryCategories` y los `ItemDefinition` con `inventoryCategory`.
+- Las piezas no-moneda del mapa usan la textura placeholder `inventory-piece` y se agregan al inventario al recogerlas.
+- Las monedas siguen sumando `coins` y no se muestran dentro de las tres categorias de inventario.
 
 ## Controles actuales
 
@@ -169,8 +184,9 @@ Para agregar un personaje:
 Para agregar un item:
 
 1. Agregar definicion en `items.ts`.
-2. Ajustar `InventorySystem` solo si el tipo de item requiere logica nueva.
-3. Agregar spawn en `levels.ts` o en el futuro en mapas Tiled.
+2. Si debe mostrarse en el inventario, asignar `inventoryCategory`.
+3. Ajustar `InventorySystem` solo si el tipo de item requiere logica nueva.
+4. Agregar spawn en `levels.ts` o en el futuro en mapas Tiled.
 
 Para agregar un nivel:
 
@@ -213,11 +229,13 @@ Para agregar un nivel:
 
 - `ProgressionSystem` controla experiencia, subida de nivel y desbloqueo inicial de habilidades.
 - `InventorySystem` controla recoleccion de items/monedas.
+- Las piezas de inventario deben pasar por `InventorySystem.collect`, no escribirse directamente en el save desde la UI.
 - `LocalSaveAdapter` es la unica capa de persistencia actual.
 - La seleccion de personaje vive en `SaveData.selectedCharacterId`.
 - No escribir directamente en `localStorage` desde escenas, entidades o componentes.
 - Si se agrega Supabase en el futuro, crear otro adapter con una interfaz compatible; no reemplazar de golpe el save local sin migracion.
 - Antes de cambiar estructura de save, pensar en versionado.
+- Durante transiciones entre niveles, Phaser muestra el efecto visual y React oculta HUD/controles usando el estado `level-transition`.
 
 ## Reglas mobile
 

@@ -55,6 +55,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createM1Texture();
     this.createProjectileTexture();
     this.createCoinTexture();
+    this.createInventoryPieceTexture();
     this.createLifeTexture();
     this.createSawTexture();
     this.createCheckpointTexture();
@@ -378,6 +379,23 @@ export class PreloadScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x7b5018, 1);
     graphics.strokeCircle(12, 12, 8);
     graphics.generateTexture("coin", 26, 26);
+    graphics.destroy();
+  }
+
+  private createInventoryPieceTexture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x06121a, 0.35);
+    graphics.fillEllipse(14, 27, 24, 6);
+    graphics.fillStyle(0x1d3542, 1);
+    graphics.fillRoundedRect(5, 5, 18, 20, 5);
+    graphics.fillStyle(0xbff7ee, 1);
+    graphics.fillRoundedRect(8, 3, 14, 18, 4);
+    graphics.fillStyle(0xffffff, 0.55);
+    graphics.fillRect(11, 7, 8, 2);
+    graphics.fillRect(11, 12, 6, 2);
+    graphics.lineStyle(2, 0x08222b, 1);
+    graphics.strokeRoundedRect(8, 3, 14, 18, 4);
+    graphics.generateTexture("inventory-piece", 28, 30);
     graphics.destroy();
   }
 
