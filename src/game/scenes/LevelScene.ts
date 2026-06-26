@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { gameAudio } from "../../shared/audio/GameAudio";
 import { EVENTS } from "../../shared/constants/events";
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_DEFAULTS } from "../../shared/constants/game";
 import type { LevelDefinition, LevelHazardDefinition, SaveData } from "../../shared/types/game";
@@ -94,6 +95,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     const input = this.inputSystem.readFrame();
+    this.handleMovementAudio(input);
     this.movement.update(this.player, input);
     this.handleActions(input);
     this.updateCameraPressure(delta);
@@ -182,7 +184,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     if (enemy.enemyId === "m2") {
-      return new M2Enemy(this, enemy.x, enemy.y, enemy.patrolDistance);
+      return new M2Enemy(this, enemy.x, enemy.y, enemy.patrolDistance, enemy.aggression);
     }
 
     return new BasicEnemy(this, enemy.x, enemy.y, enemy.enemyId, enemy.patrolDistance);
@@ -250,18 +252,34 @@ export class LevelScene extends Phaser.Scene {
 
   private handleActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
     if (input.pauseJustPressed) {
+      gameAudio.playUiSelect();
       this.pauseGame();
       return;
     }
 
     if (input.meleeJustPressed) {
+      if (this.player.canMelee(this.time.now)) {
+        gameAudio.playAttack();
+      }
+
       this.combat.meleeAttack(this, this.player, this.enemies, (enemy) => {
         this.handleEnemyDefeated(enemy);
       });
     }
 
     if (input.shootJustPressed) {
+      if (this.player.canShoot(this.time.now)) {
+        gameAudio.playShoot();
+      }
+
       this.combat.shoot(this, this.player, this.projectiles);
+    }
+  }
+
+  private handleMovementAudio(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    if (input.jumpJustPressed && body.blocked.down) {
+      gameAudio.playJump();
     }
   }
 
@@ -581,6 +599,7 @@ export class LevelScene extends Phaser.Scene {
 
   private collectCoin(coin: Coin): void {
     this.inventory.collect(this.save.player, coin.itemId);
+    gameAudio.playCollect();
     coin.disableBody(true, true);
     this.saveAdapter.save(this.save);
     this.emitHud();
@@ -589,6 +608,7 @@ export class LevelScene extends Phaser.Scene {
   private collectLifePickup(pickup: Phaser.Physics.Arcade.Sprite): void {
     this.save.player.maxHealth += 1;
     this.save.player.health = this.save.player.maxHealth;
+    gameAudio.playCollect();
     pickup.disableBody(true, true);
     this.saveAdapter.save(this.save);
     this.emitHud();
@@ -599,6 +619,8 @@ export class LevelScene extends Phaser.Scene {
     const defeated = enemy.takeDamage(projectile.damage);
     if (defeated) {
       this.handleEnemyDefeated(enemy);
+    } else {
+      gameAudio.playEnemyHit();
     }
   }
 
@@ -608,6 +630,10 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.damagePlayer(enemy.damage);
+
+    if (enemy instanceof M2Enemy) {
+      enemy.completeStrike();
+    }
   }
 
   private tryStompEnemy(enemy: BaseEnemy): boolean {
@@ -628,15 +654,78 @@ export class LevelScene extends Phaser.Scene {
 
     if (defeated) {
       this.handleEnemyDefeated(enemy);
+    } else {
+      gameAudio.playEnemyHit();
     }
 
     return true;
   }
 
   private handleEnemyDefeated(enemy: BaseEnemy): void {
+    gameAudio.playEnemyDefeat();
+    this.createEnemyDefeatEffect(enemy);
     this.progression.addExperience(this.save.player, enemy.experienceReward);
     this.saveAdapter.save(this.save);
     this.emitHud();
+  }
+
+  private createEnemyDefeatEffect(enemy: BaseEnemy): void {
+    const x = enemy.x;
+    const y = enemy.y;
+    const palette = this.getEnemyDefeatPalette(enemy.definition.id);
+    const flash = this.add.circle(x, y, 18, palette.core, 0.72).setDepth(31);
+    const ring = this.add.circle(x, y, 12, palette.ring, 0).setStrokeStyle(4, palette.ring, 0.88).setDepth(30);
+
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 1.8,
+      duration: 150,
+      ease: "Quad.easeOut",
+      onComplete: () => flash.destroy(),
+    });
+
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 3.2,
+      duration: 280,
+      ease: "Cubic.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+
+    for (let index = 0; index < 12; index += 1) {
+      const angle = (Math.PI * 2 * index) / 12 + Phaser.Math.FloatBetween(-0.18, 0.18);
+      const distance = Phaser.Math.Between(24, 58);
+      const spark = this.add
+        .rectangle(x, y, Phaser.Math.Between(5, 8), Phaser.Math.Between(3, 5), palette.sparks[index % palette.sparks.length], 0.9)
+        .setDepth(32)
+        .setRotation(angle);
+
+      this.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.25,
+        rotation: angle + Phaser.Math.FloatBetween(-1.4, 1.4),
+        duration: Phaser.Math.Between(220, 360),
+        ease: "Cubic.easeOut",
+        onComplete: () => spark.destroy(),
+      });
+    }
+  }
+
+  private getEnemyDefeatPalette(enemyId: string): { core: number; ring: number; sparks: number[] } {
+    if (enemyId === "m2") {
+      return { core: 0xfff1a1, ring: 0x8cecff, sparks: [0xfff1a1, 0xffffff, 0x8cecff] };
+    }
+
+    if (enemyId === "m1") {
+      return { core: 0xff8f5f, ring: 0xffd56a, sparks: [0xff8f5f, 0xffd56a, 0x6be092] };
+    }
+
+    return { core: 0xff5f68, ring: 0xffd56a, sparks: [0xff5f68, 0xffd56a, 0xffffff] };
   }
 
   private damagePlayer(amount: number): void {
@@ -644,7 +733,12 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
+    const previousHealth = this.player.stats.health;
     const defeated = this.player.takeDamage(amount);
+    if (this.player.stats.health < previousHealth) {
+      gameAudio.playPlayerHit();
+    }
+
     this.saveAdapter.save(this.save);
     this.emitHud();
     if (defeated) {
@@ -719,12 +813,14 @@ export class LevelScene extends Phaser.Scene {
 
     if (this.save.player.health > 1) {
       this.save.player.health -= 1;
+      gameAudio.playPlayerHit();
       this.respawnPlayerAtSafePoint();
       this.emitHud();
       return;
     }
 
     this.save.player.health = 0;
+    gameAudio.playPlayerHit();
     this.emitHud();
     this.levelFinished = true;
     this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
@@ -752,6 +848,7 @@ export class LevelScene extends Phaser.Scene {
 
     this.saveAdapter.save(this.save);
     gameEvents.emit(EVENTS.LEVEL_COMPLETED, { levelId: this.level.id });
+    gameAudio.playLevelComplete();
     this.emitHud();
 
     if (this.level.nextLevelId) {
@@ -890,6 +987,7 @@ export class LevelScene extends Phaser.Scene {
     if (this.remainingTimeMs <= 0) {
       this.levelFinished = true;
       this.save.player.health = 0;
+      gameAudio.playPlayerHit();
       this.emitHud();
       this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
     }

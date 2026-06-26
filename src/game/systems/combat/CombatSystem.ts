@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { gameAudio } from "../../../shared/audio/GameAudio";
 import type { BaseEnemy } from "../../entities/enemies/BaseEnemy";
 import type { Player } from "../../entities/player/Player";
 import { Projectile } from "../../entities/projectiles/Projectile";
@@ -66,6 +67,8 @@ export class CombatSystem {
       const defeated = enemy.takeDamage(player.stats.meleeDamage);
       if (defeated) {
         onEnemyDefeated(enemy);
+      } else {
+        gameAudio.playEnemyHit();
       }
     }
   }

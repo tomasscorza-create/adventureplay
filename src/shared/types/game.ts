@@ -107,6 +107,7 @@ export interface LevelEnemySpawn {
   x: number;
   y: number;
   patrolDistance: number;
+  aggression?: number;
 }
 
 export interface LevelCoinSpawn {

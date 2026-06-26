@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { gameEvents } from "./game/events/EventBus";
 import { createGame } from "./game/main";
+import { gameAudio } from "./shared/audio/GameAudio";
 import { EVENTS } from "./shared/constants/events";
 import type { CharacterId, GameScreen, HudState, SaveData } from "./shared/types/game";
 import { LocalSaveAdapter } from "./game/systems/save/LocalSaveAdapter";
@@ -61,9 +62,16 @@ export function App() {
     saveAdapter.save(nextSave);
     setSave(nextSave);
   };
-  const resumeGame = () => gameEvents.emit(EVENTS.RESUME_GAME, undefined);
-  const restartGame = () => gameEvents.emit(EVENTS.RESTART_GAME, undefined);
+  const resumeGame = () => {
+    gameAudio.playUiSelect();
+    gameEvents.emit(EVENTS.RESUME_GAME, undefined);
+  };
+  const restartGame = () => {
+    gameAudio.playUiSelect();
+    gameEvents.emit(EVENTS.RESTART_GAME, undefined);
+  };
   const goToMenu = () => {
+    gameAudio.playUiSelect();
     setSave(saveAdapter.load());
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };

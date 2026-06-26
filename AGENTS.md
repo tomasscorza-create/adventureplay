@@ -53,6 +53,8 @@ La demo actual permite:
 - Abrir menu principal.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
 - Abrir inventario del jugador desde el boton Inventario del menu principal.
+- Abrir opciones desde la tuerca junto a Menu principal.
+- Encender o apagar sonido y musica por separado desde Opciones.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1, 2 y 3 de Frontera Verde.
@@ -62,7 +64,10 @@ La demo actual permite:
 - Ver una estela visual de espada con ventana breve de dano al atacar.
 - Enfrentar al enemigo basico rojo M0 como obstaculo quieto.
 - Derrotar al monstruo M1 con espada o saltando encima.
-- Esquivar o golpear al ave M2 mientras cruza horizontalmente hacia el jugador.
+- Esquivar o golpear al ave M2, que ahora acecha y hace picadas directas hacia el jugador.
+- Ver un pequeno efecto visual de explosion al derrotar monstruos.
+- Escuchar musica suave original generada por Web Audio tras la primera interaccion.
+- Escuchar sonidos sutiles de interfaz, salto, ataque, disparo, recoleccion, golpes a monstruos, derrota de monstruos y dano recibido.
 - Disparar proyectiles.
 - Recibir dano.
 - Derrotar enemigos.
@@ -130,6 +135,8 @@ El input esta unificado. No volver a leer teclado directamente desde `MovementSy
 - `src/game/systems/input/GameplayInputSystem.ts`: combina teclado + tactil en un frame de input.
 - `src/game/systems/movement/MovementSystem.ts`: consume `GameplayInputFrame`.
 - `src/game/scenes/LevelScene.ts`: lee input una vez por frame y lo pasa a movimiento/acciones.
+- `src/shared/audio/GameAudio.ts`: capa compartida de audio procedural para musica, UI y feedback de gameplay.
+- `GameAudio` guarda preferencias locales de `musicEnabled` y `soundEnabled` para controlar musica y sonidos por separado.
 
 Regla importante: toda nueva entrada jugable debe agregarse primero al input unificado, no como acceso directo a DOM, teclado o pointer desde la escena.
 
@@ -173,6 +180,7 @@ Para agregar un enemigo:
 1. Agregar definicion en `enemies.ts`.
 2. Si sirve la IA basica, agregar spawn en `levels.ts`.
 3. Si necesita IA propia, crear clase en `src/game/entities/enemies/` extendiendo `BaseEnemy`.
+4. Para M2, usar `aggression` en `levels.ts` si el nivel debe hacerlo atacar mas rapido y con menos pausa entre picadas.
 
 Para agregar un personaje:
 
