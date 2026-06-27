@@ -18,6 +18,7 @@ import { PauseScreen } from "./ui/screens/PauseScreen";
 import { VictoryScreen } from "./ui/screens/VictoryScreen";
 
 const initialHud: HudState = {
+  stageNumber: 1,
   health: 3,
   maxHealth: 3,
   level: 1,

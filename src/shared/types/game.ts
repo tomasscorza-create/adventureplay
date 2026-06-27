@@ -26,6 +26,7 @@ export interface PlayerHudState {
 }
 
 export interface HudState extends PlayerHudState {
+  stageNumber: number;
   timeRemaining: number;
   timeLimit: number;
   progressPercent: number;
@@ -45,6 +46,7 @@ export interface SaveData {
   selectedCharacterId: CharacterId;
   unlockedLevels: string[];
   completedLevels: string[];
+  claimedRewardBoxes: string[];
   checkpointId?: string;
 }
 
@@ -63,6 +65,7 @@ export interface EnemyDefinition {
   damage: number;
   speed: number;
   experienceReward: number;
+  coinReward?: { min: number; max: number };
   chaseRange?: number;
 }
 
@@ -87,6 +90,11 @@ export interface PlatformDefinition {
   y: number;
   width: number;
   height: number;
+  movement?: {
+    axis: "x" | "y";
+    distance: number;
+    speed: number;
+  };
 }
 
 export interface LevelHazardDefinition {
@@ -114,6 +122,7 @@ export interface LevelCoinSpawn {
   itemId: string;
   x: number;
   y: number;
+  value?: number;
 }
 
 export interface LevelLifePickup {
@@ -122,9 +131,16 @@ export interface LevelLifePickup {
   y: number;
 }
 
+export interface LevelRewardBox {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface LevelDefinition {
   id: string;
   name: string;
+  stageNumber: number;
   nextLevelId?: string;
   worldWidth: number;
   timeLimitSeconds: number;
@@ -135,6 +151,7 @@ export interface LevelDefinition {
   enemies: LevelEnemySpawn[];
   coins: LevelCoinSpawn[];
   lifePickups: LevelLifePickup[];
+  rewardBox: LevelRewardBox;
   checkpoint: { id: string; x: number; y: number };
   goal: { x: number; y: number };
 }

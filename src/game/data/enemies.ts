@@ -8,6 +8,7 @@ export const enemyDefinitions: Record<string, EnemyDefinition> = {
     damage: 1,
     speed: 0,
     experienceReward: 35,
+    coinReward: { min: 2, max: 4 },
   },
   emberling: {
     id: "emberling",
@@ -24,6 +25,7 @@ export const enemyDefinitions: Record<string, EnemyDefinition> = {
     damage: 1,
     speed: 92,
     experienceReward: 35,
+    coinReward: { min: 4, max: 7 },
     chaseRange: 1050,
   },
   m2: {
@@ -33,6 +35,7 @@ export const enemyDefinitions: Record<string, EnemyDefinition> = {
     damage: 1,
     speed: 175,
     experienceReward: 45,
+    coinReward: { min: 7, max: 10 },
     chaseRange: 920,
   },
 };

@@ -9,9 +9,11 @@ import { M1Enemy } from "../entities/enemies/M1Enemy";
 import { M2Enemy } from "../entities/enemies/M2Enemy";
 import { MovingHazard } from "../entities/hazards/MovingHazard";
 import { Coin } from "../entities/items/Coin";
+import { MovingPlatform } from "../entities/platforms/MovingPlatform";
 import { Player } from "../entities/player/Player";
 import type { Projectile } from "../entities/projectiles/Projectile";
 import { getCharacterDefinition } from "../data/characters";
+import { itemDefinitions, randomInventoryRewardItemIds } from "../data/items";
 import { levelDefinitions } from "../data/levels";
 import { gameEvents } from "../events/EventBus";
 import { CameraSystem } from "../systems/camera/CameraSystem";
@@ -28,9 +30,11 @@ export class LevelScene extends Phaser.Scene {
   private save!: SaveData;
   private player!: Player;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private movingPlatforms!: Phaser.Physics.Arcade.Group;
   private enemies!: Phaser.Physics.Arcade.Group;
   private coins!: Phaser.Physics.Arcade.Group;
   private lifePickups!: Phaser.Physics.Arcade.StaticGroup;
+  private rewardBox?: Phaser.Physics.Arcade.Sprite;
   private staticHazards!: Phaser.Physics.Arcade.StaticGroup;
   private movingHazards!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
@@ -65,6 +69,7 @@ export class LevelScene extends Phaser.Scene {
     this.save.checkpointId = undefined;
     gameSaveStore.save(this.save);
     this.activeCheckpoint = undefined;
+    this.rewardBox = undefined;
     this.remainingTimeMs = this.level.timeLimitSeconds * 1000;
     this.lastHudSecond = -1;
     this.levelFinished = false;
@@ -126,8 +131,13 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(30);
 
     this.platforms = this.physics.add.staticGroup();
+    this.movingPlatforms = this.physics.add.group({ runChildUpdate: true });
     for (const platform of this.level.platforms) {
-      this.createPlatform(platform);
+      if (platform.movement) {
+        this.movingPlatforms.add(new MovingPlatform(this, platform));
+      } else {
+        this.createPlatform(platform);
+      }
     }
 
     this.staticHazards = this.physics.add.staticGroup();
@@ -145,7 +155,10 @@ export class LevelScene extends Phaser.Scene {
 
   private createEntities(): void {
     this.enemies = this.physics.add.group();
-    this.coins = this.physics.add.group();
+    this.coins = this.physics.add.group({
+      allowGravity: false,
+      immovable: true,
+    });
     this.lifePickups = this.physics.add.staticGroup();
     this.movingHazards = this.physics.add.group({ runChildUpdate: true });
     this.projectiles = this.physics.add.group({ runChildUpdate: true });
@@ -155,13 +168,23 @@ export class LevelScene extends Phaser.Scene {
     }
 
     for (const coin of this.level.coins) {
-      this.coins.add(new Coin(this, coin.x, coin.y, coin.itemId));
+      this.coins.add(new Coin(this, coin.x, coin.y, coin.itemId, coin.value));
     }
 
     for (const pickup of this.level.lifePickups) {
       const life = this.lifePickups.create(pickup.x, pickup.y, "life");
       life.setDepth(9);
       life.setData("pickupId", pickup.id);
+    }
+
+    if (!this.save.claimedRewardBoxes.includes(this.level.rewardBox.id)) {
+      this.rewardBox = this.physics.add.staticSprite(
+        this.level.rewardBox.x,
+        this.level.rewardBox.y,
+        "reward-box",
+      );
+      this.rewardBox.setDepth(10);
+      this.rewardBox.setData("rewardBoxId", this.level.rewardBox.id);
     }
 
     for (const hazard of this.level.hazards.filter((item) => item.type === "moving")) {
@@ -192,8 +215,13 @@ export class LevelScene extends Phaser.Scene {
 
   private createCollisions(): void {
     this.physics.add.collider(this.player, this.platforms);
+    this.physics.add.collider(this.player, this.movingPlatforms);
     this.physics.add.collider(this.enemies, this.platforms);
+    this.physics.add.collider(this.enemies, this.movingPlatforms);
     this.physics.add.collider(this.projectiles, this.platforms, (projectile) => {
+      projectile.destroy();
+    });
+    this.physics.add.collider(this.projectiles, this.movingPlatforms, (projectile) => {
       projectile.destroy();
     });
 
@@ -204,6 +232,12 @@ export class LevelScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.lifePickups, (_player, pickup) => {
       this.collectLifePickup(pickup as Phaser.Physics.Arcade.Sprite);
     });
+
+    if (this.rewardBox) {
+      this.physics.add.overlap(this.player, this.rewardBox, (_player, rewardBox) => {
+        this.collectRewardBox(rewardBox as Phaser.Physics.Arcade.Sprite);
+      });
+    }
 
     this.physics.add.overlap(this.player, this.enemies, (_player, enemy) => {
       this.handlePlayerEnemyOverlap(enemy as BaseEnemy);
@@ -277,8 +311,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handleMovementAudio(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    if (input.jumpJustPressed && body.blocked.down) {
+    if (input.jumpJustPressed && this.player.isGrounded()) {
       gameAudio.playJump();
     }
   }
@@ -598,7 +631,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private collectCoin(coin: Coin): void {
-    this.inventory.collect(this.save.player, coin.itemId);
+    this.inventory.collect(this.save.player, coin.itemId, coin.value);
+    if (itemDefinitions[coin.itemId]?.type === "coin") {
+      this.createCoinGainEffect(coin.x, coin.y, coin.value);
+    }
     gameAudio.playCollect();
     coin.disableBody(true, true);
     gameSaveStore.save(this.save);
@@ -612,6 +648,59 @@ export class LevelScene extends Phaser.Scene {
     pickup.disableBody(true, true);
     gameSaveStore.save(this.save);
     this.emitHud();
+  }
+
+  private collectRewardBox(rewardBox: Phaser.Physics.Arcade.Sprite): void {
+    const rewardBoxId = rewardBox.getData("rewardBoxId") as string | undefined;
+    if (!rewardBoxId || this.save.claimedRewardBoxes.includes(rewardBoxId)) {
+      return;
+    }
+
+    const rewardItemId = Phaser.Utils.Array.GetRandom(randomInventoryRewardItemIds);
+    const rewardItem = itemDefinitions[rewardItemId];
+    if (!rewardItem) {
+      return;
+    }
+
+    this.inventory.collect(this.save.player, rewardItemId);
+    this.save.claimedRewardBoxes.push(rewardBoxId);
+    gameAudio.playCollect();
+    this.createRewardBoxEffect(rewardBox.x, rewardBox.y, rewardItem.name);
+    rewardBox.disableBody(true, true);
+    gameSaveStore.save(this.save);
+    this.emitHud();
+  }
+
+  private createRewardBoxEffect(x: number, y: number, rewardName: string): void {
+    const glow = this.add.circle(x, y, 18, 0xf2c45f, 0.68).setDepth(31);
+    const label = this.add
+      .text(x, y - 34, `+ ${rewardName}`, {
+        color: "#fff1b8",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "16px",
+        fontStyle: "bold",
+        stroke: "#172119",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(32);
+
+    this.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 2.4,
+      duration: 420,
+      ease: "Cubic.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.tweens.add({
+      targets: label,
+      y: y - 78,
+      alpha: 0,
+      duration: 1100,
+      ease: "Sine.easeOut",
+      onComplete: () => label.destroy(),
+    });
   }
 
   private hitEnemyWithProjectile(projectile: Projectile, enemy: BaseEnemy): void {
@@ -665,8 +754,37 @@ export class LevelScene extends Phaser.Scene {
     gameAudio.playEnemyDefeat();
     this.createEnemyDefeatEffect(enemy);
     this.progression.addExperience(this.save.player, enemy.experienceReward);
+    const coinReward = enemy.definition.coinReward;
+    if (coinReward) {
+      const amount = Phaser.Math.Between(coinReward.min, coinReward.max);
+      this.inventory.collect(this.save.player, "bronzeCoin", amount);
+      this.createCoinGainEffect(enemy.x, enemy.y - 12, amount);
+    }
     gameSaveStore.save(this.save);
     this.emitHud();
+  }
+
+  private createCoinGainEffect(x: number, y: number, amount: number): void {
+    const label = this.add
+      .text(x, y - 24, `+${amount} ORO`, {
+        color: "#ffe48a",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "15px",
+        fontStyle: "bold",
+        stroke: "#3a2710",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(33);
+
+    this.tweens.add({
+      targets: label,
+      y: y - 62,
+      alpha: 0,
+      duration: 850,
+      ease: "Sine.easeOut",
+      onComplete: () => label.destroy(),
+    });
   }
 
   private createEnemyDefeatEffect(enemy: BaseEnemy): void {
@@ -862,6 +980,7 @@ export class LevelScene extends Phaser.Scene {
   private playLevelTransition(nextLevelId: string): void {
     const nextLevel = levelDefinitions[nextLevelId];
     const nextLabel = nextLevel?.name ?? "Next Level";
+    const nextStageNumber = nextLevel?.stageNumber;
     const durationMs = 4000;
     const centerX = GAME_WIDTH / 2;
     const centerY = GAME_HEIGHT / 2;
@@ -886,7 +1005,7 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(221);
 
     const title = this.add
-      .text(centerX, centerY - 86, "Nivel completado", {
+      .text(centerX, centerY - 86, `Nivel ${this.level.stageNumber} completado`, {
         color: "#fff4cf",
         fontFamily: "Arial, sans-serif",
         fontSize: "34px",
@@ -897,8 +1016,11 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(222)
       .setAlpha(0);
 
+    const subtitleText = nextStageNumber
+      ? `Avanzando al nivel ${nextStageNumber}: ${nextLabel}`
+      : `Avanzando a ${nextLabel}`;
     const subtitle = this.add
-      .text(centerX, centerY - 36, `Avanzando a ${nextLabel}`, {
+      .text(centerX, centerY - 36, subtitleText, {
         color: "#9be7dc",
         fontFamily: "Arial, sans-serif",
         fontSize: "20px",
@@ -995,6 +1117,7 @@ export class LevelScene extends Phaser.Scene {
 
   private emitHud(): void {
     gameEvents.emit(EVENTS.HUD_UPDATED, {
+      stageNumber: this.level.stageNumber,
       health: this.save.player.health,
       maxHealth: this.save.player.maxHealth,
       level: this.save.player.level,

@@ -56,6 +56,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createProjectileTexture();
     this.createCoinTexture();
     this.createInventoryPieceTexture();
+    this.createRewardBoxTexture();
     this.createLifeTexture();
     this.createSawTexture();
     this.createCheckpointTexture();
@@ -396,6 +397,25 @@ export class PreloadScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x08222b, 1);
     graphics.strokeRoundedRect(8, 3, 14, 18, 4);
     graphics.generateTexture("inventory-piece", 28, 30);
+    graphics.destroy();
+  }
+
+  private createRewardBoxTexture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x0a1210, 0.35);
+    graphics.fillEllipse(24, 43, 42, 9);
+    graphics.fillStyle(0x6f3f22, 1);
+    graphics.fillRoundedRect(3, 15, 42, 27, 5);
+    graphics.fillStyle(0xa96a32, 1);
+    graphics.fillRoundedRect(3, 7, 42, 15, 6);
+    graphics.fillStyle(0xd7a94f, 1);
+    graphics.fillRect(21, 8, 6, 34);
+    graphics.fillRoundedRect(18, 22, 12, 10, 3);
+    graphics.fillStyle(0xffe7a0, 0.82);
+    graphics.fillRect(20, 10, 3, 10);
+    graphics.lineStyle(2, 0x301d14, 1);
+    graphics.strokeRoundedRect(3, 7, 42, 35, 6);
+    graphics.generateTexture("reward-box", 48, 48);
     graphics.destroy();
   }
 

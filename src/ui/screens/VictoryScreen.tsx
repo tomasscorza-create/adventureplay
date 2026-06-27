@@ -13,7 +13,7 @@ export function VictoryScreen({ hud, onRestart, onMenu }: VictoryScreenProps) {
         <span className="panel__eyebrow">Sendero conquistado</span>
         <h2>Victoria</h2>
         <p>
-          Nivel completado con {hud.coins} monedas y nivel {hud.level}.
+          Nivel completado con {hud.coins} ORO y nivel {hud.level}.
         </p>
         <div className="actions">
           <button className="button" type="button" onClick={onRestart}>

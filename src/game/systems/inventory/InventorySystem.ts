@@ -2,14 +2,14 @@ import type { PlayerStats } from "../../../shared/types/game";
 import { itemDefinitions } from "../../data/items";
 
 export class InventorySystem {
-  collect(player: PlayerStats, itemId: string): void {
+  collect(player: PlayerStats, itemId: string, amount = 1): void {
     const item = itemDefinitions[itemId];
     if (!item) {
       return;
     }
 
     if (item.type === "coin") {
-      player.coins += item.value;
+      player.coins += item.value * amount;
       return;
     }
 

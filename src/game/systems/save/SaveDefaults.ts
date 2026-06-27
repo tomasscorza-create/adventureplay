@@ -2,7 +2,7 @@ import { PLAYER_DEFAULTS } from "../../../shared/constants/game";
 import type { SaveData } from "../../../shared/types/game";
 import { experienceByLevel } from "../../data/progression";
 
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
 
 export const defaultSave: SaveData = {
   player: {
@@ -22,6 +22,7 @@ export const defaultSave: SaveData = {
   selectedCharacterId: "ruder",
   unlockedLevels: ["meadowOutpost"],
   completedLevels: [],
+  claimedRewardBoxes: [],
 };
 
 export function createDefaultSave(): SaveData {

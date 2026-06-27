@@ -98,6 +98,31 @@ button {
   height: 100%;
 }
 
+.stage-level-badge {
+  position: fixed;
+  top: calc(18px + env(safe-area-inset-top));
+  right: calc(18px + env(safe-area-inset-right));
+  z-index: 6;
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: 6px 9px;
+  border: 1px solid rgba(242, 196, 95, 0.42);
+  border-radius: 7px;
+  color: #fff3c4;
+  background: rgba(10, 20, 17, 0.78);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.3);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.stage-level-badge strong {
+  color: var(--gold);
+  font-size: 0.88rem;
+}
+
 .hud {
   position: fixed;
   top: calc(18px + env(safe-area-inset-top));
@@ -1363,6 +1388,12 @@ button {
     width: auto;
     max-width: calc(100vw - 150px - env(safe-area-inset-left) - env(safe-area-inset-right));
     transform: none;
+  }
+
+  .stage-level-badge {
+    top: calc(62px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+    padding: 5px 7px;
   }
 
   .hud__item {

@@ -9,7 +9,7 @@ export const inventoryCategories: Array<{ id: InventoryCategoryId; name: string 
 export const itemDefinitions: Record<string, ItemDefinition> = {
   bronzeCoin: {
     id: "bronzeCoin",
-    name: "Bronze Coin",
+    name: "ORO",
     type: "coin",
     value: 1,
   },
@@ -54,3 +54,7 @@ export const itemDefinitions: Record<string, ItemDefinition> = {
     description: "Consumible de recuperacion para sistemas futuros.",
   },
 };
+
+export const randomInventoryRewardItemIds = Object.values(itemDefinitions)
+  .filter((item) => Boolean(item.inventoryCategory))
+  .map((item) => item.id);

@@ -1,9 +1,132 @@
-import type { LevelDefinition } from "../../shared/types/game";
+import type {
+  LevelCoinSpawn,
+  LevelDefinition,
+  LevelEnemySpawn,
+  LevelHazardDefinition,
+  PlatformDefinition,
+} from "../../shared/types/game";
+
+const pathCoinPositions = [
+  { x: 315, y: 500 },
+  { x: 430, y: 500 },
+  { x: 825, y: 510 },
+  { x: 1085, y: 435 },
+  { x: 1150, y: 435 },
+  { x: 1480, y: 515 },
+  { x: 1770, y: 445 },
+  { x: 2365, y: 455 },
+  { x: 2625, y: 385 },
+  { x: 2965, y: 510 },
+  { x: 3220, y: 430 },
+  { x: 3500, y: 515 },
+  { x: 3820, y: 450 },
+  { x: 4065, y: 375 },
+  { x: 4385, y: 515 },
+  { x: 4640, y: 455 },
+  { x: 4970, y: 505 },
+  { x: 5240, y: 425 },
+  { x: 5450, y: 610 },
+  { x: 5610, y: 515 },
+  { x: 5905, y: 435 },
+  { x: 6295, y: 515 },
+  { x: 6545, y: 455 },
+  { x: 6820, y: 610 },
+  { x: 6960, y: 500 },
+  { x: 7235, y: 425 },
+  { x: 7590, y: 510 },
+  { x: 7855, y: 440 },
+  { x: 8255, y: 500 },
+  { x: 8470, y: 425 },
+];
+
+export function getPathCoinTarget(stageNumber: number): number {
+  return Math.round(25 * 1.1 ** (stageNumber - 1));
+}
+
+function createPathCoinSpawns(stageNumber: number): LevelCoinSpawn[] {
+  const target = getPathCoinTarget(stageNumber);
+  const coinCount = Math.min(pathCoinPositions.length, Math.ceil(target / 2));
+  const positions = Array.from({ length: coinCount }, (_, index) => {
+    const positionIndex = Math.round((index * (pathCoinPositions.length - 1)) / (coinCount - 1));
+    return pathCoinPositions[positionIndex];
+  });
+  const values = positions.map((_, index) => 1 + ((index + stageNumber - 1) % 3));
+  let difference = target - values.reduce((sum, value) => sum + value, 0);
+
+  while (difference !== 0) {
+    for (let index = 0; index < values.length && difference !== 0; index += 1) {
+      if (difference > 0 && values[index] < 3) {
+        values[index] += 1;
+        difference -= 1;
+      } else if (difference < 0 && values[index] > 1) {
+        values[index] -= 1;
+        difference += 1;
+      }
+    }
+  }
+
+  return positions.map((position, index) => ({
+    itemId: "bronzeCoin",
+    ...position,
+    value: values[index],
+  }));
+}
+
+type PlatformRoute = NonNullable<PlatformDefinition["movement"]> & { x: number };
+
+function addPlatformMovement(
+  platforms: PlatformDefinition[],
+  routes: PlatformRoute[],
+): PlatformDefinition[] {
+  return platforms.map((platform) => {
+    const route = routes.find((candidate) => candidate.x === platform.x);
+    if (!route) {
+      return { ...platform, movement: undefined };
+    }
+
+    return {
+      ...platform,
+      movement: {
+        axis: route.axis,
+        distance: route.distance,
+        speed: route.speed,
+      },
+    };
+  });
+}
+
+function increaseHazardPressure(
+  hazards: LevelHazardDefinition[],
+  levelPrefix: string,
+  speedMultiplier: number,
+  distanceMultiplier: number,
+): LevelHazardDefinition[] {
+  return hazards.map((hazard, index) => ({
+    ...hazard,
+    id: `${levelPrefix}-${index + 1}`,
+    distance: hazard.distance ? Math.round(hazard.distance * distanceMultiplier) : undefined,
+    speed: hazard.speed ? Math.round(hazard.speed * speedMultiplier) : undefined,
+  }));
+}
+
+function increaseEnemyPressure(
+  enemies: LevelEnemySpawn[],
+  multiplier: number,
+): LevelEnemySpawn[] {
+  return enemies.map((enemy) => ({
+    ...enemy,
+    patrolDistance: Math.round(enemy.patrolDistance * multiplier),
+    aggression: enemy.aggression
+      ? Number((enemy.aggression * multiplier).toFixed(2))
+      : undefined,
+  }));
+}
 
 export const levelDefinitions: Record<string, LevelDefinition> = {
   meadowOutpost: {
     id: "meadowOutpost",
     name: "Meadow Outpost I",
+    stageNumber: 1,
     nextLevelId: "meadowOutpost2",
     worldWidth: 8640,
     timeLimitSeconds: 90,
@@ -88,37 +211,14 @@ export const levelDefinitions: Record<string, LevelDefinition> = {
       { enemyId: "m2", x: 8420, y: 425, patrolDistance: 340, aggression: 0.95 },
     ],
     coins: [
-      { itemId: "bronzeCoin", x: 315, y: 500 },
-      { itemId: "bronzeCoin", x: 825, y: 510 },
-      { itemId: "bronzeCoin", x: 1085, y: 435 },
-      { itemId: "bronzeCoin", x: 1480, y: 515 },
-      { itemId: "bronzeCoin", x: 1770, y: 445 },
-      { itemId: "bronzeCoin", x: 2365, y: 455 },
-      { itemId: "bronzeCoin", x: 2625, y: 385 },
-      { itemId: "bronzeCoin", x: 2965, y: 510 },
-      { itemId: "bronzeCoin", x: 3220, y: 430 },
-      { itemId: "bronzeCoin", x: 3820, y: 450 },
-      { itemId: "bronzeCoin", x: 4065, y: 375 },
-      { itemId: "bronzeCoin", x: 4385, y: 515 },
-      { itemId: "bronzeCoin", x: 4640, y: 455 },
-      { itemId: "bronzeCoin", x: 4970, y: 505 },
-      { itemId: "bronzeCoin", x: 5240, y: 425 },
-      { itemId: "bronzeCoin", x: 5610, y: 515 },
-      { itemId: "bronzeCoin", x: 5905, y: 435 },
-      { itemId: "bronzeCoin", x: 6295, y: 515 },
-      { itemId: "bronzeCoin", x: 6545, y: 455 },
-      { itemId: "bronzeCoin", x: 6960, y: 500 },
-      { itemId: "bronzeCoin", x: 7235, y: 425 },
-      { itemId: "bronzeCoin", x: 7590, y: 510 },
-      { itemId: "bronzeCoin", x: 7855, y: 440 },
-      { itemId: "bronzeCoin", x: 8255, y: 500 },
-      { itemId: "bronzeCoin", x: 8470, y: 425 },
+      ...createPathCoinSpawns(1),
       { itemId: "forestGatePlan", x: 4120, y: 372 },
       { itemId: "fieldHook", x: 5960, y: 432 },
     ],
     lifePickups: [
       { id: "meadow-extra-life", x: 5585, y: 515 },
     ],
+    rewardBox: { id: "reward-box-l1", x: 390, y: 642 },
     checkpoint: { id: "meadow-midpoint", x: 4300, y: 610 },
     goal: { x: 8530, y: 595 },
   },
@@ -128,6 +228,7 @@ levelDefinitions.meadowOutpost2 = {
   ...levelDefinitions.meadowOutpost,
   id: "meadowOutpost2",
   name: "Meadow Outpost II",
+  stageNumber: 2,
   nextLevelId: "meadowOutpost3",
   timeLimitSeconds: 82,
   autoScrollSpeed: 52,
@@ -172,11 +273,13 @@ levelDefinitions.meadowOutpost2 = {
     { enemyId: "m0", x: 8420, y: 615, patrolDistance: 0 },
   ],
   coins: [
-    ...levelDefinitions.meadowOutpost.coins,
+    ...createPathCoinSpawns(2),
+    ...levelDefinitions.meadowOutpost.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
     { itemId: "oldIronKey", x: 2410, y: 566 },
     { itemId: "trainingBlade", x: 7085, y: 468 },
   ],
   lifePickups: [],
+  rewardBox: { id: "reward-box-l2", x: 1080, y: 462 },
   checkpoint: { id: "meadow-ii-midpoint", x: 4300, y: 610 },
 };
 
@@ -184,7 +287,8 @@ levelDefinitions.meadowOutpost3 = {
   ...levelDefinitions.meadowOutpost2,
   id: "meadowOutpost3",
   name: "Meadow Outpost III",
-  nextLevelId: undefined,
+  stageNumber: 3,
+  nextLevelId: "meadowOutpost4",
   timeLimitSeconds: 74,
   autoScrollSpeed: 62,
   hazards: [
@@ -235,8 +339,122 @@ levelDefinitions.meadowOutpost3 = {
     { enemyId: "m0", x: 8420, y: 615, patrolDistance: 0 },
   ],
   coins: [
-    ...levelDefinitions.meadowOutpost2.coins,
+    ...createPathCoinSpawns(3),
+    ...levelDefinitions.meadowOutpost2.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
     { itemId: "smallHealthPotion", x: 6785, y: 420 },
   ],
+  rewardBox: { id: "reward-box-l3", x: 2380, y: 487 },
   checkpoint: { id: "meadow-iii-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost4 = {
+  ...levelDefinitions.meadowOutpost3,
+  id: "meadowOutpost4",
+  name: "Piedras Errantes I",
+  stageNumber: 4,
+  nextLevelId: "meadowOutpost5",
+  timeLimitSeconds: 70,
+  autoScrollSpeed: 72,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 770, axis: "x", distance: 68, speed: 56 },
+    { x: 2570, axis: "y", distance: 66, speed: 52 },
+    { x: 3770, axis: "x", distance: 82, speed: 60 },
+    { x: 5180, axis: "y", distance: 72, speed: 56 },
+    { x: 7175, axis: "x", distance: 88, speed: 64 },
+    { x: 8200, axis: "y", distance: 70, speed: 60 },
+  ]),
+  hazards: [
+    ...increaseHazardPressure(levelDefinitions.meadowOutpost3.hazards, "l4-hazard", 1.16, 1.08),
+    { id: "l4-platform-saw-1", type: "moving", x: 2625, y: 360, width: 34, height: 34, damage: 1, axis: "x", distance: 105, speed: 112 },
+    { id: "l4-platform-saw-2", type: "moving", x: 5225, y: 405, width: 34, height: 34, damage: 1, axis: "y", distance: 105, speed: 108 },
+    { id: "l4-platform-spikes", type: "spike", x: 7125, y: 635, width: 118, height: 25, damage: 1 },
+  ],
+  enemies: [
+    ...increaseEnemyPressure(levelDefinitions.meadowOutpost3.enemies, 1.16),
+    { enemyId: "m1", x: 3970, y: 615, patrolDistance: 155 },
+    { enemyId: "m2", x: 7420, y: 405, patrolDistance: 520, aggression: 1.62 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(4),
+    ...levelDefinitions.meadowOutpost3.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  lifePickups: [],
+  rewardBox: { id: "reward-box-l4", x: 4380, y: 542 },
+  checkpoint: { id: "meadow-iv-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost5 = {
+  ...levelDefinitions.meadowOutpost4,
+  id: "meadowOutpost5",
+  name: "Piedras Errantes II",
+  stageNumber: 5,
+  nextLevelId: "meadowOutpost6",
+  timeLimitSeconds: 66,
+  autoScrollSpeed: 84,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 270, axis: "y", distance: 62, speed: 64 },
+    { x: 1010, axis: "x", distance: 82, speed: 68 },
+    { x: 2320, axis: "y", distance: 74, speed: 66 },
+    { x: 3175, axis: "x", distance: 94, speed: 72 },
+    { x: 4025, axis: "y", distance: 82, speed: 68 },
+    { x: 5180, axis: "x", distance: 96, speed: 76 },
+    { x: 6485, axis: "y", distance: 86, speed: 72 },
+    { x: 7805, axis: "x", distance: 104, speed: 80 },
+  ]),
+  hazards: [
+    ...increaseHazardPressure(levelDefinitions.meadowOutpost4.hazards, "l5-hazard", 1.16, 1.08),
+    { id: "l5-platform-saw-1", type: "moving", x: 1080, y: 415, width: 34, height: 34, damage: 1, axis: "y", distance: 108, speed: 128 },
+    { id: "l5-platform-saw-2", type: "moving", x: 4100, y: 360, width: 34, height: 34, damage: 2, axis: "x", distance: 126, speed: 134 },
+    { id: "l5-platform-spikes", type: "spike", x: 6450, y: 635, width: 138, height: 25, damage: 2 },
+  ],
+  enemies: [
+    ...increaseEnemyPressure(levelDefinitions.meadowOutpost4.enemies, 1.16),
+    { enemyId: "m1", x: 3350, y: 615, patrolDistance: 170 },
+    { enemyId: "m2", x: 6120, y: 390, patrolDistance: 560, aggression: 1.82 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(5),
+    ...levelDefinitions.meadowOutpost4.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  rewardBox: { id: "reward-box-l5", x: 5900, y: 462 },
+  checkpoint: { id: "meadow-v-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost6 = {
+  ...levelDefinitions.meadowOutpost5,
+  id: "meadowOutpost6",
+  name: "Piedras Errantes III",
+  stageNumber: 6,
+  nextLevelId: undefined,
+  timeLimitSeconds: 62,
+  autoScrollSpeed: 98,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 270, axis: "x", distance: 86, speed: 78 },
+    { x: 1010, axis: "y", distance: 80, speed: 76 },
+    { x: 1700, axis: "x", distance: 102, speed: 84 },
+    { x: 2570, axis: "y", distance: 92, speed: 80 },
+    { x: 3175, axis: "x", distance: 112, speed: 88 },
+    { x: 4025, axis: "y", distance: 98, speed: 84 },
+    { x: 4910, axis: "x", distance: 118, speed: 92 },
+    { x: 5840, axis: "y", distance: 102, speed: 88 },
+    { x: 7175, axis: "x", distance: 124, speed: 96 },
+    { x: 8200, axis: "y", distance: 108, speed: 92 },
+  ]),
+  hazards: [
+    ...increaseHazardPressure(levelDefinitions.meadowOutpost5.hazards, "l6-hazard", 1.17, 1.08),
+    { id: "l6-lethal-saw-1", type: "moving", x: 1765, y: 420, width: 38, height: 38, damage: 3, axis: "y", distance: 124, speed: 154 },
+    { id: "l6-lethal-saw-2", type: "moving", x: 4980, y: 430, width: 38, height: 38, damage: 3, axis: "x", distance: 150, speed: 164 },
+    { id: "l6-heavy-spikes", type: "spike", x: 7160, y: 635, width: 152, height: 25, damage: 2 },
+  ],
+  enemies: [
+    ...increaseEnemyPressure(levelDefinitions.meadowOutpost5.enemies, 1.16),
+    { enemyId: "m2", x: 1880, y: 395, patrolDistance: 580, aggression: 2.02 },
+    { enemyId: "m1", x: 5480, y: 615, patrolDistance: 190 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(6),
+    ...levelDefinitions.meadowOutpost5.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  rewardBox: { id: "reward-box-l6", x: 6545, y: 482 },
+  checkpoint: { id: "meadow-vi-midpoint", x: 4300, y: 610 },
 };

@@ -34,6 +34,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setFlipX(direction < 0);
   }
 
+  isGrounded(): boolean {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    return body.blocked.down || body.touching.down;
+  }
+
   syncStateFromBody(isMoving: boolean): void {
     if (this.state === "dead" || this.state === "hurt") {
       return;
@@ -44,9 +49,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    const nextState = !body.blocked.down && body.velocity.y < 0
+    const isGrounded = this.isGrounded();
+    const nextState = !isGrounded && body.velocity.y < 0
       ? "jump"
-      : !body.blocked.down && body.velocity.y > 0
+      : !isGrounded && body.velocity.y > 0
         ? "fall"
         : isMoving
           ? "run"

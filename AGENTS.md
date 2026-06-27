@@ -15,6 +15,7 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 - El progreso del juego requiere autenticacion Supabase y se guarda en `public.game_saves` mediante `GameSaveStore` + `SupabaseSaveAdapter`.
 - Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
 - La migracion fuente para progreso remoto esta en `supabase/migrations/20260626000000_create_game_saves.sql`.
+- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 2`; incluye `claimedRewardBoxes` y conserva `player.coins` como clave interna para el ORO.
 - El arte actual es placeholder generado en Phaser con texturas simples. No hay arte final todavia.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
 
@@ -35,6 +36,7 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 - `src/shared/supabase/client.ts`: cliente Supabase web configurado por `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
+- `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
 - `src/ui/components/`: componentes React reutilizables.
@@ -63,7 +65,7 @@ La demo actual permite:
 - Encender o apagar sonido y musica por separado desde Opciones.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Elegir niveles desbloqueados desde Frontera Verde.
-- Jugar los niveles 1, 2 y 3 de Frontera Verde.
+- Jugar los niveles 1 a 6 de Frontera Verde.
 - Mover personaje.
 - Saltar.
 - Atacar cuerpo a cuerpo.
@@ -79,11 +81,19 @@ La demo actual permite:
 - Derrotar enemigos.
 - Ganar experiencia.
 - Subir de nivel.
-- Recoger monedas.
+- Recoger ORO.
+- Recoger piezas de ORO estaticas distribuidas de principio a fin; cada una vale entre 1 y 3 y se persiste inmediatamente en `save.player.coins`.
+- Recibir ORO variable al derrotar monstruos: M0 entrega 2-4, M1 entrega 4-7 y M2 entrega 7-10.
 - Recoger piezas de inventario en el mapa.
+- Encontrar una caja de recompensa unica en cada nivel; permanece en reintentos hasta recogerla y luego no vuelve a aparecer.
+- Recibir al azar un objeto valido de inventario al abrir cada caja y conservarlo en el guardado remoto.
 - Activar checkpoint.
 - Llegar a la meta.
-- Avanzar del nivel 1 al nivel 2 y del nivel 2 al nivel 3 al completar la meta.
+- Avanzar en cadena del nivel 1 al nivel 6 al completar cada meta.
+- Desde el nivel 4, cruzar plataformas de piedra que se mueven horizontal o verticalmente.
+- Saltar desde plataformas moviles; el estado de suelo contempla `blocked.down` y `touching.down` mediante `Player.isGrounded()`.
+- Afrontar una progresion aproximada de 15-20% de presion adicional por nivel mediante auto-scroll, velocidad de peligros, cantidad de enemigos y plataformas moviles.
+- En los niveles 5 y 6, esquivar peligros que quitan dos vidas y sierras letales de tres vidas.
 - Ver una transicion visual de 4 segundos antes de cargar el siguiente nivel.
 - Ver victoria.
 - Ver game over.
@@ -91,7 +101,7 @@ La demo actual permite:
 - Guardar progreso basico en `public.game_saves` para el usuario autenticado.
 - Guardar el personaje seleccionado en `public.game_saves`.
 - Guardar piezas recogidas en el inventario persistente.
-- Ver niveles completados, pendientes, bloqueados y proximamente en la interfaz de exploracion.
+- Ver los niveles 1 a 6 como completados, pendientes o bloqueados, y los niveles 7 a 10 como proximamente en la interfaz de exploracion.
 
 ## Personajes jugables
 
@@ -109,8 +119,12 @@ La demo actual permite:
 - El inventario usa `save.player.inventory` y se guarda con `GameSaveStore`.
 - Las categorias actuales son: Planos y llaves, Herramientas y armas, Pociones.
 - `src/game/data/items.ts` define `inventoryCategories` y los `ItemDefinition` con `inventoryCategory`.
-- Las piezas no-moneda del mapa usan la textura placeholder `inventory-piece` y se agregan al inventario al recogerlas.
-- Las monedas siguen sumando `coins` y no se muestran dentro de las tres categorias de inventario.
+- Las piezas del mapa que no son ORO usan la textura placeholder `inventory-piece` y se agregan al inventario al recogerlas.
+- El ORO sigue sumando en la clave tecnica `coins` y no se muestra dentro de las tres categorias de inventario.
+- El presupuesto de ORO del camino usa `round(25 * 1.1^(nivel - 1))`: LV1=25 y LV10=59; las recompensas de enemigos son adicionales.
+- La interfaz y los textos para jugadores deben usar siempre `ORO`; conservar `coins`, `Coin`, `coinReward` y `bronzeCoin` solo como identificadores internos compatibles con los guardados existentes.
+- Cada nivel define una sola `rewardBox`; sus recompensas posibles son los items con `inventoryCategory` en `items.ts`.
+- `SaveData.claimedRewardBoxes` registra las cajas ya abiertas para que no reaparezcan en partidas posteriores.
 
 ## Controles actuales
 
@@ -206,8 +220,16 @@ Para agregar un nivel:
 
 1. Agregar definicion en `levels.ts`.
 2. Usar `nextLevelId` si completar ese nivel debe encadenar con otro.
-3. Mantener plataformas, enemigos, monedas, checkpoint y meta como datos.
-4. Mas adelante migrar a Tiled en `src/assets/maps/` sin romper la interfaz de `LevelDefinition`.
+3. Mantener plataformas, enemigos, ORO, checkpoint y meta como datos.
+4. Definir una `rewardBox` con ID unico y posicion alcanzable.
+5. Mas adelante migrar a Tiled en `src/assets/maps/` sin romper la interfaz de `LevelDefinition`.
+
+Para agregar plataformas moviles:
+
+1. Mantener la plataforma dentro de `platforms` en `levels.ts`.
+2. Agregar `movement` con `axis`, `distance` y `speed` solo a las piedras que deban moverse.
+3. No crear tweens de plataformas dentro de `LevelScene`; la fisica y el movimiento pertenecen a `MovingPlatform`.
+4. Combinar la plataforma movil con pozos, pinchos o sierras solo desde los datos del nivel.
 
 ## Reglas de arquitectura
 
@@ -242,8 +264,11 @@ Para agregar un nivel:
 ## Reglas para progresion y guardado
 
 - `ProgressionSystem` controla experiencia, subida de nivel y desbloqueo inicial de habilidades.
-- `InventorySystem` controla recoleccion de items/monedas.
+- `InventorySystem` controla recoleccion de items y ORO.
 - Las piezas de inventario deben pasar por `InventorySystem.collect`, no escribirse directamente en el save desde la UI.
+- Las recompensas aleatorias de cajas tambien deben pasar por `InventorySystem.collect` y marcar su ID en `claimedRewardBoxes` antes de persistir.
+- El ORO del camino y de enemigos debe pasar por `InventorySystem.collect`; no incrementar `coins` directamente desde entidades.
+- El grupo fisico interno `coins` debe mantener `allowGravity: false` e `immovable: true`; si se deja la configuracion por defecto del grupo, sobrescribe a `Coin` y las piezas de ORO caen fuera del mapa.
 - `GameSaveStore` es la capa sincronica que deben usar Phaser y React para leer/escribir `SaveData`.
 - `SupabaseSaveAdapter` es la capa remota actual y persiste en `public.game_saves`.
 - `SaveDefaults.ts` define `SAVE_SCHEMA_VERSION`, defaults y normalizacion de saves.
@@ -253,6 +278,8 @@ Para agregar un nivel:
 - Para migrar a Supabase real: aplicar las migraciones con `supabase link --project-ref <project-ref>` y `supabase db push`, luego cambiar variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - Antes de cambiar estructura de save, pensar en versionado.
 - Durante transiciones entre niveles, Phaser muestra el efecto visual y React oculta HUD/controles usando el estado `level-transition`.
+- `LevelDefinition.stageNumber` conserva la numeracion real del escenario en HUD y transiciones; no inferirla desde el nombre tematico.
+- El HUD muestra un indicador pequeno `LV I` a `LV X` para el nivel del escenario, separado del nivel RPG del personaje.
 
 ## Reglas mobile
 
@@ -290,7 +317,7 @@ Si se toca gameplay, verificar manualmente:
 - Pausar.
 - Recibir dano.
 - Derrotar enemigo.
-- Recoger moneda.
+- Recoger ORO.
 - Completar nivel.
 
 ## Convenciones de codigo
@@ -311,7 +338,7 @@ Si se toca gameplay, verificar manualmente:
 3. Agregar animaciones placeholder por estados del jugador.
 4. Separar mejor factories/spawners de `LevelScene` si crece el contenido.
 5. Preparar loader para mapas Tiled.
-6. Crear mas niveles desde datos.
+6. Crear los niveles 7 a 10 desde datos conservando la progresion de dificultad.
 7. Agregar menu de configuracion y remapeo basico.
 8. Agregar Capacitor cuando la experiencia mobile web este comoda.
 
