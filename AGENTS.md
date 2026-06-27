@@ -12,7 +12,9 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 - Phaser renderiza el juego real en canvas. React no renderiza el juego frame a frame.
 - React maneja UI externa: menu, seleccion de personaje, seleccion de modos/regiones/niveles, HUD, pausa, game over, victoria, controles tactiles y aviso de orientacion.
 - El Event Bus conecta Phaser y React sin acoplarlos directamente.
-- El guardado actual usa `localStorage` mediante `LocalSaveAdapter`.
+- El progreso del juego requiere autenticacion Supabase y se guarda en `public.game_saves` mediante `GameSaveStore` + `SupabaseSaveAdapter`.
+- Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
+- La migracion fuente para progreso remoto esta en `supabase/migrations/20260626000000_create_game_saves.sql`.
 - El arte actual es placeholder generado en Phaser con texturas simples. No hay arte final todavia.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
 
@@ -28,6 +30,9 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 - `src/game/scenes/`: escenas Phaser.
 - `src/game/entities/`: entidades jugables de Phaser.
 - `src/game/systems/`: sistemas separados por responsabilidad.
+- `src/game/systems/save/GameSaveStore.ts`: cache sincronica para Phaser y cola de persistencia remota.
+- `src/game/systems/save/SupabaseSaveAdapter.ts`: adapter async para `public.game_saves`.
+- `src/shared/supabase/client.ts`: cliente Supabase web configurado por `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
@@ -51,6 +56,7 @@ Este archivo es el registro interno del estado actual del proyecto y la guia de 
 La demo actual permite:
 
 - Abrir menu principal.
+- Crear cuenta o entrar con email/password antes de jugar.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
 - Abrir inventario del jugador desde el boton Inventario del menu principal.
 - Abrir opciones desde la tuerca junto a Menu principal.
@@ -82,8 +88,8 @@ La demo actual permite:
 - Ver victoria.
 - Ver game over.
 - Pausar.
-- Guardar progreso basico en `localStorage`.
-- Guardar el personaje seleccionado en `localStorage`.
+- Guardar progreso basico en `public.game_saves` para el usuario autenticado.
+- Guardar el personaje seleccionado en `public.game_saves`.
 - Guardar piezas recogidas en el inventario persistente.
 - Ver niveles completados, pendientes, bloqueados y proximamente en la interfaz de exploracion.
 
@@ -100,7 +106,7 @@ La demo actual permite:
 
 - El menu principal solo muestra accesos a secciones; el inventario se abre desde el boton Inventario.
 - La pantalla Inventario tiene tabs superiores para mirar una categoria a la vez.
-- El inventario usa `save.player.inventory` y se guarda con `LocalSaveAdapter`.
+- El inventario usa `save.player.inventory` y se guarda con `GameSaveStore`.
 - Las categorias actuales son: Planos y llaves, Herramientas y armas, Pociones.
 - `src/game/data/items.ts` define `inventoryCategories` y los `ItemDefinition` con `inventoryCategory`.
 - Las piezas no-moneda del mapa usan la textura placeholder `inventory-piece` y se agregan al inventario al recogerlas.
@@ -187,7 +193,7 @@ Para agregar un personaje:
 1. Agregar definicion en `characters.ts`.
 2. Cargar su asset en `PreloadScene`.
 3. Crear o normalizar una textura con las animaciones esperadas por `Player`: idle, run, jump, fall, attack, hurt y dead.
-4. Mantener la seleccion a traves de `LocalSaveAdapter`, no con estado temporal de escena.
+4. Mantener la seleccion a traves de `GameSaveStore`, no con estado temporal de escena.
 
 Para agregar un item:
 
@@ -238,10 +244,13 @@ Para agregar un nivel:
 - `ProgressionSystem` controla experiencia, subida de nivel y desbloqueo inicial de habilidades.
 - `InventorySystem` controla recoleccion de items/monedas.
 - Las piezas de inventario deben pasar por `InventorySystem.collect`, no escribirse directamente en el save desde la UI.
-- `LocalSaveAdapter` es la unica capa de persistencia actual.
+- `GameSaveStore` es la capa sincronica que deben usar Phaser y React para leer/escribir `SaveData`.
+- `SupabaseSaveAdapter` es la capa remota actual y persiste en `public.game_saves`.
+- `SaveDefaults.ts` define `SAVE_SCHEMA_VERSION`, defaults y normalizacion de saves.
 - La seleccion de personaje vive en `SaveData.selectedCharacterId`.
-- No escribir directamente en `localStorage` desde escenas, entidades o componentes.
-- Si se agrega Supabase en el futuro, crear otro adapter con una interfaz compatible; no reemplazar de golpe el save local sin migracion.
+- No escribir directamente en `localStorage` para progreso desde escenas, entidades o componentes. `GameAudio` si usa `localStorage` solo para preferencias locales de sonido/musica.
+- No llamar Supabase directamente desde escenas o entidades; usar `GameSaveStore` para conservar el flujo sincronico de Phaser.
+- Para migrar a Supabase real: aplicar las migraciones con `supabase link --project-ref <project-ref>` y `supabase db push`, luego cambiar variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - Antes de cambiar estructura de save, pensar en versionado.
 - Durante transiciones entre niveles, Phaser muestra el efecto visual y React oculta HUD/controles usando el estado `level-transition`.
 

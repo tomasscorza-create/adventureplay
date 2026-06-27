@@ -21,7 +21,7 @@ import { touchInputStore } from "../systems/input/TouchInputStore";
 import { InventorySystem } from "../systems/inventory/InventorySystem";
 import { MovementSystem } from "../systems/movement/MovementSystem";
 import { ProgressionSystem } from "../systems/progression/ProgressionSystem";
-import { LocalSaveAdapter } from "../systems/save/LocalSaveAdapter";
+import { gameSaveStore } from "../systems/save/GameSaveStore";
 
 export class LevelScene extends Phaser.Scene {
   private level!: LevelDefinition;
@@ -38,7 +38,6 @@ export class LevelScene extends Phaser.Scene {
   private goal!: Phaser.Physics.Arcade.Sprite;
   private inputSystem!: GameplayInputSystem;
   private activeCheckpoint?: { x: number; y: number; id: string };
-  private readonly saveAdapter = new LocalSaveAdapter();
   private readonly movement = new MovementSystem();
   private readonly combat = new CombatSystem();
   private readonly progression = new ProgressionSystem();
@@ -60,10 +59,11 @@ export class LevelScene extends Phaser.Scene {
 
   create(data: { levelId?: string }): void {
     this.level = levelDefinitions[data.levelId ?? "meadowOutpost"];
-    this.save = this.saveAdapter.load();
+    this.save = gameSaveStore.load();
     this.save.player.maxHealth = PLAYER_DEFAULTS.maxHealth;
     this.save.player.health = this.save.player.maxHealth;
     this.save.checkpointId = undefined;
+    gameSaveStore.save(this.save);
     this.activeCheckpoint = undefined;
     this.remainingTimeMs = this.level.timeLimitSeconds * 1000;
     this.lastHudSecond = -1;
@@ -601,7 +601,7 @@ export class LevelScene extends Phaser.Scene {
     this.inventory.collect(this.save.player, coin.itemId);
     gameAudio.playCollect();
     coin.disableBody(true, true);
-    this.saveAdapter.save(this.save);
+    gameSaveStore.save(this.save);
     this.emitHud();
   }
 
@@ -610,7 +610,7 @@ export class LevelScene extends Phaser.Scene {
     this.save.player.health = this.save.player.maxHealth;
     gameAudio.playCollect();
     pickup.disableBody(true, true);
-    this.saveAdapter.save(this.save);
+    gameSaveStore.save(this.save);
     this.emitHud();
   }
 
@@ -665,7 +665,7 @@ export class LevelScene extends Phaser.Scene {
     gameAudio.playEnemyDefeat();
     this.createEnemyDefeatEffect(enemy);
     this.progression.addExperience(this.save.player, enemy.experienceReward);
-    this.saveAdapter.save(this.save);
+    gameSaveStore.save(this.save);
     this.emitHud();
   }
 
@@ -739,7 +739,7 @@ export class LevelScene extends Phaser.Scene {
       gameAudio.playPlayerHit();
     }
 
-    this.saveAdapter.save(this.save);
+    gameSaveStore.save(this.save);
     this.emitHud();
     if (defeated) {
       this.levelFinished = true;
@@ -802,7 +802,7 @@ export class LevelScene extends Phaser.Scene {
   private activateCheckpoint(): void {
     this.activeCheckpoint = { ...this.level.checkpoint };
     this.save.checkpointId = this.level.checkpoint.id;
-    this.saveAdapter.save(this.save);
+    gameSaveStore.save(this.save);
     this.checkpoint.setTint(0xffffff);
   }
 
@@ -846,7 +846,7 @@ export class LevelScene extends Phaser.Scene {
       this.save.unlockedLevels.push(this.level.nextLevelId);
     }
 
-    this.saveAdapter.save(this.save);
+    gameSaveStore.save(this.save);
     gameEvents.emit(EVENTS.LEVEL_COMPLETED, { levelId: this.level.id });
     gameAudio.playLevelComplete();
     this.emitHud();

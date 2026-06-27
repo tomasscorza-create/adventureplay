@@ -8,7 +8,9 @@ import type { CharacterId, InventoryCategoryId, SaveData } from "../../shared/ty
 type MenuView = "main" | "modes" | "explore" | "characters" | "inventory" | "options";
 
 interface MainMenuScreenProps {
+  playerEmail?: string;
   save: SaveData;
+  onSignOut: () => void;
   onStartLevel: (levelId: string) => void;
   onSelectCharacter: (characterId: CharacterId) => void;
 }
@@ -51,7 +53,13 @@ const categoryIconLabels: Record<InventoryCategoryId, string> = {
   potions: "P",
 };
 
-export function MainMenuScreen({ save, onStartLevel, onSelectCharacter }: MainMenuScreenProps) {
+export function MainMenuScreen({
+  playerEmail,
+  save,
+  onSignOut,
+  onStartLevel,
+  onSelectCharacter,
+}: MainMenuScreenProps) {
   const [view, setView] = useState<MenuView>("main");
   const [activeInventoryCategoryId, setActiveInventoryCategoryId] =
     useState<InventoryCategoryId>("plansKeys");
@@ -120,17 +128,27 @@ export function MainMenuScreen({ save, onStartLevel, onSelectCharacter }: MainMe
             <div className="home-monument" aria-label="Menu principal">
               <div className="home-monument__topline">
                 <span className="home-monument__plaque">Menu principal</span>
-                <button
-                  className="options-gear"
-                  type="button"
-                  aria-label="Opciones"
-                  onClick={() => runMenuAction(() => setView("options"))}
-                >
-                  <svg className="options-gear__icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3.4" />
-                    <path d="M12 2.8v3.1M12 18.1v3.1M2.8 12h3.1M18.1 12h3.1M5.5 5.5l2.2 2.2M16.3 16.3l2.2 2.2M18.5 5.5l-2.2 2.2M7.7 16.3l-2.2 2.2" />
-                  </svg>
-                </button>
+                <span className="session-controls">
+                  {playerEmail && <span className="session-controls__email">{playerEmail}</span>}
+                  <button
+                    className="session-controls__button"
+                    type="button"
+                    onClick={() => runMenuAction(onSignOut)}
+                  >
+                    Salir
+                  </button>
+                  <button
+                    className="options-gear"
+                    type="button"
+                    aria-label="Opciones"
+                    onClick={() => runMenuAction(() => setView("options"))}
+                  >
+                    <svg className="options-gear__icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3.4" />
+                      <path d="M12 2.8v3.1M12 18.1v3.1M2.8 12h3.1M18.1 12h3.1M5.5 5.5l2.2 2.2M16.3 16.3l2.2 2.2M18.5 5.5l-2.2 2.2M7.7 16.3l-2.2 2.2" />
+                    </svg>
+                  </button>
+                </span>
               </div>
               <h1 className="game-title">
                 <span>Adventure</span>
