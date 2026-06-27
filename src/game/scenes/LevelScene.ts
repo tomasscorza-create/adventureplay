@@ -2,16 +2,23 @@ import Phaser from "phaser";
 import { gameAudio } from "../../shared/audio/GameAudio";
 import { EVENTS } from "../../shared/constants/events";
 import { GAME_HEIGHT, GAME_WIDTH, PLAYER_DEFAULTS } from "../../shared/constants/game";
-import type { LevelDefinition, LevelHazardDefinition, SaveData } from "../../shared/types/game";
+import type {
+  LevelDefinition,
+  LevelHazardDefinition,
+  PowerChargeState,
+  SaveData,
+} from "../../shared/types/game";
 import { BasicEnemy } from "../entities/enemies/BasicEnemy";
 import type { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { M1Enemy } from "../entities/enemies/M1Enemy";
 import { M2Enemy } from "../entities/enemies/M2Enemy";
+import { M3Enemy } from "../entities/enemies/M3Enemy";
 import { MovingHazard } from "../entities/hazards/MovingHazard";
 import { Coin } from "../entities/items/Coin";
 import { MovingPlatform } from "../entities/platforms/MovingPlatform";
 import { Player } from "../entities/player/Player";
 import type { Projectile } from "../entities/projectiles/Projectile";
+import { PowerProjectile } from "../entities/projectiles/PowerProjectile";
 import { getCharacterDefinition } from "../data/characters";
 import { itemDefinitions, randomInventoryRewardItemIds } from "../data/items";
 import { levelDefinitions } from "../data/levels";
@@ -38,6 +45,7 @@ export class LevelScene extends Phaser.Scene {
   private staticHazards!: Phaser.Physics.Arcade.StaticGroup;
   private movingHazards!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
+  private powerProjectiles!: Phaser.Physics.Arcade.Group;
   private checkpoint!: Phaser.Physics.Arcade.Sprite;
   private goal!: Phaser.Physics.Arcade.Sprite;
   private inputSystem!: GameplayInputSystem;
@@ -162,6 +170,10 @@ export class LevelScene extends Phaser.Scene {
     this.lifePickups = this.physics.add.staticGroup();
     this.movingHazards = this.physics.add.group({ runChildUpdate: true });
     this.projectiles = this.physics.add.group({ runChildUpdate: true });
+    this.powerProjectiles = this.physics.add.group({
+      allowGravity: false,
+      runChildUpdate: true,
+    });
 
     for (const enemy of this.level.enemies) {
       this.enemies.add(this.createEnemy(enemy));
@@ -210,6 +222,13 @@ export class LevelScene extends Phaser.Scene {
       return new M2Enemy(this, enemy.x, enemy.y, enemy.patrolDistance, enemy.aggression);
     }
 
+    if (enemy.enemyId === "m3") {
+      return new M3Enemy(this, enemy.x, enemy.y, [
+        ...this.platforms.getChildren(),
+        ...this.movingPlatforms.getChildren(),
+      ] as Phaser.GameObjects.Rectangle[]);
+    }
+
     return new BasicEnemy(this, enemy.x, enemy.y, enemy.enemyId, enemy.patrolDistance);
   }
 
@@ -253,6 +272,9 @@ export class LevelScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.projectiles, this.enemies, (projectile, enemy) => {
       this.hitEnemyWithProjectile(projectile as Projectile, enemy as BaseEnemy);
+    });
+    this.physics.add.overlap(this.powerProjectiles, this.enemies, (projectile, enemy) => {
+      this.hitEnemyWithPower(projectile as PowerProjectile, enemy as BaseEnemy);
     });
 
     this.physics.add.overlap(this.player, this.checkpoint, () => this.activateCheckpoint());
@@ -308,6 +330,81 @@ export class LevelScene extends Phaser.Scene {
 
       this.combat.shoot(this, this.player, this.projectiles);
     }
+
+    if (input.healJustPressed) {
+      this.useHealingPower();
+    }
+
+    if (input.powerJustPressed) {
+      this.useLethalPower();
+    }
+  }
+
+  private useHealingPower(): void {
+    const powerCharges = this.getActivePowerCharges();
+    if (
+      powerCharges.healingCharges <= 0 ||
+      this.save.player.health >= this.save.player.maxHealth
+    ) {
+      return;
+    }
+
+    powerCharges.healingCharges -= 1;
+    this.save.player.health = this.save.player.maxHealth;
+    gameAudio.playHealingPower();
+    this.createHealingEffect();
+    gameSaveStore.save(this.save);
+    this.emitHud();
+  }
+
+  private useLethalPower(): void {
+    const powerCharges = this.getActivePowerCharges();
+    if (powerCharges.powerCharges <= 0 || !this.player.canShoot(this.time.now)) {
+      return;
+    }
+
+    powerCharges.powerCharges -= 1;
+    this.player.markShooting(this.time.now);
+    const projectile = new PowerProjectile(
+      this,
+      this.player.x + 34,
+      this.player.y - 7,
+    );
+    this.powerProjectiles.add(projectile);
+    projectile.setVelocity(780, 0);
+    (projectile.body as Phaser.Physics.Arcade.Body).setAllowGravity(false).setGravityY(0);
+    gameAudio.playLethalPower();
+    gameSaveStore.save(this.save);
+    this.emitHud();
+  }
+
+  private createHealingEffect(): void {
+    const x = this.player.x;
+    const y = this.player.y - 10;
+    const ring = this.add.circle(x, y, 24, 0x64ff9f, 0.14)
+      .setStrokeStyle(5, 0xb7ffd1, 0.94)
+      .setDepth(32);
+    const cross = this.add.text(x, y, "+", {
+      color: "#effff3",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "34px",
+      fontStyle: "bold",
+      stroke: "#197344",
+      strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(33);
+
+    this.tweens.add({
+      targets: [ring, cross],
+      y: y - 52,
+      alpha: 0,
+      scale: 1.7,
+      duration: 720,
+      ease: "Cubic.easeOut",
+      onComplete: () => {
+        ring.destroy();
+        cross.destroy();
+      },
+    });
   }
 
   private handleMovementAudio(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
@@ -713,6 +810,37 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private hitEnemyWithPower(projectile: PowerProjectile, enemy: BaseEnemy): void {
+    const impactX = enemy.x;
+    const impactY = enemy.y;
+    projectile.destroy();
+    enemy.takeDamage(Number.MAX_SAFE_INTEGER);
+    this.createPowerExplosion(impactX, impactY);
+    this.handleEnemyDefeated(enemy);
+  }
+
+  private createPowerExplosion(x: number, y: number): void {
+    const flash = this.add.circle(x, y, 28, 0xffffff, 0.98).setDepth(36);
+    const core = this.add.circle(x, y, 34, 0x58ddff, 0.76).setDepth(35);
+    const ring = this.add.circle(x, y, 22, 0x8d6bff, 0)
+      .setStrokeStyle(7, 0x9ef5ff, 0.96)
+      .setDepth(34);
+
+    this.cameras.main.shake(150, 0.006);
+    this.tweens.add({
+      targets: [flash, core, ring],
+      alpha: 0,
+      scale: 3.5,
+      duration: 320,
+      ease: "Cubic.easeOut",
+      onComplete: () => {
+        flash.destroy();
+        core.destroy();
+        ring.destroy();
+      },
+    });
+  }
+
   private handlePlayerEnemyOverlap(enemy: BaseEnemy): void {
     if (this.tryStompEnemy(enemy)) {
       return;
@@ -835,6 +963,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private getEnemyDefeatPalette(enemyId: string): { core: number; ring: number; sparks: number[] } {
+    if (enemyId === "m3") {
+      return { core: 0xff6a32, ring: 0x9f1f2d, sparks: [0xffd06a, 0xe23a35, 0x5c1820] };
+    }
+
     if (enemyId === "m2") {
       return { core: 0xfff1a1, ring: 0x8cecff, sparks: [0xfff1a1, 0xffffff, 0x8cecff] };
     }
@@ -1116,6 +1248,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private emitHud(): void {
+    const powerCharges = this.getActivePowerCharges();
     gameEvents.emit(EVENTS.HUD_UPDATED, {
       stageNumber: this.level.stageNumber,
       health: this.save.player.health,
@@ -1124,10 +1257,16 @@ export class LevelScene extends Phaser.Scene {
       experience: this.save.player.experience,
       experienceToNextLevel: this.save.player.experienceToNextLevel,
       coins: this.save.player.coins,
+      healingCharges: powerCharges.healingCharges,
+      powerCharges: powerCharges.powerCharges,
       timeRemaining: Math.ceil(this.remainingTimeMs / 1000),
       timeLimit: this.level.timeLimitSeconds,
       progressPercent: this.getProgressPercent(),
     });
+  }
+
+  private getActivePowerCharges(): PowerChargeState {
+    return this.save.characterPowerCharges[this.save.selectedCharacterId];
   }
 
   private getProgressPercent(): number {

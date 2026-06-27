@@ -38,4 +38,14 @@ export const enemyDefinitions: Record<string, EnemyDefinition> = {
     coinReward: { min: 7, max: 10 },
     chaseRange: 920,
   },
+  m3: {
+    id: "m3",
+    name: "M3",
+    health: 2,
+    damage: 1,
+    speed: 112,
+    experienceReward: 70,
+    coinReward: { min: 10, max: 14 },
+    chaseRange: 1800,
+  },
 };

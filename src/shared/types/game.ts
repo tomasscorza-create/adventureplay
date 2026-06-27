@@ -16,7 +16,7 @@ export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
 
 export type InventoryCategoryId = "plansKeys" | "toolsWeapons" | "potions";
 
-export interface PlayerHudState {
+export interface PlayerBaseState {
   health: number;
   maxHealth: number;
   level: number;
@@ -25,6 +25,15 @@ export interface PlayerHudState {
   coins: number;
 }
 
+export interface PowerChargeState {
+  healingCharges: number;
+  powerCharges: number;
+}
+
+export type CharacterPowerCharges = Record<CharacterId, PowerChargeState>;
+
+export interface PlayerHudState extends PlayerBaseState, PowerChargeState {}
+
 export interface HudState extends PlayerHudState {
   stageNumber: number;
   timeRemaining: number;
@@ -32,7 +41,7 @@ export interface HudState extends PlayerHudState {
   progressPercent: number;
 }
 
-export interface PlayerStats extends PlayerHudState {
+export interface PlayerStats extends PlayerBaseState {
   speed: number;
   jumpPower: number;
   meleeDamage: number;
@@ -44,6 +53,9 @@ export interface PlayerStats extends PlayerHudState {
 export interface SaveData {
   player: PlayerStats;
   selectedCharacterId: CharacterId;
+  primaryCharacterId?: CharacterId;
+  unlockedCharacterIds: CharacterId[];
+  characterPowerCharges: CharacterPowerCharges;
   unlockedLevels: string[];
   completedLevels: string[];
   claimedRewardBoxes: string[];
@@ -55,6 +67,7 @@ export interface CharacterDefinition {
   name: string;
   textureKey: string;
   animationPrefix: string;
+  portraitUrl: string;
   description: string;
 }
 

@@ -9,6 +9,7 @@ import { EVENTS } from "./shared/constants/events";
 import { isSupabaseConfigured, supabase } from "./shared/supabase/client";
 import type { CharacterId, GameScreen, HudState, SaveData } from "./shared/types/game";
 import { HUD } from "./ui/components/HUD";
+import { AbilityControls } from "./ui/components/AbilityControls";
 import { MobileControls } from "./ui/components/MobileControls";
 import { OrientationNotice } from "./ui/components/OrientationNotice";
 import { AuthScreen } from "./ui/screens/AuthScreen";
@@ -19,12 +20,14 @@ import { VictoryScreen } from "./ui/screens/VictoryScreen";
 
 const initialHud: HudState = {
   stageNumber: 1,
-  health: 3,
-  maxHealth: 3,
+  health: 4,
+  maxHealth: 4,
   level: 1,
   experience: 0,
   experienceToNextLevel: 100,
   coins: 0,
+  healingCharges: 3,
+  powerCharges: 25,
   timeRemaining: 90,
   timeLimit: 90,
   progressPercent: 0,
@@ -184,20 +187,81 @@ export function App() {
     await supabase?.auth.signOut();
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };
+  const resetProgress = async () => {
+    gameAudio.playUiSelect();
+    const freshSave = gameSaveStore.reset();
+    await gameSaveStore.flush();
+    setSave(freshSave);
+    setHud(initialHud);
+    setScreen("main-menu");
+    gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+  };
 
   const startGame = (levelId = "meadowOutpost") => {
-    if (authStatus !== "signed-in") {
+    const currentSave = gameSaveStore.load();
+    if (
+      authStatus !== "signed-in" ||
+      !currentSave.primaryCharacterId ||
+      !currentSave.unlockedCharacterIds.includes(currentSave.selectedCharacterId)
+    ) {
       return;
     }
 
-    setSave(gameSaveStore.load());
+    setSave(currentSave);
     gameEvents.emit(EVENTS.START_GAME, { levelId });
   };
   const selectCharacter = (characterId: CharacterId) => {
     const currentSave = gameSaveStore.load();
-    const nextSave = { ...currentSave, selectedCharacterId: characterId };
+    const isChoosingPrimary = !currentSave.primaryCharacterId;
+    if (!isChoosingPrimary && !currentSave.unlockedCharacterIds.includes(characterId)) {
+      return;
+    }
+
+    const nextSave: SaveData = {
+      ...currentSave,
+      selectedCharacterId: characterId,
+      primaryCharacterId: currentSave.primaryCharacterId ?? characterId,
+      unlockedCharacterIds: isChoosingPrimary
+        ? [characterId]
+        : currentSave.unlockedCharacterIds,
+    };
     gameSaveStore.save(nextSave);
     setSave(nextSave);
+  };
+  const unlockCharacter = (characterId: CharacterId, cost: number): boolean => {
+    const currentSave = gameSaveStore.load();
+    if (
+      !currentSave.primaryCharacterId ||
+      currentSave.unlockedCharacterIds.includes(characterId) ||
+      currentSave.player.coins < cost
+    ) {
+      return false;
+    }
+
+    const nextSave = structuredClone(currentSave);
+    nextSave.player.coins -= cost;
+    nextSave.unlockedCharacterIds.push(characterId);
+    gameSaveStore.save(nextSave);
+    setSave(nextSave);
+    return true;
+  };
+  const purchaseCharacterPower = (
+    characterId: CharacterId,
+    power: "healingCharges" | "powerCharges",
+    amount: number,
+    cost: number,
+  ): boolean => {
+    const currentSave = gameSaveStore.load();
+    if (currentSave.player.coins < cost) {
+      return false;
+    }
+
+    const nextSave = structuredClone(currentSave);
+    nextSave.player.coins -= cost;
+    nextSave.characterPowerCharges[characterId][power] += amount;
+    gameSaveStore.save(nextSave);
+    setSave(nextSave);
+    return true;
   };
   const resumeGame = () => {
     gameAudio.playUiSelect();
@@ -219,15 +283,19 @@ export function App() {
     <main className="app-shell">
       <div id="game-root" className="game-root" />
       {!needsAuth && (screen === "playing" || screen === "paused") && <HUD hud={hud} />}
+      {!needsAuth && screen === "playing" && <AbilityControls hud={hud} />}
       {!needsAuth && (screen === "playing" || screen === "paused") && <OrientationNotice />}
-      {!needsAuth && screen === "playing" && <MobileControls />}
+      {!needsAuth && screen === "playing" && <MobileControls hud={hud} />}
       {!needsAuth && screen === "main-menu" && (
         <MainMenuScreen
           playerEmail={playerEmail}
           save={save}
           onSignOut={signOut}
+          onResetProgress={resetProgress}
           onStartLevel={startGame}
           onSelectCharacter={selectCharacter}
+          onUnlockCharacter={unlockCharacter}
+          onPurchaseCharacterPower={purchaseCharacterPower}
         />
       )}
       {!needsAuth && screen === "paused" && (

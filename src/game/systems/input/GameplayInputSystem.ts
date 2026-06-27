@@ -23,6 +23,8 @@ export class GameplayInputSystem {
       jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
       melee: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
       shoot: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
+      heal: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+      power: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       pause: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P),
       escape: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
     };
@@ -37,6 +39,8 @@ export class GameplayInputSystem {
       jump: this.cursors.up.isDown || this.keys.up.isDown || this.keys.jump.isDown || touch.jump,
       melee: this.keys.melee.isDown || touch.melee,
       shoot: this.keys.shoot.isDown || touch.shoot,
+      heal: this.keys.heal.isDown || touch.heal,
+      power: this.keys.power.isDown || touch.power,
       pause: this.keys.pause.isDown || this.keys.escape.isDown || touch.pause,
       jumpJustPressed:
         Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
@@ -49,6 +53,12 @@ export class GameplayInputSystem {
       shootJustPressed:
         Phaser.Input.Keyboard.JustDown(this.keys.shoot) ||
         touchInputStore.wasJustPressed("shoot"),
+      healJustPressed:
+        Phaser.Input.Keyboard.JustDown(this.keys.heal) ||
+        touchInputStore.wasJustPressed("heal"),
+      powerJustPressed:
+        Phaser.Input.Keyboard.JustDown(this.keys.power) ||
+        touchInputStore.wasJustPressed("power"),
       pauseJustPressed:
         Phaser.Input.Keyboard.JustDown(this.keys.pause) ||
         Phaser.Input.Keyboard.JustDown(this.keys.escape) ||
@@ -67,6 +77,8 @@ interface KeyboardBindings {
   jump: Phaser.Input.Keyboard.Key;
   melee: Phaser.Input.Keyboard.Key;
   shoot: Phaser.Input.Keyboard.Key;
+  heal: Phaser.Input.Keyboard.Key;
+  power: Phaser.Input.Keyboard.Key;
   pause: Phaser.Input.Keyboard.Key;
   escape: Phaser.Input.Keyboard.Key;
 }

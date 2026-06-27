@@ -3,6 +3,11 @@ import amyUrl from "../../assets/characters/amy.png";
 import dunelUrl from "../../assets/characters/dunel.png";
 import sarixUrl from "../../assets/characters/sarix.png";
 import m2Url from "../../assets/enemies/m2.png";
+import m3Run1Url from "../../assets/enemies/m3-run-1.png";
+import m3Run2Url from "../../assets/enemies/m3-run-2.png";
+import m3Run3Url from "../../assets/enemies/m3-run-3.png";
+import m3Run4Url from "../../assets/enemies/m3-run-4.png";
+import m3Run5Url from "../../assets/enemies/m3-run-5.png";
 import playerKnightUrl from "../../assets/player-knight.png";
 import bushUrl from "../../assets/scenery/bush.png";
 import cloudsUrl from "../../assets/scenery/clouds.png";
@@ -45,15 +50,20 @@ export class PreloadScene extends Phaser.Scene {
       frameWidth: 256,
       frameHeight: 363,
     });
+    [m3Run1Url, m3Run2Url, m3Run3Url, m3Run4Url, m3Run5Url].forEach((url, index) => {
+      this.load.image(`enemy-m3-run-${index + 1}`, url);
+    });
     this.loadSceneryAssets();
   }
 
   create(): void {
     this.createCharacterAnimations();
     this.createM2Animations();
+    this.createM3Animations();
     this.createEnemyTexture();
     this.createM1Texture();
     this.createProjectileTexture();
+    this.createPowerProjectileTexture();
     this.createCoinTexture();
     this.createInventoryPieceTexture();
     this.createRewardBoxTexture();
@@ -309,6 +319,17 @@ export class PreloadScene extends Phaser.Scene {
     });
   }
 
+  private createM3Animations(): void {
+    this.anims.create({
+      key: "enemy-m3-run",
+      frames: [1, 2, 3, 4, 5].map((frameNumber) => ({
+        key: `enemy-m3-run-${frameNumber}`,
+      })),
+      frameRate: 10,
+      repeat: -1,
+    });
+  }
+
   private createEnemyTexture(): void {
     const graphics = this.add.graphics();
     graphics.fillStyle(0x0d1512, 0.32);
@@ -366,6 +387,20 @@ export class PreloadScene extends Phaser.Scene {
     graphics.fillStyle(0xffe28a, 0.85);
     graphics.fillCircle(15, 4.5, 3);
     graphics.generateTexture("projectile", 18, 9);
+    graphics.destroy();
+  }
+
+  private createPowerProjectileTexture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x47d7ff, 0.18);
+    graphics.fillEllipse(28, 16, 56, 30);
+    graphics.fillStyle(0x7cf7ff, 0.72);
+    graphics.fillEllipse(30, 16, 43, 20);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillEllipse(34, 16, 27, 10);
+    graphics.fillStyle(0x8d6bff, 0.82);
+    graphics.fillTriangle(0, 16, 20, 6, 20, 26);
+    graphics.generateTexture("power-projectile", 58, 32);
     graphics.destroy();
   }
 

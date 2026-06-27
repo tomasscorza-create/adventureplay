@@ -4,6 +4,8 @@ export interface GameplayInputState {
   jump: boolean;
   melee: boolean;
   shoot: boolean;
+  heal: boolean;
+  power: boolean;
   pause: boolean;
 }
 
@@ -11,6 +13,8 @@ export interface GameplayInputFrame extends GameplayInputState {
   jumpJustPressed: boolean;
   meleeJustPressed: boolean;
   shootJustPressed: boolean;
+  healJustPressed: boolean;
+  powerJustPressed: boolean;
   pauseJustPressed: boolean;
 }
 
@@ -22,5 +26,7 @@ export const emptyGameplayInputState: GameplayInputState = {
   jump: false,
   melee: false,
   shoot: false,
+  heal: false,
+  power: false,
   pause: false,
 };

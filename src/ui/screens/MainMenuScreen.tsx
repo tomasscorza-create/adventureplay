@@ -1,9 +1,16 @@
 import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import menuBackgroundUrl from "../../assets/menu/menu-background.webp";
+import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
+import menuGearUrl from "../../assets/menu/menu-gear.webp";
+import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
+import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
 import { playableCharacters } from "../../game/data/characters";
 import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
 import { gameAudio } from "../../shared/audio/GameAudio";
 import type { CharacterId, InventoryCategoryId, SaveData } from "../../shared/types/game";
+import { AbilityIcon } from "../components/AbilityIcon";
 
 type MenuView = "main" | "modes" | "explore" | "characters" | "inventory" | "options";
 
@@ -11,9 +18,39 @@ interface MainMenuScreenProps {
   playerEmail?: string;
   save: SaveData;
   onSignOut: () => void;
+  onResetProgress: () => Promise<void>;
   onStartLevel: (levelId: string) => void;
   onSelectCharacter: (characterId: CharacterId) => void;
+  onUnlockCharacter: (characterId: CharacterId, cost: number) => boolean;
+  onPurchaseCharacterPower: (
+    characterId: CharacterId,
+    power: "healingCharges" | "powerCharges",
+    amount: number,
+    cost: number,
+  ) => boolean;
 }
+
+type PurchasablePower = "healingCharges" | "powerCharges";
+
+interface PowerPackage {
+  amount: number;
+  cost: number;
+}
+
+const powerPackages: Record<PurchasablePower, PowerPackage[]> = {
+  healingCharges: [
+    { amount: 3, cost: 350 },
+    { amount: 5, cost: 490 },
+    { amount: 12, cost: 750 },
+  ],
+  powerCharges: [
+    { amount: 10, cost: 200 },
+    { amount: 25, cost: 390 },
+    { amount: 60, cost: 750 },
+  ],
+};
+
+const CHARACTER_UNLOCK_COST = 700;
 
 interface LevelSlot {
   number: number;
@@ -28,10 +65,10 @@ const levelSlots: LevelSlot[] = [
   { number: 4, levelId: "meadowOutpost4", name: "Piedras Errantes I" },
   { number: 5, levelId: "meadowOutpost5", name: "Piedras Errantes II" },
   { number: 6, levelId: "meadowOutpost6", name: "Piedras Errantes III" },
-  { number: 7, name: "Nivel 7" },
-  { number: 8, name: "Nivel 8" },
-  { number: 9, name: "Nivel 9" },
-  { number: 10, name: "Nivel 10" },
+  { number: 7, levelId: "meadowOutpost7", name: "Caceria del Coloso I" },
+  { number: 8, levelId: "meadowOutpost8", name: "Caceria del Coloso II" },
+  { number: 9, levelId: "meadowOutpost9", name: "Caceria del Coloso III" },
+  { number: 10, levelId: "meadowOutpost10", name: "Caceria del Coloso IV" },
 ];
 
 const regions = [
@@ -42,9 +79,9 @@ const regions = [
 ];
 
 const mainActions = [
-  { id: "start", label: "Iniciar juego", view: "modes" as const },
-  { id: "character", label: "Personaje", view: "characters" as const },
-  { id: "inventory", label: "Inventario", view: "inventory" as const },
+  { id: "start", label: "Iniciar juego", view: "modes" as const, imageUrl: menuStartButtonUrl },
+  { id: "character", label: "Personaje", view: "characters" as const, imageUrl: menuCharacterButtonUrl },
+  { id: "inventory", label: "Inventario", view: "inventory" as const, imageUrl: menuInventoryButtonUrl },
 ];
 
 const categoryIconLabels: Record<InventoryCategoryId, string> = {
@@ -57,13 +94,19 @@ export function MainMenuScreen({
   playerEmail,
   save,
   onSignOut,
+  onResetProgress,
   onStartLevel,
   onSelectCharacter,
+  onUnlockCharacter,
+  onPurchaseCharacterPower,
 }: MainMenuScreenProps) {
-  const [view, setView] = useState<MenuView>("main");
+  const [view, setView] = useState<MenuView>(() => save.primaryCharacterId ? "main" : "characters");
+  const [inspectedCharacterId, setInspectedCharacterId] = useState<CharacterId>();
   const [activeInventoryCategoryId, setActiveInventoryCategoryId] =
     useState<InventoryCategoryId>("plansKeys");
   const [audioSettings, setAudioSettings] = useState(() => gameAudio.getSettings());
+  const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+  const [isResettingProgress, setIsResettingProgress] = useState(false);
   const runMenuAction = (action: () => void) => {
     gameAudio.playUiSelect();
     action();
@@ -125,22 +168,20 @@ export function MainMenuScreen({
         <span className="menu-stage__vista menu-stage__vista--right" aria-hidden="true" />
         <div className="menu-shell">
           {view === "main" && (
-            <div className="home-monument" aria-label="Menu principal">
+            <div
+              className="home-monument"
+              aria-label="Menu principal"
+              style={{ "--menu-background-image": `url(${menuBackgroundUrl})` } as CSSProperties}
+            >
               <div className="home-monument__topline">
                 <span className="home-monument__plaque">Menu principal</span>
                 <span className="session-controls">
                   {playerEmail && <span className="session-controls__email">{playerEmail}</span>}
                   <button
-                    className="session-controls__button"
-                    type="button"
-                    onClick={() => runMenuAction(onSignOut)}
-                  >
-                    Salir
-                  </button>
-                  <button
                     className="options-gear"
                     type="button"
                     aria-label="Opciones"
+                    style={{ "--menu-gear-image": `url(${menuGearUrl})` } as CSSProperties}
                     onClick={() => runMenuAction(() => setView("options"))}
                   >
                     <svg className="options-gear__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -161,6 +202,7 @@ export function MainMenuScreen({
                     className={`menu-relic menu-relic--${action.id}`}
                     type="button"
                     key={action.id}
+                    style={{ "--menu-button-image": `url(${action.imageUrl})` } as CSSProperties}
                     onClick={() => runMenuAction(() => setView(action.view))}
                   >
                     <span className="menu-relic__icon" aria-hidden="true" />
@@ -189,6 +231,72 @@ export function MainMenuScreen({
                   onToggle={toggleMusic}
                 />
               </div>
+
+              <section className="account-settings" aria-label="Cuenta y progreso">
+                <div className="account-settings__header">
+                  <span>Cuenta</span>
+                  {playerEmail && <strong>{playerEmail}</strong>}
+                </div>
+                <div className="account-settings__actions">
+                  <button
+                    className="account-action account-action--signout"
+                    type="button"
+                    onClick={() => runMenuAction(onSignOut)}
+                  >
+                    <span>Salir de la cuenta</span>
+                    <small>Cierra la sesion sin borrar el progreso.</small>
+                  </button>
+                  <button
+                    className="account-action account-action--reset"
+                    type="button"
+                    onClick={() => {
+                      gameAudio.playUiSelect();
+                      setShowResetConfirmation(true);
+                    }}
+                  >
+                    <span>Reiniciar juego</span>
+                    <small>Borra todo el progreso y vuelve al inicio.</small>
+                  </button>
+                </div>
+              </section>
+
+              {showResetConfirmation && (
+                <div className="reset-confirmation" role="dialog" aria-modal="true" aria-label="Confirmar reinicio del juego">
+                  <span className="reset-confirmation__warning" aria-hidden="true">!</span>
+                  <div className="reset-confirmation__copy">
+                    <strong>¿Reiniciar todo el juego?</strong>
+                    <p>
+                      Se borrarán ORO, inventario, niveles, cajas, personaje seleccionado y cargas de todos los héroes. La cuenta de acceso seguirá existiendo.
+                    </p>
+                  </div>
+                  <div className="reset-confirmation__actions">
+                    <button
+                      type="button"
+                      disabled={isResettingProgress}
+                      onClick={() => {
+                        gameAudio.playUiSelect();
+                        setShowResetConfirmation(false);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="reset-confirmation__confirm"
+                      type="button"
+                      disabled={isResettingProgress}
+                      onClick={async () => {
+                        setIsResettingProgress(true);
+                        await onResetProgress();
+                        setIsResettingProgress(false);
+                        setShowResetConfirmation(false);
+                        setView("characters");
+                      }}
+                    >
+                      {isResettingProgress ? "Reiniciando..." : "Borrar progreso"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -268,34 +376,91 @@ export function MainMenuScreen({
 
           {view === "characters" && (
             <div className="menu-chamber menu-chamber--characters">
-              <MenuHeading eyebrow="Personaje" title="Elegir heroe" onBack={() => setView("main")} />
+              {inspectedCharacterId ? (
+                <CharacterDetail
+                  characterId={inspectedCharacterId}
+                  save={save}
+                  onBack={() => setInspectedCharacterId(undefined)}
+                  onPurchase={onPurchaseCharacterPower}
+                  onUnlock={onUnlockCharacter}
+                />
+              ) : (
+                <>
+                  <MenuHeading
+                    eyebrow="Personaje"
+                    title={save.primaryCharacterId ? "Elegir heroe" : "Escoge tu personaje principal"}
+                    onBack={() => setView("main")}
+                    hideBack={!save.primaryCharacterId}
+                  />
 
-              <div className="character-list" aria-label="Personajes disponibles">
-                {playableCharacters.map((character) => {
-                  const isSelected = character.id === save.selectedCharacterId;
-                  return (
-                    <button
-                      className={`character-card character-card--${character.id}${
-                        isSelected ? " character-card--selected" : ""
-                      }`}
-                      type="button"
-                      key={character.id}
-                      data-character-id={character.id}
-                      aria-pressed={isSelected}
-                      onClick={() => runMenuAction(() => onSelectCharacter(character.id))}
-                    >
-                      <span className={`character-card__avatar character-card__avatar--${character.id}`}>
-                        {character.name.slice(0, 1)}
-                      </span>
-                      <span className="character-card__body">
-                        <strong>{character.name}</strong>
-                        <span>{character.description}</span>
-                      </span>
-                      <span className="character-card__status">{isSelected ? "Seleccionado" : "Disponible"}</span>
-                    </button>
-                  );
-                })}
-              </div>
+                  {!save.primaryCharacterId && (
+                    <p className="primary-character-notice">
+                      Tu primer heroe quedara desbloqueado. Los otros personajes se podran liberar despues por 700 ORO cada uno.
+                    </p>
+                  )}
+
+                  <div className="character-list" aria-label="Personajes disponibles">
+                    {playableCharacters.map((character) => {
+                      const isSelected = Boolean(
+                        save.primaryCharacterId && character.id === save.selectedCharacterId,
+                      );
+                      const isChoosingPrimary = !save.primaryCharacterId;
+                      const isUnlocked = isChoosingPrimary || save.unlockedCharacterIds.includes(character.id);
+                      return (
+                        <article
+                          className={`character-card character-card--${character.id}${
+                            isSelected ? " character-card--selected" : ""
+                          }${isUnlocked ? "" : " character-card--locked"}`}
+                          key={character.id}
+                          data-character-id={character.id}
+                        >
+                          <button
+                            className="character-card__select"
+                            type="button"
+                            aria-label={`Seleccionar a ${character.name}`}
+                            aria-pressed={isSelected}
+                            disabled={!isUnlocked}
+                            onClick={() => runMenuAction(() => {
+                              onSelectCharacter(character.id);
+                              if (isChoosingPrimary) {
+                                setView("main");
+                              }
+                            })}
+                          />
+                          {!isChoosingPrimary && (
+                            <button
+                              className="character-card__view"
+                              type="button"
+                              onClick={() => runMenuAction(() => setInspectedCharacterId(character.id))}
+                            >
+                              Ver
+                            </button>
+                          )}
+                          <img
+                            className="character-card__portrait"
+                            src={character.portraitUrl}
+                            alt=""
+                          />
+                          <span className="character-card__veil" aria-hidden="true" />
+                          <span className="character-card__identity">
+                            <strong>{character.name}</strong>
+                            <span>
+                              {isChoosingPrimary
+                                ? "Elegir como principal"
+                                : !isUnlocked
+                                  ? "Bloqueado · 700 ORO"
+                                  : isSelected
+                                    ? "Heroe activo"
+                                    : "Seleccionar"}
+                            </span>
+                          </span>
+                          {!isUnlocked && <span className="character-card__lock" aria-hidden="true">700</span>}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -393,16 +558,267 @@ export function MainMenuScreen({
   );
 }
 
+function CharacterDetail({
+  characterId,
+  save,
+  onBack,
+  onPurchase,
+  onUnlock,
+}: {
+  characterId: CharacterId;
+  save: SaveData;
+  onBack: () => void;
+  onPurchase: MainMenuScreenProps["onPurchaseCharacterPower"];
+  onUnlock: MainMenuScreenProps["onUnlockCharacter"];
+}) {
+  const [isShopOpen, setIsShopOpen] = useState(false);
+  const [purchaseMessage, setPurchaseMessage] = useState<string>();
+  const [pendingPurchase, setPendingPurchase] = useState<{
+    power: PurchasablePower;
+    pack: PowerPackage;
+  }>();
+  const [showUnlockConfirmation, setShowUnlockConfirmation] = useState(false);
+  const character = playableCharacters.find((candidate) => candidate.id === characterId);
+  if (!character) {
+    return null;
+  }
+
+  const powerCharges = save.characterPowerCharges[characterId];
+  const isUnlocked = save.unlockedCharacterIds.includes(characterId);
+  const requestPackage = (power: PurchasablePower, pack: PowerPackage) => {
+    gameAudio.playUiSelect();
+    setPurchaseMessage(undefined);
+    setPendingPurchase({ power, pack });
+  };
+  const confirmPurchase = () => {
+    if (!pendingPurchase) {
+      return;
+    }
+
+    gameAudio.playUiSelect();
+    const { power, pack } = pendingPurchase;
+    const purchased = onPurchase(characterId, power, pack.amount, pack.cost);
+    setPurchaseMessage(
+      purchased
+        ? `Compra realizada: +${pack.amount} ${power === "healingCharges" ? "regeneraciones" : "ataques letales"}.`
+        : "No tienes suficiente ORO.",
+    );
+    setPendingPurchase(undefined);
+  };
+
+  return (
+    <>
+      <MenuHeading eyebrow="Ficha de heroe" title={character.name} onBack={onBack} backLabel="Heroes" />
+      <section className="character-detail" aria-label={`Poderes disponibles de ${character.name}`}>
+        <div className="character-detail__portrait-frame">
+          <img src={character.portraitUrl} alt={character.name} />
+          <strong>{character.name}</strong>
+        </div>
+        <div className="character-detail__content">
+          {isUnlocked ? (
+            <button
+              className="character-shop-trigger"
+              type="button"
+              aria-expanded={isShopOpen}
+              onClick={() => {
+                gameAudio.playUiSelect();
+                setPurchaseMessage(undefined);
+                setPendingPurchase(undefined);
+                setIsShopOpen((isOpen) => !isOpen);
+              }}
+            >
+              <span className="character-shop-trigger__coin" aria-hidden="true">O</span>
+              <span>{isShopOpen ? "Cerrar tienda" : "Comprar poderes"}</span>
+              <ShopIcon />
+              <strong>{save.player.coins} ORO</strong>
+            </button>
+          ) : (
+            <button
+              className="character-unlock-trigger"
+              type="button"
+              disabled={save.player.coins < CHARACTER_UNLOCK_COST}
+              onClick={() => {
+                gameAudio.playUiSelect();
+                setShowUnlockConfirmation(true);
+              }}
+            >
+              <span className="character-shop-trigger__coin" aria-hidden="true">O</span>
+              <span>Desbloquear a {character.name}</span>
+              <strong>{CHARACTER_UNLOCK_COST} ORO</strong>
+            </button>
+          )}
+
+          {isUnlocked && isShopOpen ? (
+            <div className="character-shop" aria-label={`Tienda de poderes para ${character.name}`}>
+              <PowerPackageGroup
+                title="Regenerador de vida"
+                power="healingCharges"
+                packages={powerPackages.healingCharges}
+                coins={save.player.coins}
+                onBuy={requestPackage}
+              />
+              <PowerPackageGroup
+                title="Ataque letal"
+                power="powerCharges"
+                packages={powerPackages.powerCharges}
+                coins={save.player.coins}
+                onBuy={requestPackage}
+              />
+              {pendingPurchase && (
+                <div className="purchase-confirmation" role="dialog" aria-modal="true" aria-label="Confirmar compra">
+                  <span className="purchase-confirmation__icon" aria-hidden="true">
+                    <AbilityIcon type={pendingPurchase.power === "healingCharges" ? "heal" : "power"} />
+                  </span>
+                  <div className="purchase-confirmation__copy">
+                    <strong>Confirmar compra</strong>
+                    <span>
+                      +{pendingPurchase.pack.amount} {pendingPurchase.power === "healingCharges" ? "regeneraciones" : "ataques letales"} para {character.name}
+                    </span>
+                    <b>{pendingPurchase.pack.cost} ORO</b>
+                  </div>
+                  <div className="purchase-confirmation__actions">
+                    <button
+                      className="purchase-confirmation__cancel"
+                      type="button"
+                      onClick={() => {
+                        gameAudio.playUiSelect();
+                        setPendingPurchase(undefined);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="purchase-confirmation__confirm"
+                      type="button"
+                      onClick={confirmPurchase}
+                    >
+                      Confirmar compra
+                    </button>
+                  </div>
+                </div>
+              )}
+              {purchaseMessage && <p className="character-shop__message" role="status">{purchaseMessage}</p>}
+            </div>
+          ) : (
+            <div className="character-detail__powers">
+              <article className="character-detail__power character-detail__power--heal">
+                <span className="character-detail__power-icon">
+                  <AbilityIcon type="heal" />
+                </span>
+                <span>Regeneraciones disponibles</span>
+                <strong>{powerCharges.healingCharges}</strong>
+              </article>
+              <article className="character-detail__power character-detail__power--lethal">
+                <span className="character-detail__power-icon">
+                  <AbilityIcon type="power" />
+                </span>
+                <span>Poderes letales disponibles</span>
+                <strong>{powerCharges.powerCharges}</strong>
+              </article>
+            </div>
+          )}
+          {showUnlockConfirmation && !isUnlocked && (
+            <div className="purchase-confirmation" role="dialog" aria-modal="true" aria-label="Confirmar desbloqueo">
+              <span className="purchase-confirmation__icon" aria-hidden="true">700</span>
+              <div className="purchase-confirmation__copy">
+                <strong>Desbloquear a {character.name}</strong>
+                <span>El personaje quedara disponible permanentemente en esta cuenta.</span>
+                <b>{CHARACTER_UNLOCK_COST} ORO</b>
+              </div>
+              <div className="purchase-confirmation__actions">
+                <button
+                  className="purchase-confirmation__cancel"
+                  type="button"
+                  onClick={() => {
+                    gameAudio.playUiSelect();
+                    setShowUnlockConfirmation(false);
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="purchase-confirmation__confirm"
+                  type="button"
+                  onClick={() => {
+                    gameAudio.playUiSelect();
+                    const unlocked = onUnlock(characterId, CHARACTER_UNLOCK_COST);
+                    setShowUnlockConfirmation(false);
+                    setPurchaseMessage(unlocked ? `${character.name} fue desbloqueado.` : "No tienes suficiente ORO.");
+                  }}
+                >
+                  Confirmar desbloqueo
+                </button>
+              </div>
+            </div>
+          )}
+          {purchaseMessage && !isShopOpen && <p className="character-shop__message" role="status">{purchaseMessage}</p>}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function PowerPackageGroup({
+  title,
+  power,
+  packages,
+  coins,
+  onBuy,
+}: {
+  title: string;
+  power: PurchasablePower;
+  packages: PowerPackage[];
+  coins: number;
+  onBuy: (power: PurchasablePower, pack: PowerPackage) => void;
+}) {
+  return (
+    <section className={`power-package-group power-package-group--${power}`}>
+      <div className="power-package-group__title">
+        <AbilityIcon type={power === "healingCharges" ? "heal" : "power"} />
+        <strong>{title}</strong>
+      </div>
+      <div className="power-package-list">
+        {packages.map((pack) => (
+          <button
+            className="power-package"
+            type="button"
+            key={pack.amount}
+            disabled={coins < pack.cost}
+            onClick={() => onBuy(power, pack)}
+            aria-label={`Comprar ${pack.amount} por ${pack.cost} ORO`}
+          >
+            <span>+{pack.amount}</span>
+            <strong>{pack.cost}</strong>
+            <small>ORO</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ShopIcon() {
+  return (
+    <svg className="character-shop-trigger__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 7H7" />
+      <circle cx="10" cy="20" r="1.5" />
+      <circle cx="18" cy="20" r="1.5" />
+    </svg>
+  );
+}
+
 function MenuHeading({
   eyebrow,
   title,
   onBack,
   backLabel = "Volver",
+  hideBack = false,
 }: {
   eyebrow: string;
   title: string;
   onBack: () => void;
   backLabel?: string;
+  hideBack?: boolean;
 }) {
   return (
     <div className="menu-heading">
@@ -410,16 +826,18 @@ function MenuHeading({
         <span className="panel__eyebrow">{eyebrow}</span>
         <h2>{title}</h2>
       </div>
-      <button
-        className="button button--secondary button--small"
-        type="button"
-        onClick={() => {
-          gameAudio.playUiSelect();
-          onBack();
-        }}
-      >
-        {backLabel}
-      </button>
+      {!hideBack && (
+        <button
+          className="button button--secondary button--small"
+          type="button"
+          onClick={() => {
+            gameAudio.playUiSelect();
+            onBack();
+          }}
+        >
+          {backLabel}
+        </button>
+      )}
     </div>
   );
 }

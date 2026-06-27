@@ -116,6 +116,28 @@ class GameAudioController {
     this.playTone({ frequency: 520, endFrequency: 940, duration: 0.09, type: "square", volume: 0.045 });
   }
 
+  playHealingPower(): void {
+    this.unlock();
+    const now = this.context?.currentTime ?? 0;
+    [392, 523.25, 659.25, 783.99].forEach((frequency, index) => {
+      this.playTone({
+        frequency,
+        duration: 0.2,
+        type: "sine",
+        volume: 0.055,
+        startTime: now + index * 0.055,
+      });
+    });
+  }
+
+  playLethalPower(): void {
+    this.unlock();
+    const now = this.context?.currentTime ?? 0;
+    this.playTone({ frequency: 180, endFrequency: 980, duration: 0.22, type: "sawtooth", volume: 0.075, startTime: now });
+    this.playTone({ frequency: 620, endFrequency: 1240, duration: 0.18, type: "square", volume: 0.045, startTime: now + 0.04 });
+    this.playNoise({ duration: 0.16, volume: 0.045, filterType: "highpass", filterFrequency: 1400, startTime: now + 0.03 });
+  }
+
   playEnemyHit(): void {
     this.unlock();
     const now = this.context?.currentTime ?? 0;

@@ -122,6 +122,20 @@ function increaseEnemyPressure(
   }));
 }
 
+function createColossusHazards(
+  hazards: LevelHazardDefinition[],
+  levelPrefix: string,
+  speedMultiplier = 1,
+): LevelHazardDefinition[] {
+  return hazards
+    .filter((hazard) => hazard.type === "pit" || [1765, 4980, 7160].some((x) => Math.abs(hazard.x - x) < 90))
+    .map((hazard, index) => ({
+      ...hazard,
+      id: `${levelPrefix}-${index + 1}`,
+      speed: hazard.speed ? Math.round(hazard.speed * speedMultiplier) : undefined,
+    }));
+}
+
 export const levelDefinitions: Record<string, LevelDefinition> = {
   meadowOutpost: {
     id: "meadowOutpost",
@@ -425,7 +439,7 @@ levelDefinitions.meadowOutpost6 = {
   id: "meadowOutpost6",
   name: "Piedras Errantes III",
   stageNumber: 6,
-  nextLevelId: undefined,
+  nextLevelId: "meadowOutpost7",
   timeLimitSeconds: 62,
   autoScrollSpeed: 98,
   platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
@@ -440,16 +454,18 @@ levelDefinitions.meadowOutpost6 = {
     { x: 7175, axis: "x", distance: 124, speed: 96 },
     { x: 8200, axis: "y", distance: 108, speed: 92 },
   ]),
-  hazards: [
+  hazards: createColossusHazards([
     ...increaseHazardPressure(levelDefinitions.meadowOutpost5.hazards, "l6-hazard", 1.17, 1.08),
     { id: "l6-lethal-saw-1", type: "moving", x: 1765, y: 420, width: 38, height: 38, damage: 3, axis: "y", distance: 124, speed: 154 },
     { id: "l6-lethal-saw-2", type: "moving", x: 4980, y: 430, width: 38, height: 38, damage: 3, axis: "x", distance: 150, speed: 164 },
     { id: "l6-heavy-spikes", type: "spike", x: 7160, y: 635, width: 152, height: 25, damage: 2 },
-  ],
+  ], "l6-colossus"),
   enemies: [
-    ...increaseEnemyPressure(levelDefinitions.meadowOutpost5.enemies, 1.16),
-    { enemyId: "m2", x: 1880, y: 395, patrolDistance: 580, aggression: 2.02 },
-    { enemyId: "m1", x: 5480, y: 615, patrolDistance: 190 },
+    { enemyId: "m1", x: 1765, y: 615, patrolDistance: 150 },
+    { enemyId: "m3", x: 3150, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4440, y: 405, patrolDistance: 500, aggression: 1.55 },
+    { enemyId: "m3", x: 5700, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 7640, y: 615, patrolDistance: 165 },
   ],
   coins: [
     ...createPathCoinSpawns(6),
@@ -457,4 +473,148 @@ levelDefinitions.meadowOutpost6 = {
   ],
   rewardBox: { id: "reward-box-l6", x: 6545, y: 482 },
   checkpoint: { id: "meadow-vi-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost7 = {
+  ...levelDefinitions.meadowOutpost6,
+  id: "meadowOutpost7",
+  name: "Caceria del Coloso I",
+  stageNumber: 7,
+  nextLevelId: "meadowOutpost8",
+  timeLimitSeconds: 64,
+  autoScrollSpeed: 104,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 770, axis: "y", distance: 78, speed: 82 },
+    { x: 1700, axis: "x", distance: 108, speed: 88 },
+    { x: 3175, axis: "y", distance: 94, speed: 90 },
+    { x: 4580, axis: "x", distance: 116, speed: 94 },
+    { x: 6235, axis: "y", distance: 102, speed: 96 },
+    { x: 7805, axis: "x", distance: 126, speed: 100 },
+  ]),
+  hazards: createColossusHazards(levelDefinitions.meadowOutpost6.hazards, "l7-colossus", 1.06),
+  enemies: [
+    { enemyId: "m3", x: 850, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 2440, y: 615, patrolDistance: 150 },
+    { enemyId: "m3", x: 3500, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 4980, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 6285, y: 405, patrolDistance: 500, aggression: 1.48 },
+    { enemyId: "m3", x: 7100, y: 598, patrolDistance: 0 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(7),
+    ...levelDefinitions.meadowOutpost6.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  lifePickups: [],
+  rewardBox: { id: "reward-box-l7", x: 1700, y: 462 },
+  checkpoint: { id: "colossus-i-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost8 = {
+  ...levelDefinitions.meadowOutpost7,
+  id: "meadowOutpost8",
+  name: "Caceria del Coloso II",
+  stageNumber: 8,
+  nextLevelId: "meadowOutpost9",
+  timeLimitSeconds: 62,
+  autoScrollSpeed: 110,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 270, axis: "x", distance: 92, speed: 88 },
+    { x: 1010, axis: "y", distance: 88, speed: 86 },
+    { x: 2570, axis: "x", distance: 116, speed: 94 },
+    { x: 4025, axis: "y", distance: 104, speed: 94 },
+    { x: 5550, axis: "x", distance: 122, speed: 100 },
+    { x: 7175, axis: "y", distance: 112, speed: 102 },
+    { x: 8200, axis: "x", distance: 130, speed: 106 },
+  ]),
+  hazards: createColossusHazards(levelDefinitions.meadowOutpost6.hazards, "l8-colossus", 1.12),
+  enemies: [
+    { enemyId: "m3", x: 1430, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 2820, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 3770, y: 615, patrolDistance: 165 },
+    { enemyId: "m3", x: 4640, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 6150, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 6980, y: 405, patrolDistance: 480, aggression: 1.54 },
+    { enemyId: "m3", x: 8100, y: 598, patrolDistance: 0 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(8),
+    ...levelDefinitions.meadowOutpost7.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  lifePickups: [],
+  rewardBox: { id: "reward-box-l8", x: 4025, y: 392 },
+  checkpoint: { id: "colossus-ii-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost9 = {
+  ...levelDefinitions.meadowOutpost8,
+  id: "meadowOutpost9",
+  name: "Caceria del Coloso III",
+  stageNumber: 9,
+  nextLevelId: "meadowOutpost10",
+  timeLimitSeconds: 60,
+  autoScrollSpeed: 116,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 770, axis: "x", distance: 96, speed: 94 },
+    { x: 1700, axis: "y", distance: 94, speed: 92 },
+    { x: 3175, axis: "x", distance: 122, speed: 100 },
+    { x: 4910, axis: "y", distance: 108, speed: 100 },
+    { x: 6485, axis: "x", distance: 132, speed: 106 },
+    { x: 7805, axis: "y", distance: 116, speed: 108 },
+  ]),
+  hazards: createColossusHazards(levelDefinitions.meadowOutpost6.hazards, "l9-colossus", 1.18),
+  enemies: [
+    { enemyId: "m3", x: 1360, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 2440, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 3420, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4320, y: 405, patrolDistance: 500, aggression: 1.58 },
+    { enemyId: "m3", x: 5300, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 6900, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 7500, y: 615, patrolDistance: 180 },
+    { enemyId: "m3", x: 8250, y: 598, patrolDistance: 0 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(9),
+    ...levelDefinitions.meadowOutpost8.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  lifePickups: [{ id: "colossus-iii-extra-life", x: 5840, y: 432 }],
+  rewardBox: { id: "reward-box-l9", x: 5840, y: 462 },
+  checkpoint: { id: "colossus-iii-midpoint", x: 4300, y: 610 },
+};
+
+levelDefinitions.meadowOutpost10 = {
+  ...levelDefinitions.meadowOutpost9,
+  id: "meadowOutpost10",
+  name: "Caceria del Coloso IV",
+  stageNumber: 10,
+  nextLevelId: undefined,
+  timeLimitSeconds: 58,
+  autoScrollSpeed: 122,
+  platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
+    { x: 270, axis: "y", distance: 94, speed: 96 },
+    { x: 1010, axis: "x", distance: 104, speed: 98 },
+    { x: 2570, axis: "y", distance: 104, speed: 102 },
+    { x: 4025, axis: "x", distance: 132, speed: 106 },
+    { x: 5550, axis: "y", distance: 114, speed: 108 },
+    { x: 6900, axis: "x", distance: 138, speed: 112 },
+    { x: 8200, axis: "y", distance: 122, speed: 114 },
+  ]),
+  hazards: createColossusHazards(levelDefinitions.meadowOutpost6.hazards, "l10-colossus", 1.25),
+  enemies: [
+    { enemyId: "m3", x: 1510, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 2140, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 3150, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 4080, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4980, y: 395, patrolDistance: 520, aggression: 1.62 },
+    { enemyId: "m3", x: 5450, y: 598, patrolDistance: 0 },
+    { enemyId: "m3", x: 6900, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 7500, y: 615, patrolDistance: 190 },
+    { enemyId: "m3", x: 8100, y: 598, patrolDistance: 0 },
+  ],
+  coins: [
+    ...createPathCoinSpawns(10),
+    ...levelDefinitions.meadowOutpost9.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
+  ],
+  lifePickups: [],
+  rewardBox: { id: "reward-box-l10", x: 8200, y: 517 },
+  checkpoint: { id: "colossus-iv-midpoint", x: 4300, y: 610 },
 };
