@@ -15,7 +15,15 @@ export type SkillId = "stronger-strike" | "quick-steps";
 export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
 
 export type InventoryCategoryId = "plansKeys" | "toolsWeapons" | "potions";
-export type AchievementId = "first-level" | "flawless-level" | "monster-hunter";
+export type AchievementId =
+  | "first-level"
+  | "flawless-level"
+  | "monster-hunter"
+  | "first-monster"
+  | "first-gold"
+  | "first-checkpoint"
+  | "first-treasure"
+  | "three-levels";
 
 export interface AchievementProgress {
   unlockedIds: AchievementId[];
@@ -156,10 +164,13 @@ export interface LevelRewardBox {
   y: number;
 }
 
+export type LevelTheme = "verdant-frontier" | "enchanted-forest";
+
 export interface LevelDefinition {
   id: string;
   name: string;
   stageNumber: number;
+  theme: LevelTheme;
   nextLevelId?: string;
   worldWidth: number;
   timeLimitSeconds: number;

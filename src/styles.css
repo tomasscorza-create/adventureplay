@@ -1012,6 +1012,220 @@ button {
   animation: damage-screen-hit 1000ms ease-out forwards;
 }
 
+.achievement-unlock {
+  position: fixed;
+  top: calc(20px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 96;
+  display: grid;
+  width: min(460px, calc(100vw - 28px));
+  min-height: 104px;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  overflow: hidden;
+  padding: 14px 22px 17px 16px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 218, 119, 0.78);
+  border-radius: 18px;
+  color: #fff7d6;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(84, 224, 184, 0.2), transparent 32%),
+    linear-gradient(125deg, rgba(12, 27, 36, 0.97), rgba(25, 39, 40, 0.98) 58%, rgba(46, 35, 19, 0.98));
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, 0.5),
+    0 0 32px rgba(239, 190, 68, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  transform-origin: 50% 0;
+  animation: achievement-unlock-lifecycle 4600ms linear both;
+  isolation: isolate;
+}
+
+.achievement-unlock::before {
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border: 1px solid rgba(137, 231, 205, 0.18);
+  border-radius: 13px;
+  content: "";
+}
+
+.achievement-unlock__icon {
+  position: relative;
+  display: grid;
+  width: 70px;
+  height: 70px;
+  place-items: center;
+  border: 2px solid #f4c85f;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #ffe18a, #b97520);
+  box-shadow:
+    0 8px 24px rgba(224, 161, 45, 0.32),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  transform: rotate(-5deg);
+  animation: achievement-icon-arrive 700ms 160ms cubic-bezier(0.18, 1.45, 0.32, 1) both;
+}
+
+.achievement-unlock__icon svg {
+  width: 43px;
+  height: 43px;
+  fill: #213a34;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.38));
+}
+
+.achievement-unlock__icon span {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  display: grid;
+  min-width: 27px;
+  height: 27px;
+  place-items: center;
+  padding: 0 5px;
+  border: 2px solid #f8df8c;
+  border-radius: 999px;
+  color: #f7e8b0;
+  background: #17352f;
+  font-size: 0.66rem;
+  font-weight: 1000;
+  letter-spacing: -0.03em;
+}
+
+.achievement-unlock__copy {
+  min-width: 0;
+}
+
+.achievement-unlock__eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: #78e0bd;
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.achievement-unlock__copy strong {
+  display: block;
+  overflow: hidden;
+  color: #ffe29a;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.24rem, 3.2vw, 1.62rem);
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.38);
+}
+
+.achievement-unlock__shine {
+  position: absolute;
+  inset: -70% auto -70% -35%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, rgba(255, 245, 202, 0.3), transparent);
+  transform: rotate(16deg);
+  animation: achievement-shine 900ms 500ms ease-out both;
+}
+
+.achievement-unlock__timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #58ddb5, #f4ca62 58%, #fff0aa);
+  box-shadow: 0 0 12px rgba(244, 202, 98, 0.72);
+  transform-origin: left;
+  animation: achievement-timer 3500ms 650ms linear both;
+}
+
+@keyframes achievement-unlock-lifecycle {
+  0% {
+    opacity: 0;
+    filter: blur(7px);
+    transform: translate3d(-50%, -58px, 0) scale(0.8);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  12% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(-50%, 7px, 0) scale(1.035);
+    animation-timing-function: cubic-bezier(0.34, 1.45, 0.64, 1);
+  }
+  18%,
+  78% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  84% {
+    opacity: 1;
+    transform: translate3d(-50%, -3px, 0) scale(1);
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translate3d(-50%, -48px, 0) scale(0.9);
+  }
+}
+
+@keyframes achievement-icon-arrive {
+  from { opacity: 0; transform: rotate(-20deg) scale(0.45); }
+  to { opacity: 1; transform: rotate(-5deg) scale(1); }
+}
+
+@keyframes achievement-shine {
+  from { transform: translateX(0) rotate(16deg); }
+  to { transform: translateX(650%) rotate(16deg); }
+}
+
+@keyframes achievement-timer {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (max-width: 540px) {
+  .achievement-unlock {
+    top: calc(10px + env(safe-area-inset-top));
+    min-height: 84px;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 12px;
+    padding: 11px 16px 14px 12px;
+    border-radius: 15px;
+  }
+
+  .achievement-unlock__icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 17px;
+  }
+
+  .achievement-unlock__icon svg {
+    width: 33px;
+    height: 33px;
+  }
+
+  .achievement-unlock__eyebrow {
+    margin-bottom: 3px;
+    font-size: 0.61rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .achievement-unlock {
+    animation: achievement-unlock-reduced 4600ms ease both;
+  }
+
+  .achievement-unlock__icon,
+  .achievement-unlock__shine {
+    animation: none;
+  }
+}
+
+@keyframes achievement-unlock-reduced {
+  0%, 100% { opacity: 0; transform: translate3d(-50%, -12px, 0); }
+  10%, 88% { opacity: 1; transform: translate3d(-50%, 0, 0); }
+}
+
 .hud__health-feedback {
   position: absolute;
   left: 50%;
@@ -3727,10 +3941,45 @@ button {
     linear-gradient(180deg, #73945c, #466d4b 64%, #294b39);
 }
 
+.region-piece--active {
+  border-color: #f4d783;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 4px rgba(244, 215, 131, 0.16),
+    0 18px 40px rgba(0, 0, 0, 0.3);
+  transform: translateY(-3px);
+}
+
+.region-piece--enchanted {
+  border-color: #2f6f62;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(177, 255, 174, 0.3), transparent 38%),
+    linear-gradient(180deg, #4f9674, #24685e 60%, #16433f);
+}
+
+.region-piece--enchanted.region-piece--active {
+  border-color: #a9f0ac;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 0 0 4px rgba(112, 231, 187, 0.18),
+    0 0 34px rgba(72, 205, 167, 0.24);
+}
+
 .level-column {
   min-height: 500px;
   background:
     linear-gradient(180deg, #5b6360, #343f40 62%, #222b2f);
+}
+
+.level-column--enchanted-forest {
+  border-color: rgba(117, 225, 185, 0.48);
+  background:
+    radial-gradient(circle at 50% 0, rgba(117, 225, 185, 0.16), transparent 38%),
+    linear-gradient(180deg, #315b52, #203f3c 62%, #172c2d);
+}
+
+.level-column--enchanted-forest .level-column__header {
+  background: rgba(31, 92, 75, 0.34);
 }
 
 .level-column__header {

@@ -29,6 +29,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 | Gameplay, colisiones o camara | Reglas para escenas, Reglas para entidades | `src/game/scenes/LevelScene.ts`, `src/game/entities/`, `src/game/systems/` |
 | Controles desktop o tactiles | Sistema de input, Reglas mobile | `GameplayInputSystem.ts`, `TouchInputStore.ts`, `MobileControls.tsx` |
 | Niveles, enemigos, items o plataformas | Datos editables | `src/game/data/`, `MovingPlatform.ts` |
+| Nueva region o escenario | Proceso replicable para crear una region | `levels.ts`, `LevelScene.ts`, `PreloadScene.ts`, `MainMenuScreen.tsx`, `SaveDefaults.ts` |
 | Personajes, poderes o tienda | Personajes jugables, Inventario, Reglas para progresion y guardado | `characters.ts`, `MainMenuScreen.tsx`, `GameSaveStore.ts` |
 | Logros | Datos editables, Reglas para progresion y guardado | `achievements.ts`, `AchievementSystem.ts`, `MainMenuScreen.tsx`, `GameSaveStore.ts` |
 | Persistencia o Supabase | Reglas para progresion y guardado | `GameSaveStore.ts`, `SupabaseSaveAdapter.ts`, `SaveDefaults.ts`, `supabase/migrations/` |
@@ -44,6 +45,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Los textos visibles usan `ORO`; los identificadores internos compatibles conservan `coins` y nombres relacionados.
 - Las acciones destructivas o de compra siempre requieren confirmacion explicita.
 - Mobile prioriza landscape, safe areas y controles que no tapen el centro del gameplay.
+- Las pruebas visuales en navegador las realiza el usuario. Los agentes no deben abrir, automatizar ni ejecutar pruebas de navegador salvo peticion explicita del usuario.
 - `npm run build` es el minimo obligatorio antes de entregar cambios de codigo.
 
 ### Navegacion
@@ -51,6 +53,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Estado y estructura: `Estado actual del proyecto`, `Estructura principal`, `Escenas existentes`.
 - Funcionalidad vigente: `Demo jugable actual`, `Personajes jugables`, `Inventario`, `Controles actuales`.
 - Implementacion: `Sistema de input`, `Datos editables`, reglas de arquitectura, escenas, entidades y guardado.
+- Expansion de contenido: `Proceso replicable para crear una region`.
 - Plataforma y calidad: `Estado mobile y Android`, `Reglas mobile`, `Verificacion obligatoria antes de entregar`.
 - Continuidad: `Convenciones de codigo`, `Proximos pasos recomendados`, `Advertencias actuales`, `Mantenimiento de esta guia`.
 
@@ -70,6 +73,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 8`; incluye heroe principal, personajes desbloqueados, cargas por personaje y progreso de logros, y conserva `player.coins` como clave interna para el ORO.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
+- Bosque encantado es la segunda region seleccionable y tiene `enchantedGrove1` (`Umbral encantado`) como primer nivel disponible. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; introduce M0 y M1 con las mismas IA/estadisticas y skins de musgo, raices y corteza exclusivas del escenario.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
 
 ## Estructura principal
@@ -91,9 +95,11 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
 - `src/game/data/achievements.ts`: definiciones, textos, objetivos y lectura de progreso de los logros.
 - `src/game/systems/achievements/AchievementSystem.ts`: registra derrotas y finalizaciones validas, y desbloquea logros sin depender de React.
+- `src/ui/components/AchievementUnlockToast.tsx`: aviso React en cola para logros desbloqueados durante gameplay; recibe eventos tipados desde Phaser y no contiene logica de concesion.
 - `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; los PNG fuente permanecen en `diseños png/personajes/`.
 - `src/assets/menu/`: fondo y controles WebP optimizados del menu principal; los PNG fuente permanecen en `diseños png/menu/` y no deben modificarse.
 - `src/assets/enemies/m3-run-1.png` a `m3-run-5.png`: cinco cuadros transparentes y alineados de carrera lateral de M3; las fuentes permanecen en `diseños png/mounstros/`.
+- `src/assets/scenery/enchanted-forest/`: fondo y cuatro arboles por capas de Bosque encantado; las fuentes permanecen en `diseños png/escenarios/escenario 2/`.
 - `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3 con estados de alerta, persecucion, salto, ataque, recuperacion, dano y derrota; tiene dos puntos de vida, barra propia y navegacion preventiva de bordes/plataformas.
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
@@ -119,7 +125,8 @@ La demo actual permite:
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
-- Desbloquear los logros iniciales `Primer paso` al completar LV1, `Paso impecable` al terminar cualquier nivel sin perder salud y `Cazador de monstruos` al acumular 10 derrotas de monstruos.
+- Desbloquear ocho logros: `Primer paso` al completar LV1, `Paso impecable` al terminar cualquier nivel sin perder salud, `Cazador de monstruos` al acumular 10 derrotas, `Primer rival` al derrotar el primer monstruo, `Bolsillos con brillo` al recoger la primera pieza de ORO, `Camino asegurado` al activar el primer checkpoint, `Tesoro encontrado` al abrir la primera caja y `Explorador constante` al completar tres niveles.
+- Ver cada logro nuevo durante la partida mediante una tarjeta animada `Logro desbloqueado` con icono y nombre. Si se obtienen varios a la vez, React los presenta en cola sin superponerlos.
 - Crear cuenta o entrar con email/password antes de jugar.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
 - En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Escoge tu personaje principal`; solo el elegido queda desbloqueado.
@@ -132,6 +139,9 @@ La demo actual permite:
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1 a 10 de Frontera Verde.
+- Seleccionar Bosque encantado como segunda region y jugar `Umbral encantado` desde una partida nueva o existente.
+- Recorrer Bosque encantado sobre piedra verde azulada con musgo y raices, con el fondo y cuatro arboles propios distribuidos en capas de parallax.
+- Enfrentar en `Umbral encantado` dos M0 inmoviles con aspecto de guardianes de musgo y dos M1 perseguidores con aspecto de criaturas de corteza; su comportamiento sigue reutilizando `BasicEnemy` y `M1Enemy`.
 - Mover personaje.
 - Saltar.
 - Atacar cuerpo a cuerpo.
@@ -167,6 +177,7 @@ La demo actual permite:
 - Activar checkpoint y reaparecer alli al reintentar el mismo nivel; la camara y la presion se reposicionan de forma segura.
 - Los huecos del suelo siempre son pozos atravesables: el borde inferior del mundo no actua como piso. Caer descuenta exactamente 1 punto de salud y reaparece al jugador sobre suelo seguro junto a la linea roja izquierda, conservando el progreso visible actual en vez de volver al inicio o checkpoint.
 - Un Game Over definitivo limpia `checkpointId`: `Reintentar` conserva el mismo nivel seleccionado pero siempre comienza desde `playerStart`. El checkpoint solo sirve para continuar mientras la partida del nivel sigue activa.
+- `ACTIVE_LEVEL_CHANGED` mantiene en React el `levelId` real de la partida. `RESTART_GAME` debe enviarlo explicitamente para que derrota, victoria y pausa reinicien el mismo nivel y nunca usen silenciosamente Frontera Verde como seleccion anterior.
 - Llegar a la meta.
 - Avanzar en cadena del nivel 1 al nivel 10 al completar cada meta.
 - Desde el nivel 4, cruzar plataformas de piedra que se mueven horizontal o verticalmente.
@@ -315,10 +326,12 @@ Para agregar un item:
 Para agregar un nivel:
 
 1. Agregar definicion en `levels.ts`.
-2. Usar `nextLevelId` si completar ese nivel debe encadenar con otro.
-3. Mantener plataformas, enemigos, ORO, checkpoint y meta como datos.
-4. Definir una `rewardBox` con ID unico y posicion alcanzable.
-5. Mas adelante migrar a Tiled en `src/assets/maps/` sin romper la interfaz de `LevelDefinition`.
+2. Asignar `theme` para seleccionar la familia visual correcta; los valores actuales son `verdant-frontier` y `enchanted-forest`.
+3. Usar `nextLevelId` si completar ese nivel debe encadenar con otro.
+4. Mantener plataformas, enemigos, ORO, checkpoint y meta como datos.
+5. Definir una `rewardBox` con ID unico y posicion alcanzable.
+6. Agregar el nivel a la region correspondiente de `MainMenuScreen.tsx` y a la secuencia de normalizacion de `SaveDefaults.ts` cuando corresponda.
+7. Mas adelante migrar a Tiled en `src/assets/maps/` sin romper la interfaz de `LevelDefinition`.
 
 Para agregar plataformas moviles:
 
@@ -326,6 +339,74 @@ Para agregar plataformas moviles:
 2. Agregar `movement` con `axis`, `distance` y `speed` solo a las piedras que deban moverse.
 3. No crear tweens de plataformas dentro de `LevelScene`; la fisica y el movimiento pertenecen a `MovingPlatform`.
 4. Combinar la plataforma movil con pozos, pinchos o sierras solo desde los datos del nivel.
+
+## Proceso replicable para crear una region
+
+Esta seccion resume la construccion de Bosque encantado y convierte sus decisiones en un flujo reutilizable. El objetivo es que una region nueva comparta sistemas de gameplay sin convertirse en una copia visual ni introducir estados globales que apunten a la region anterior.
+
+### Decisiones de arquitectura tomadas
+
+- Una region no requiere una escena Phaser nueva. `LevelScene` sigue siendo el orquestador y `LevelDefinition.theme` selecciona la familia visual.
+- La identidad de la region vive en assets, parallax, terreno, decoracion y skins; tiempo, progreso, camara, presion roja, checkpoint, meta, guardado y colisiones se reutilizan.
+- Los niveles permanecen en `levels.ts`. No crear arrays de plataformas, enemigos o peligros dentro de `LevelScene`.
+- El mapa y sus listas de niveles viven en React, dentro de `MainMenuScreen.tsx`. Cada region declara sus propios `LevelSlot`.
+- El primer nivel de cada region se agrega a `levelSequences` en `SaveDefaults.ts`. La normalizacion debe desbloquearlo tanto en saves nuevos como existentes.
+- Los enemigos reutilizados aceptan una textura por tema. `BasicEnemy` y `M1Enemy` conservan IA, stats, dano y recompensas; solo cambia su `textureKey`.
+- CSS sirve para diferenciar la UI React de seleccion de region. Las entidades dentro del canvas no pueden estilizarse individualmente con CSS: sus skins deben cargarse o generarse en Phaser mediante `PreloadScene`.
+- Las pruebas visuales siguen a cargo del usuario. El agente entrega auditoria y build, e indica la comprobacion manual pendiente.
+
+### Orden optimizado de implementacion
+
+1. Revisar `git status --short` y no restaurar, mover ni borrar assets fuente que el usuario haya reorganizado.
+2. Definir un ID estable de tema y region. Para Bosque encantado se usa `theme: "enchanted-forest"` y el primer nivel es `enchantedGrove1`.
+3. Inspeccionar dimensiones, transparencia y funcion de los assets antes de copiarlos. Mantener las fuentes en `diseños png/escenarios/<escenario>/` y copiar solo los archivos usados a `src/assets/scenery/<tema>/`.
+4. Cargar todos los assets de gameplay en `PreloadScene` con claves agrupadas por tema. No cargar rutas finales directamente desde `LevelScene`.
+5. Crear primero un nivel minimo recorrible en `levels.ts`: `worldWidth`, tiempo, auto-scroll, inicio, suelo, plataformas, pozos, ORO, caja, checkpoint y meta. Usar IDs unicos para caja, checkpoint y peligros.
+6. Agregar la region y sus slots en `MainMenuScreen.tsx`. Diferenciar el estado activo con clases CSS tematicas colocadas despues de las reglas generales que puedan sobrescribirlas.
+7. Agregar el primer nivel a `levelSequences` de `SaveDefaults.ts` para no dejarlo bloqueado en cuentas existentes.
+8. Implementar el render tematico en metodos separados de `LevelScene`: fondo, capas de parallax, terreno, decoracion y visual de pozos. Conservar las colisiones basadas en los mismos datos.
+9. Incorporar enemigos gradualmente. Primero reutilizar IA existente con una textura tematica opcional; crear una clase nueva solo si cambia el comportamiento.
+10. Revisar todo flujo que conserva nivel: inicio, pausa, derrota, victoria, transicion y reintento. Ninguno debe depender de un fallback fijo de otra region.
+11. Adaptar `audit:levels` para que las reglas especificas de una region se filtren por `theme`; no asumir que el numero de escenario es global.
+12. Ejecutar `git diff --check`, `npm run audit:levels` y `npm run build`. Dejar la prueba visual y el recorrido completo pendientes del usuario salvo peticion explicita.
+
+### Implementacion actual de Bosque encantado
+
+- Region: `enchanted-forest`, visible como `Bosque encantado` en el mapa.
+- Primer nivel: `enchantedGrove1`, nombre visible `Umbral encantado`, numero local LV1.
+- Disponibilidad: desbloqueado por normalizacion en saves nuevos y existentes, independiente del avance de Frontera Verde.
+- Recorrido inicial: 5200 px, 78 segundos, auto-scroll 34, seis pozos, plataformas bajas y elevadas, 25 ORO, caja, checkpoint y meta.
+- Direccion visual: fondo luminoso verde azulado, cuatro arboles transparentes en capas de parallax, luciernagas, piedra humeda verde azulada, musgo y raices.
+- Assets de runtime: `src/assets/scenery/enchanted-forest/`; fuentes: `diseños png/escenarios/escenario 2/`.
+- Enemigos actuales: dos M0 inmoviles y dos M1 perseguidores. M0 usa skin de musgo/raices; M1 usa skin de corteza/runa y conserva persecucion, memoria, salto y deteccion de bordes.
+- UI: segunda pieza seleccionable del mapa, estado `Nuevo`, columna de nivel tematica y LV1 jugable.
+- Auditoria: distingue `Bosque encantado LV1` de `Frontera Verde LV1`; el numero de nivel es local a cada region.
+
+### Errores encontrados y prevencion
+
+- Reintento en region incorrecta: `RESTART_GAME` no transportaba `levelId` y `GameOverScene` tenia fallback a `meadowOutpost`. Solucion: `ACTIVE_LEVEL_CHANGED` sincroniza el nivel real en React, `RESTART_GAME` exige `{ levelId }` y derrota/victoria conservan `restartLevelId`.
+- Fallbacks silenciosos: iniciar o reintentar con datos incompletos podia abrir Frontera Verde. Solucion: los eventos tipados exigen nivel; una referencia invalida en resultado vuelve al menu en vez de seleccionar otra region.
+- Auditoria acoplada a la primera region: `stageNumber >= 6` exigia M3 y `stageNumber >= 3` exigia corazon para cualquier region. Solucion: las reglas exclusivas de Frontera Verde se filtran mediante `theme`.
+- Colision de numeracion: ordenar o mostrar solo por `stageNumber` produce dos `LV1` ambiguos. Solucion: agrupar y rotular por region/tema antes del numero local.
+- Cascada CSS duplicada: el archivo contiene reglas antiguas y finales para `.region-piece`; una variante tematica declarada demasiado pronto puede ser sobrescrita. Solucion: colocar `.region-piece--enchanted` y estados activos despues de la ultima regla base efectiva.
+- CSS aplicado al lugar equivocado: CSS no puede cambiar sprites Phaser individuales porque todo gameplay se dibuja en canvas. Solucion: generar/cargar texturas Phaser y reservar CSS para UI React.
+- Saves existentes sin acceso: agregar solo el nivel al menu no lo desbloquea en partidas previas. Solucion: normalizar el primer ID de cada secuencia en `SaveDefaults.ts` sin borrar progreso.
+- Huecos visuales sin dano real: separar suelo sin un peligro `pit` permite inconsistencias de caida y falla la auditoria. Solucion: cada hueco entre plataformas de suelo debe quedar cubierto por un pozo de datos.
+- Cambios de assets ajenos: durante esta expansion habia PNG fuente movidos a nuevas carpetas. Solucion: conservar esos movimientos del usuario y trabajar con copias dentro de `src/assets`, sin restaurar rutas antiguas.
+
+### Checklist de salida para una region nueva
+
+- [ ] `LevelDefinition.theme` nuevo o reutilizado y aplicado a todos sus niveles.
+- [ ] Assets fuente preservados, copias de runtime organizadas y claves cargadas en `PreloadScene`.
+- [ ] Fondo, al menos dos profundidades de parallax y terreno visual propio.
+- [ ] Primer nivel agregado a datos, menu, secuencia de guardado y normalizacion de saves existentes.
+- [ ] Inicio, plataformas, pozos, ORO, caja, checkpoint y meta alcanzables con IDs unicos.
+- [ ] Enemigos orientados a datos; IA reutilizada con skin tematica cuando corresponda.
+- [ ] Reintento desde pausa, derrota y victoria conserva el `levelId` exacto.
+- [ ] Transiciones no cruzan de region salvo que `nextLevelId` lo indique expresamente.
+- [ ] Auditoria diferencia regiones y no aplica reglas tematicas a niveles ajenos.
+- [ ] `git diff --check`, `npm run audit:levels` y `npm run build` pasan.
+- [ ] Prueba visual y recorrido manual marcados como pendientes del usuario si no fueron solicitados.
 
 ## Reglas de arquitectura
 
@@ -415,15 +496,17 @@ npm run audit:levels
 npm run build
 ```
 
-`audit:levels` valida los 10 niveles, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y que LV3-LV10 tengan un unico corazon aislado de otros elementos entre el 60% y el 80%; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`audit:levels` valida los 11 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y que LV3-LV10 de Frontera Verde tengan un unico corazon aislado de otros elementos entre el 60% y el 80%; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
-Si se toca UI/mobile, verificar visualmente:
+Las pruebas visuales y manuales en navegador quedan a cargo del usuario. Un agente solo debe ejecutarlas cuando el usuario lo pida expresamente; en los demas casos debe entregar las verificaciones automaticas y dejar esta comprobacion como pendiente del usuario.
+
+Si el usuario solicita verificar UI/mobile, comprobar:
 
 - Desktop: controles tactiles ocultos, aviso oculto.
 - Portrait movil: aviso visible, controles ocultos.
 - Landscape movil: aviso oculto, controles visibles, HUD no se cruza con controles ni pausa.
 
-Si se toca gameplay, verificar manualmente:
+Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 
 - Iniciar partida.
 - Moverse.
@@ -461,8 +544,9 @@ Si se toca gameplay, verificar manualmente:
 4. Separar mejor factories/spawners de `LevelScene` si crece el contenido.
 5. Preparar loader para mapas Tiled.
 6. Recorrer manualmente LV6-LV10 completos para afinar velocidades, ventanas de alerta y saltos limite de M1/M3 sin volver a saturarlos con peligros secundarios.
-7. Agregar menu de configuracion y remapeo basico.
-8. Agregar Capacitor cuando la experiencia mobile web este comoda.
+7. Probar manualmente el circuito completo de `Umbral encantado` y ajustar saltos, lectura de piedra, densidad de arboles y velocidad de presion antes de crear LV2.
+8. Agregar menu de configuracion y remapeo basico.
+9. Agregar Capacitor cuando la experiencia mobile web este comoda.
 
 ## Advertencias actuales
 
@@ -497,3 +581,11 @@ Ultima revision documental: 2026-06-28. Esta fecha indica revision del contenido
 Verificacion del checkpoint de niveles 7 a 10 y M3: `npm run build` pasa el 2026-06-27 y el smoke test en navegador confirma carga del nivel 7, sprite lateral, barra de vida y escala visual cercana al heroe. Sigue siendo recomendable recorrer manualmente los cuatro niveles completos para ajustar balance fino y saltos limite.
 
 Verificacion del checkpoint de logros, pozos e IA de M3 del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. El smoke test local confirma autenticacion, menu principal, sala de logros con progreso persistido, layout landscape 844x390 sin desbordamiento y 0 errores de consola. En esta revision no se recorrio manualmente el gameplay completo; mantener pendientes las comprobaciones jugables detalladas de esta guia.
+
+Verificacion de la expansion a ocho logros del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. No se ejecuto navegador conforme a la politica de pruebas visuales a cargo del usuario.
+
+Verificacion de avisos de logro en gameplay del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. La integracion usa `ACHIEVEMENT_UNLOCKED` desde Phaser y una cola React de tarjetas de 4.6 segundos; no se ejecuto navegador conforme a la politica de pruebas visuales a cargo del usuario.
+
+Verificacion del primer nivel de Bosque encantado del 2026-06-28: `npm run audit:levels` pasa con 11 niveles entre ambas regiones y 0 advertencias, y `npm run build` termina correctamente. `enchantedGrove1` tiene dos M0, dos M1, 0 peligros ofensivos, 25 ORO y todos sus huecos cubiertos por pozos. M0/M1 seleccionan texturas procedurales exclusivas mediante el tema sin duplicar sus clases de IA. No se ejecuto navegador conforme a la politica de pruebas visuales a cargo del usuario.
+
+Verificacion de reintentos multirregion del 2026-06-28: `RESTART_GAME` exige un `levelId`, `ACTIVE_LEVEL_CHANGED` sincroniza el nivel real con React y derrota/victoria conservan `restartLevelId`. Los fallbacks silenciosos de inicio y resultado fueron eliminados para no abrir Frontera Verde cuando falta una referencia. `npm run audit:levels` pasa con 11 niveles y 0 advertencias, y `npm run build` termina correctamente. La prueba manual del boton `Reintentar` queda a cargo del usuario.

@@ -2,7 +2,9 @@ import { getPathCoinTarget, levelDefinitions } from "../src/game/data/levels.ts"
 
 const errors = [];
 const warnings = [];
-const levels = Object.values(levelDefinitions).sort((a, b) => a.stageNumber - b.stageNumber);
+const levels = Object.values(levelDefinitions).sort((a, b) =>
+  a.theme.localeCompare(b.theme) || a.stageNumber - b.stageNumber,
+);
 const levelIds = new Set(levels.map((level) => level.id));
 const rewardBoxIds = new Set();
 const groundEnemyIds = new Set(["m0", "m1", "m3"]);
@@ -18,7 +20,7 @@ for (const level of levels) {
   }
   rewardBoxIds.add(level.rewardBox.id);
 
-  if (level.stageNumber >= 6) {
+  if (level.theme === "verdant-frontier" && level.stageNumber >= 6) {
     if (
       typeof level.m3Intelligence !== "number" ||
       level.m3Intelligence < 0.35 ||
@@ -41,7 +43,7 @@ for (const level of levels) {
     errors.push(`${level.id}: ORO del camino ${pathGold}, esperado ${expectedGold}`);
   }
 
-  const expectedHealthPickups = level.stageNumber >= 3 ? 1 : 0;
+  const expectedHealthPickups = level.theme === "verdant-frontier" && level.stageNumber >= 3 ? 1 : 0;
   if (level.healthPickups.length !== expectedHealthPickups) {
     errors.push(
       `${level.id}: tiene ${level.healthPickups.length} corazones, esperado ${expectedHealthPickups}`,
@@ -127,8 +129,9 @@ for (const level of levels) {
   }
 
   const offensiveHazards = level.hazards.filter((hazard) => hazard.type !== "pit").length;
+  const regionLabel = level.theme === "enchanted-forest" ? "Bosque encantado" : "Frontera Verde";
   console.log(
-    `LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones${level.m3Intelligence ? `, M3 IA ${level.m3Intelligence}` : ""}`,
+    `${regionLabel} LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones${level.m3Intelligence ? `, M3 IA ${level.m3Intelligence}` : ""}`,
   );
 }
 

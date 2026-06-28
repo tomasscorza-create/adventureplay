@@ -60,7 +60,7 @@ interface LevelSlot {
   name: string;
 }
 
-const levelSlots: LevelSlot[] = [
+const verdantLevelSlots: LevelSlot[] = [
   { number: 1, levelId: "meadowOutpost", name: "Sendero I" },
   { number: 2, levelId: "meadowOutpost2", name: "Sendero II" },
   { number: 3, levelId: "meadowOutpost3", name: "Sendero III" },
@@ -73,11 +73,22 @@ const levelSlots: LevelSlot[] = [
   { number: 10, levelId: "meadowOutpost10", name: "Caceria del Coloso IV" },
 ];
 
-const regions = [
-  { id: "verdant-frontier", name: "Frontera Verde", status: "Disponible" },
-  { id: "ash-crown", name: "Corona de Ceniza", status: "Proximamente" },
-  { id: "sunken-marsh", name: "Marisma Hundida", status: "Proximamente" },
-  { id: "north-spires", name: "Agujas del Norte", status: "Proximamente" },
+const enchantedLevelSlots: LevelSlot[] = [
+  { number: 1, levelId: "enchantedGrove1", name: "Umbral encantado" },
+];
+
+interface RegionDefinition {
+  id: string;
+  name: string;
+  status: string;
+  levels: LevelSlot[];
+}
+
+const regions: RegionDefinition[] = [
+  { id: "verdant-frontier", name: "Frontera Verde", status: "10 niveles", levels: verdantLevelSlots },
+  { id: "enchanted-forest", name: "Bosque encantado", status: "Nuevo", levels: enchantedLevelSlots },
+  { id: "sunken-marsh", name: "Marisma Hundida", status: "Proximamente", levels: [] },
+  { id: "north-spires", name: "Agujas del Norte", status: "Proximamente", levels: [] },
 ];
 
 const mainActions = [
@@ -107,6 +118,7 @@ export function MainMenuScreen({
   const [inspectedCharacterId, setInspectedCharacterId] = useState<CharacterId>();
   const [activeInventoryCategoryId, setActiveInventoryCategoryId] =
     useState<InventoryCategoryId>("plansKeys");
+  const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
   const [audioSettings, setAudioSettings] = useState(() => gameAudio.getSettings());
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [isResettingProgress, setIsResettingProgress] = useState(false);
@@ -150,8 +162,10 @@ export function MainMenuScreen({
     });
   }, [save.player.inventory]);
 
+  const activeRegion = regions.find((region) => region.id === activeRegionId) ?? regions[0];
+  const activeLevelSlots = activeRegion.levels;
   const nextPlayableLevelId = useMemo(() => {
-    return levelSlots.find((slot) => {
+    return activeLevelSlots.find((slot) => {
       if (!slot.levelId) {
         return false;
       }
@@ -160,7 +174,7 @@ export function MainMenuScreen({
       const isCompleted = save.completedLevels.includes(slot.levelId);
       return isUnlocked && !isCompleted;
     })?.levelId;
-  }, [save.completedLevels, save.unlockedLevels]);
+  }, [activeLevelSlots, save.completedLevels, save.unlockedLevels]);
   const unlockedAchievementCount = achievementDefinitions.filter((achievement) =>
     save.achievements.unlockedIds.includes(achievement.id),
   ).length;
@@ -395,7 +409,7 @@ export function MainMenuScreen({
                 <div className="achievement-grid">
                   {achievementDefinitions.map((achievement) => {
                     const isUnlocked = save.achievements.unlockedIds.includes(achievement.id);
-                    const progress = achievement.getProgress(save.achievements);
+                    const progress = achievement.getProgress(save);
                     const progressPercent = Math.round((progress / achievement.target) * 100);
                     return (
                       <article
@@ -547,10 +561,13 @@ export function MainMenuScreen({
                   <span className="continent-map__compass" aria-hidden="true" />
                   {regions.map((region, index) => (
                     <button
-                      className={`region-piece region-piece--${index + 1}`}
+                      className={`region-piece region-piece--${index + 1}${
+                        region.id === activeRegion.id ? " region-piece--active" : ""
+                      }${region.id === "enchanted-forest" ? " region-piece--enchanted" : ""}`}
                       type="button"
                       key={region.id}
-                      disabled={index !== 0}
+                      disabled={region.levels.length === 0}
+                      onClick={() => runMenuAction(() => setActiveRegionId(region.id))}
                     >
                       <span>{region.name}</span>
                       <strong>{region.status}</strong>
@@ -558,14 +575,17 @@ export function MainMenuScreen({
                   ))}
                 </div>
 
-                <div className="level-column" aria-label="Niveles de Frontera Verde">
+                <div
+                  className={`level-column level-column--${activeRegion.id}`}
+                  aria-label={`Niveles de ${activeRegion.name}`}
+                >
                   <div className="level-column__header">
-                    <span>Frontera Verde</span>
-                    <strong>10 niveles</strong>
+                    <span>{activeRegion.name}</span>
+                    <strong>{activeLevelSlots.length} {activeLevelSlots.length === 1 ? "nivel" : "niveles"}</strong>
                   </div>
 
                   <div className="level-list">
-                    {levelSlots.map((slot) => {
+                    {activeLevelSlots.map((slot) => {
                       const levelExists = Boolean(slot.levelId && levelDefinitions[slot.levelId]);
                       const isUnlocked = Boolean(slot.levelId && save.unlockedLevels.includes(slot.levelId));
                       const isCompleted = Boolean(slot.levelId && save.completedLevels.includes(slot.levelId));

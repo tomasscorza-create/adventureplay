@@ -7,7 +7,8 @@ import { createDefaultSave } from "./game/systems/save/SaveDefaults";
 import { gameAudio } from "./shared/audio/GameAudio";
 import { EVENTS } from "./shared/constants/events";
 import { isSupabaseConfigured, supabase } from "./shared/supabase/client";
-import type { CharacterId, GameScreen, HudState, SaveData } from "./shared/types/game";
+import type { AchievementId, CharacterId, GameScreen, HudState, SaveData } from "./shared/types/game";
+import { AchievementUnlockToast } from "./ui/components/AchievementUnlockToast";
 import { HUD } from "./ui/components/HUD";
 import { AbilityControls } from "./ui/components/AbilityControls";
 import { MobileControls } from "./ui/components/MobileControls";
@@ -34,12 +35,17 @@ const initialHud: HudState = {
 };
 
 type AuthStatus = "checking" | "signed-out" | "loading-save" | "signed-in";
+type AchievementNotification = { id: AchievementId; title: string; icon: string };
+
+const ACHIEVEMENT_NOTIFICATION_DURATION_MS = 4600;
 
 export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
   const [healthPickupFeedback, setHealthPickupFeedback] = useState({ sequence: 0, restored: 0 });
   const [damageFeedbackSequence, setDamageFeedbackSequence] = useState(0);
+  const [achievementQueue, setAchievementQueue] = useState<AchievementNotification[]>([]);
+  const [activeLevelId, setActiveLevelId] = useState("meadowOutpost");
   const [save, setSave] = useState<SaveData>(() => createDefaultSave());
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [authError, setAuthError] = useState<string>();
@@ -63,6 +69,16 @@ export function App() {
     const offPlayerDamaged = gameEvents.on(EVENTS.PLAYER_DAMAGED, () => {
       setDamageFeedbackSequence((current) => current + 1);
     });
+    const offAchievementUnlocked = gameEvents.on(EVENTS.ACHIEVEMENT_UNLOCKED, (achievement) => {
+      setAchievementQueue((current) => (
+        current.some((queued) => queued.id === achievement.id)
+          ? current
+          : [...current, achievement]
+      ));
+    });
+    const offActiveLevelChanged = gameEvents.on(EVENTS.ACTIVE_LEVEL_CHANGED, ({ levelId }) => {
+      setActiveLevelId(levelId);
+    });
     const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, (nextScreen) => {
       setScreen(nextScreen);
       if (nextScreen !== "playing" && nextScreen !== "paused") {
@@ -76,10 +92,26 @@ export function App() {
       offHud();
       offHealthPickup();
       offPlayerDamaged();
+      offAchievementUnlocked();
+      offActiveLevelChanged();
       offScreen();
       offCompleted();
     };
   }, []);
+
+  const activeAchievement = achievementQueue[0];
+
+  useEffect(() => {
+    if (!activeAchievement) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAchievementQueue((current) => current.slice(1));
+    }, ACHIEVEMENT_NOTIFICATION_DURATION_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeAchievement]);
 
   useEffect(() => {
     gameSaveStore.onError((error) => {
@@ -215,7 +247,7 @@ export function App() {
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };
 
-  const startGame = (levelId = "meadowOutpost") => {
+  const startGame = (levelId: string) => {
     const currentSave = gameSaveStore.load();
     if (
       authStatus !== "signed-in" ||
@@ -226,6 +258,7 @@ export function App() {
     }
 
     setSave(currentSave);
+    setActiveLevelId(levelId);
     gameEvents.emit(EVENTS.START_GAME, { levelId });
   };
   const selectCharacter = (characterId: CharacterId) => {
@@ -287,7 +320,7 @@ export function App() {
   };
   const restartGame = () => {
     gameAudio.playUiSelect();
-    gameEvents.emit(EVENTS.RESTART_GAME, undefined);
+    gameEvents.emit(EVENTS.RESTART_GAME, { levelId: activeLevelId });
   };
   const goToMenu = () => {
     gameAudio.playUiSelect();
@@ -305,6 +338,13 @@ export function App() {
           key={`damage-feedback-${damageFeedbackSequence}`}
           className="damage-screen-flash"
           aria-hidden="true"
+        />
+      )}
+      {!needsAuth && activeAchievement && (
+        <AchievementUnlockToast
+          key={activeAchievement.id}
+          icon={activeAchievement.icon}
+          title={activeAchievement.title}
         />
       )}
       {!needsAuth && (screen === "playing" || screen === "paused") && (

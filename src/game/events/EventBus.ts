@@ -1,14 +1,16 @@
-import type { GameScreen, HudState } from "../../shared/types/game";
+import type { AchievementId, GameScreen, HudState } from "../../shared/types/game";
 import { EVENTS } from "../../shared/constants/events";
 
 type GameEventMap = {
-  [EVENTS.START_GAME]: { levelId?: string };
+  [EVENTS.START_GAME]: { levelId: string };
   [EVENTS.RESUME_GAME]: undefined;
-  [EVENTS.RESTART_GAME]: undefined;
+  [EVENTS.RESTART_GAME]: { levelId: string };
   [EVENTS.GO_TO_MENU]: undefined;
+  [EVENTS.ACTIVE_LEVEL_CHANGED]: { levelId: string };
   [EVENTS.HUD_UPDATED]: HudState;
   [EVENTS.HEALTH_PICKUP_COLLECTED]: { restored: number };
   [EVENTS.PLAYER_DAMAGED]: { amount: number };
+  [EVENTS.ACHIEVEMENT_UNLOCKED]: { id: AchievementId; title: string; icon: string };
   [EVENTS.SCREEN_CHANGED]: GameScreen;
   [EVENTS.LEVEL_COMPLETED]: { levelId: string };
 };

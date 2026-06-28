@@ -12,17 +12,20 @@ import { achievementIds } from "../../data/achievements";
 export const SAVE_SCHEMA_VERSION = 8;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix"];
-const levelSequence = [
-  "meadowOutpost",
-  "meadowOutpost2",
-  "meadowOutpost3",
-  "meadowOutpost4",
-  "meadowOutpost5",
-  "meadowOutpost6",
-  "meadowOutpost7",
-  "meadowOutpost8",
-  "meadowOutpost9",
-  "meadowOutpost10",
+const levelSequences = [
+  [
+    "meadowOutpost",
+    "meadowOutpost2",
+    "meadowOutpost3",
+    "meadowOutpost4",
+    "meadowOutpost5",
+    "meadowOutpost6",
+    "meadowOutpost7",
+    "meadowOutpost8",
+    "meadowOutpost9",
+    "meadowOutpost10",
+  ],
+  ["enchantedGrove1"],
 ];
 const defaultPowerCharges: PowerChargeState = {
   healingCharges: 3,
@@ -54,7 +57,7 @@ export const defaultSave: SaveData = {
   primaryCharacterId: undefined,
   unlockedCharacterIds: [],
   characterPowerCharges: createDefaultCharacterPowerCharges(),
-  unlockedLevels: ["meadowOutpost"],
+  unlockedLevels: ["meadowOutpost", "enchantedGrove1"],
   completedLevels: [],
   claimedRewardBoxes: [],
   achievements: {
@@ -129,11 +132,12 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   const unlockedLevels = new Set(
     Array.isArray(data.unlockedLevels) ? data.unlockedLevels : defaults.unlockedLevels,
   );
-  unlockedLevels.add(levelSequence[0]);
-
-  for (let index = 0; index < levelSequence.length - 1; index += 1) {
-    if (completedLevels.includes(levelSequence[index])) {
-      unlockedLevels.add(levelSequence[index + 1]);
+  for (const levelSequence of levelSequences) {
+    unlockedLevels.add(levelSequence[0]);
+    for (let index = 0; index < levelSequence.length - 1; index += 1) {
+      if (completedLevels.includes(levelSequence[index])) {
+        unlockedLevels.add(levelSequence[index + 1]);
+      }
     }
   }
 
@@ -145,6 +149,10 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   player.speed = player.unlockedSkills.includes("quick-steps")
     ? PLAYER_DEFAULTS.speed + 20
     : PLAYER_DEFAULTS.speed;
+  const claimedRewardBoxes = Array.isArray(data.claimedRewardBoxes)
+    ? [...new Set(data.claimedRewardBoxes)]
+    : [...defaults.claimedRewardBoxes];
+  const checkpointId = typeof data.checkpointId === "string" ? data.checkpointId : undefined;
   const incomingAchievements = data.achievements;
   const unlockedAchievementIds = achievementIds.filter((achievementId) =>
     incomingAchievements?.unlockedIds?.includes(achievementId),
@@ -158,6 +166,21 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   if (monstersDefeated >= 10 && !unlockedAchievementIds.includes("monster-hunter")) {
     unlockedAchievementIds.push("monster-hunter");
   }
+  if (monstersDefeated >= 1 && !unlockedAchievementIds.includes("first-monster")) {
+    unlockedAchievementIds.push("first-monster");
+  }
+  if (player.coins > 0 && !unlockedAchievementIds.includes("first-gold")) {
+    unlockedAchievementIds.push("first-gold");
+  }
+  if (checkpointId && !unlockedAchievementIds.includes("first-checkpoint")) {
+    unlockedAchievementIds.push("first-checkpoint");
+  }
+  if (claimedRewardBoxes.length > 0 && !unlockedAchievementIds.includes("first-treasure")) {
+    unlockedAchievementIds.push("first-treasure");
+  }
+  if (completedLevels.length >= 3 && !unlockedAchievementIds.includes("three-levels")) {
+    unlockedAchievementIds.push("three-levels");
+  }
 
   return {
     player,
@@ -167,14 +190,12 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     characterPowerCharges,
     unlockedLevels: [...unlockedLevels],
     completedLevels,
-    claimedRewardBoxes: Array.isArray(data.claimedRewardBoxes)
-      ? [...new Set(data.claimedRewardBoxes)]
-      : [...defaults.claimedRewardBoxes],
+    claimedRewardBoxes,
     achievements: {
       unlockedIds: unlockedAchievementIds,
       monstersDefeated,
     },
-    checkpointId: typeof data.checkpointId === "string" ? data.checkpointId : undefined,
+    checkpointId,
   };
 }
 

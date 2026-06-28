@@ -20,13 +20,14 @@ export class M1Enemy extends BaseEnemy {
     y: number,
     patrolDistance: number,
     walkableSurfaces: Phaser.GameObjects.Rectangle[],
+    textureKey = "enemy-m1",
   ) {
     const definition = enemyDefinitions.m1;
     if (!definition) {
       throw new Error("Unknown enemy definition: m1");
     }
 
-    super(scene, x, y, "enemy-m1", definition, patrolDistance);
+    super(scene, x, y, textureKey, definition, patrolDistance);
     this.walkableSurfaces = walkableSurfaces;
     this.setData("stompable", true);
 

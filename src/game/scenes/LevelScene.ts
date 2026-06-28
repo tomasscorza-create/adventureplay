@@ -3,6 +3,7 @@ import { gameAudio } from "../../shared/audio/GameAudio";
 import { EVENTS } from "../../shared/constants/events";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../shared/constants/game";
 import type {
+  AchievementId,
   LevelDefinition,
   LevelHazardDefinition,
   PowerChargeState,
@@ -20,6 +21,7 @@ import { Player } from "../entities/player/Player";
 import type { Projectile } from "../entities/projectiles/Projectile";
 import { PowerProjectile } from "../entities/projectiles/PowerProjectile";
 import { getCharacterDefinition } from "../data/characters";
+import { getAchievementDefinition } from "../data/achievements";
 import { itemDefinitions, randomInventoryRewardItemIds } from "../data/items";
 import { levelDefinitions } from "../data/levels";
 import { gameEvents } from "../events/EventBus";
@@ -74,7 +76,9 @@ export class LevelScene extends Phaser.Scene {
   }
 
   create(data: { levelId?: string }): void {
-    this.level = levelDefinitions[data.levelId ?? "meadowOutpost"];
+    const requestedLevelId = data.levelId ?? "meadowOutpost";
+    this.level = levelDefinitions[requestedLevelId] ?? levelDefinitions.meadowOutpost;
+    gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.save = gameSaveStore.load();
     this.save.player.health = this.save.player.maxHealth;
     this.activeCheckpoint = this.save.checkpointId === this.level.checkpoint.id
@@ -140,10 +144,15 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createWorld(): void {
-    this.cameras.main.setBackgroundColor("#071323");
+    const isEnchantedForest = this.level.theme === "enchanted-forest";
+    this.cameras.main.setBackgroundColor(isEnchantedForest ? "#153f3b" : "#071323");
     this.physics.world.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
     this.physics.world.setBoundsCollision(true, true, true, false);
-    this.createForestBackdrop();
+    if (isEnchantedForest) {
+      this.createEnchantedForestBackdrop();
+    } else {
+      this.createForestBackdrop();
+    }
     this.createGroundLayer();
     this.createScenarioDressings();
     this.pressureLine = this.add
@@ -230,11 +239,19 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createEnemy(enemy: LevelDefinition["enemies"][number]): BaseEnemy {
+    const isEnchantedForest = this.level.theme === "enchanted-forest";
     if (enemy.enemyId === "m1") {
-      return new M1Enemy(this, enemy.x, enemy.y, enemy.patrolDistance, [
-        ...this.platforms.getChildren(),
-        ...this.movingPlatforms.getChildren(),
-      ] as Phaser.GameObjects.Rectangle[]);
+      return new M1Enemy(
+        this,
+        enemy.x,
+        enemy.y,
+        enemy.patrolDistance,
+        [
+          ...this.platforms.getChildren(),
+          ...this.movingPlatforms.getChildren(),
+        ] as Phaser.GameObjects.Rectangle[],
+        isEnchantedForest ? "enchanted-enemy-m1" : "enemy-m1",
+      );
     }
 
     if (enemy.enemyId === "m2") {
@@ -248,7 +265,16 @@ export class LevelScene extends Phaser.Scene {
       ] as Phaser.GameObjects.Rectangle[], this.level.m3Intelligence);
     }
 
-    return new BasicEnemy(this, enemy.x, enemy.y, enemy.enemyId, enemy.patrolDistance);
+    return new BasicEnemy(
+      this,
+      enemy.x,
+      enemy.y,
+      enemy.enemyId,
+      enemy.patrolDistance,
+      isEnchantedForest && enemy.enemyId === "m0"
+        ? "enchanted-enemy-m0"
+        : "enemy-emberling",
+    );
   }
 
   private createCollisions(): void {
@@ -314,8 +340,9 @@ export class LevelScene extends Phaser.Scene {
       }
     });
 
-    this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, () => {
-      this.scene.start("LevelScene", { levelId: this.level.id });
+    this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
+      const restartLevelId = levelDefinitions[levelId] ? levelId : this.level.id;
+      this.scene.start("LevelScene", { levelId: restartLevelId });
     });
 
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {
@@ -559,7 +586,77 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private createEnchantedForestBackdrop(): void {
+    this.add
+      .image(0, 0, "enchanted-background")
+      .setOrigin(0)
+      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+      .setScrollFactor(0)
+      .setDepth(-40);
+
+    this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0b4a46, 0.12)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(-39);
+
+    for (let x = -180; x < this.level.worldWidth + 500; x += 920) {
+      const farTreeKey = Math.floor(x / 920) % 2 === 0 ? "enchanted-tree-2" : "enchanted-tree-3";
+      this.add
+        .image(x, 682, farTreeKey)
+        .setOrigin(0.5, 1)
+        .setScale(0.62)
+        .setTint(0x6bb89d)
+        .setAlpha(0.32)
+        .setScrollFactor(0.18)
+        .setDepth(-29);
+    }
+
+    for (let x = 180; x < this.level.worldWidth + 600; x += 760) {
+      const middleTreeKey = Math.floor(x / 760) % 2 === 0 ? "enchanted-tree-1" : "enchanted-tree-3";
+      this.add
+        .image(x, 690, middleTreeKey)
+        .setOrigin(0.5, 1)
+        .setScale(0.72)
+        .setTint(0xb0d596)
+        .setAlpha(0.58)
+        .setScrollFactor(0.43)
+        .setDepth(-18);
+    }
+
+    for (let x = 520; x < this.level.worldWidth + 700; x += 1120) {
+      this.add
+        .image(x, 695, "enchanted-tree-4")
+        .setOrigin(0.5, 1)
+        .setScale(0.88)
+        .setAlpha(0.86)
+        .setScrollFactor(0.69)
+        .setDepth(-9);
+      this.add
+        .image(x + 560, 700, "enchanted-tree-2")
+        .setOrigin(0.5, 1)
+        .setScale(0.8)
+        .setAlpha(0.78)
+        .setScrollFactor(0.73)
+        .setDepth(-8);
+    }
+
+    for (let x = 140; x < this.level.worldWidth; x += 310) {
+      const y = 270 + ((x / 310) % 4) * 68;
+      this.add.circle(x, y, 2.5, 0xbaffb0, 0.72).setScrollFactor(0.55).setDepth(-6);
+      this.add.circle(x + 92, y + 76, 1.8, 0x75f4dd, 0.62).setScrollFactor(0.62).setDepth(-6);
+    }
+  }
+
   private createGroundLayer(): void {
+    if (this.level.theme === "enchanted-forest") {
+      for (let x = -180; x < this.level.worldWidth + 180; x += 360) {
+        this.add.ellipse(x, 692, 520, 128, 0x102d29, 0.72).setDepth(-1);
+        this.add.ellipse(x + 150, 632, 320, 80, 0x3c7252, 0.22).setDepth(-1);
+      }
+      return;
+    }
+
     for (let x = -180; x < this.level.worldWidth + 180; x += 420) {
       this.add
         .ellipse(x, 682, 560, 150, 0x020707, 0.58)
@@ -571,6 +668,11 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createScenarioDressings(): void {
+    if (this.level.theme === "enchanted-forest") {
+      this.createEnchantedForestDressings();
+      return;
+    }
+
     const groundPlatforms = this.level.platforms.filter((platform) => platform.y >= 640);
 
     for (const [index, platform] of groundPlatforms.entries()) {
@@ -612,6 +714,28 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private createEnchantedForestDressings(): void {
+    const groundPlatforms = this.level.platforms.filter((platform) => platform.y >= 640);
+    for (const [index, platform] of groundPlatforms.entries()) {
+      const surfaceY = platform.y + 2;
+      if (index % 2 === 0 && platform.width > 420) {
+        this.createMushrooms(platform.x + 130, surfaceY);
+      }
+      if (index % 3 === 1 && platform.width > 440) {
+        this.createCrystalCluster(platform.x + platform.width - 110, surfaceY);
+      }
+      if (index === 0 || index === groundPlatforms.length - 1) {
+        this.add
+          .image(platform.x + Math.min(platform.width - 80, 230), surfaceY + 4, "scenery-bush")
+          .setOrigin(0.5, 1)
+          .setScale(0.64)
+          .setTint(0x5f9e62)
+          .setAlpha(0.76)
+          .setDepth(7);
+      }
+    }
+  }
+
   private createMushrooms(x: number, y: number): void {
     this.add.image(x, y, "scenery-mushrooms").setOrigin(0.5, 1).setScale(0.46).setDepth(8);
   }
@@ -643,7 +767,11 @@ export class LevelScene extends Phaser.Scene {
         .setDepth(1);
     }
 
-    this.createTerrainRun(platform);
+    if (this.level.theme === "enchanted-forest") {
+      this.createEnchantedTerrainRun(platform);
+    } else {
+      this.createTerrainRun(platform);
+    }
 
     const collisionBody = this.add
       .rectangle(platform.x, platform.y, platform.width, platform.height, 0x000000, 0)
@@ -651,6 +779,41 @@ export class LevelScene extends Phaser.Scene {
 
     this.physics.add.existing(collisionBody, true);
     this.platforms.add(collisionBody);
+  }
+
+  private createEnchantedTerrainRun(platform: LevelDefinition["platforms"][number]): void {
+    const isGround = platform.y >= 640;
+    const topY = platform.y - 8;
+    const visualHeight = isGround ? GAME_HEIGHT - topY + 18 : 58;
+    const depth = isGround ? 4 : 5;
+    const graphics = this.add.graphics().setDepth(depth);
+
+    graphics.fillStyle(0x102923, 0.46);
+    graphics.fillRoundedRect(platform.x + 6, topY + 10, platform.width, visualHeight, 10);
+    graphics.fillStyle(isGround ? 0x31534a : 0x3b6257, 1);
+    graphics.fillRoundedRect(platform.x, topY, platform.width, visualHeight, isGround ? 8 : 12);
+    graphics.fillStyle(0x203e38, 0.88);
+    graphics.fillRect(platform.x, topY + 23, platform.width, Math.max(20, visualHeight - 23));
+    graphics.fillStyle(0x73a957, 1);
+    graphics.fillRoundedRect(platform.x - 2, topY - 2, platform.width + 4, 13, 7);
+    graphics.fillStyle(0xa1ca67, 0.72);
+    graphics.fillRect(platform.x + 8, topY, Math.max(20, platform.width - 20), 4);
+
+    graphics.lineStyle(2, 0x132e2a, 0.64);
+    const stoneWidth = isGround ? 92 : 72;
+    for (let x = platform.x + stoneWidth; x < platform.x + platform.width; x += stoneWidth) {
+      const offset = Math.floor((x - platform.x) / stoneWidth) % 2 === 0 ? 0 : 9;
+      graphics.lineBetween(x, topY + 16 + offset, x - 8, topY + visualHeight - 5);
+    }
+    for (let y = topY + 40; y < topY + visualHeight; y += 34) {
+      graphics.lineBetween(platform.x + 8, y, platform.x + platform.width - 8, y + 4);
+    }
+
+    if (!isGround) {
+      graphics.lineStyle(3, 0x315c3f, 0.68);
+      graphics.lineBetween(platform.x + 26, topY + visualHeight - 2, platform.x + 34, topY + visualHeight + 22);
+      graphics.lineBetween(platform.x + platform.width - 34, topY + visualHeight - 2, platform.x + platform.width - 42, topY + visualHeight + 15);
+    }
   }
 
   private createTerrainRun(platform: LevelDefinition["platforms"][number]): void {
@@ -719,6 +882,17 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createPitVisual(hazard: LevelHazardDefinition): void {
+    if (this.level.theme === "enchanted-forest") {
+      this.add
+        .rectangle(hazard.x, hazard.y - 22, hazard.width, hazard.height + 44, 0x061b1b, 0.96)
+        .setOrigin(0, 0)
+        .setDepth(5);
+      for (let x = hazard.x + 24; x < hazard.x + hazard.width; x += 48) {
+        this.add.circle(x, hazard.y + 8, 2.2, 0x6ce9cf, 0.42).setDepth(6);
+      }
+      return;
+    }
+
     this.add
       .rectangle(hazard.x, hazard.y - 22, hazard.width, hazard.height + 44, 0x010607, 0.98)
       .setOrigin(0, 0)
@@ -755,6 +929,9 @@ export class LevelScene extends Phaser.Scene {
   private collectCoin(coin: Coin): void {
     this.inventory.collect(this.save.player, coin.itemId, coin.value);
     if (itemDefinitions[coin.itemId]?.type === "coin") {
+      this.announceAchievements(
+        this.achievements.recordCoinCollected(this.save.achievements),
+      );
       this.createCoinGainEffect(coin.x, coin.y, coin.value);
     }
     gameAudio.playCollect();
@@ -792,6 +969,9 @@ export class LevelScene extends Phaser.Scene {
 
     this.inventory.collect(this.save.player, rewardItemId);
     this.save.claimedRewardBoxes.push(rewardBoxId);
+    this.announceAchievements(
+      this.achievements.recordRewardBoxOpened(this.save.achievements),
+    );
     gameAudio.playCollect();
     this.createRewardBoxEffect(rewardBox.x, rewardBox.y, rewardItem.name);
     rewardBox.disableBody(true, true);
@@ -922,7 +1102,9 @@ export class LevelScene extends Phaser.Scene {
     gameAudio.playEnemyDefeat();
     this.createEnemyDefeatEffect(enemy);
     this.progression.addExperience(this.save.player, enemy.experienceReward);
-    this.achievements.recordEnemyDefeat(this.save.achievements);
+    this.announceAchievements(
+      this.achievements.recordEnemyDefeat(this.save.achievements),
+    );
     const coinReward = enemy.definition.coinReward;
     if (coinReward) {
       const amount = Phaser.Math.Between(coinReward.min, coinReward.max);
@@ -1097,6 +1279,9 @@ export class LevelScene extends Phaser.Scene {
 
     this.activeCheckpoint = { ...this.level.checkpoint };
     this.save.checkpointId = this.level.checkpoint.id;
+    this.announceAchievements(
+      this.achievements.recordCheckpointActivated(this.save.achievements),
+    );
     gameSaveStore.save(this.save);
     this.checkpoint.setTint(0xffffff);
   }
@@ -1222,10 +1407,13 @@ export class LevelScene extends Phaser.Scene {
       this.save.unlockedLevels.push(this.level.nextLevelId);
     }
 
-    this.achievements.recordLevelCompleted(
-      this.save.achievements,
-      this.level.id,
-      !this.damageTakenThisLevel,
+    this.announceAchievements(
+      this.achievements.recordLevelCompleted(
+        this.save.achievements,
+        this.level.id,
+        !this.damageTakenThisLevel,
+        this.save.completedLevels.length,
+      ),
     );
 
     gameSaveStore.save(this.save);
@@ -1238,7 +1426,7 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
-    this.scene.start("GameOverScene", { result: "victory" });
+    this.scene.start("GameOverScene", { result: "victory", restartLevelId: this.level.id });
   }
 
   private playLevelTransition(nextLevelId: string): void {
@@ -1359,6 +1547,21 @@ export class LevelScene extends Phaser.Scene {
     this.time.delayedCall(durationMs, () => {
       this.scene.start("LevelScene", { levelId: nextLevelId });
     });
+  }
+
+  private announceAchievements(achievementIds: AchievementId[]): void {
+    for (const achievementId of achievementIds) {
+      const achievement = getAchievementDefinition(achievementId);
+      if (!achievement) {
+        continue;
+      }
+
+      gameEvents.emit(EVENTS.ACHIEVEMENT_UNLOCKED, {
+        id: achievement.id,
+        title: achievement.title,
+        icon: achievement.icon,
+      });
+    }
   }
 
   private updateLevelTimer(delta: number): void {

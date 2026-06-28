@@ -3,9 +3,11 @@ export const EVENTS = {
   RESUME_GAME: "react:resume-game",
   RESTART_GAME: "react:restart-game",
   GO_TO_MENU: "react:go-to-menu",
+  ACTIVE_LEVEL_CHANGED: "game:active-level-changed",
   HUD_UPDATED: "game:hud-updated",
   HEALTH_PICKUP_COLLECTED: "game:health-pickup-collected",
   PLAYER_DAMAGED: "game:player-damaged",
+  ACHIEVEMENT_UNLOCKED: "game:achievement-unlocked",
   SCREEN_CHANGED: "game:screen-changed",
   LEVEL_COMPLETED: "game:level-completed",
 } as const;

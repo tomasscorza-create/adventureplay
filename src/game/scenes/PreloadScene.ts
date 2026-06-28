@@ -12,6 +12,11 @@ import playerKnightUrl from "../../assets/player-knight.png";
 import bushUrl from "../../assets/scenery/bush.png";
 import cloudsUrl from "../../assets/scenery/clouds.png";
 import crystalsUrl from "../../assets/scenery/crystals.png";
+import enchantedBackgroundUrl from "../../assets/scenery/enchanted-forest/background.png";
+import enchantedTree1Url from "../../assets/scenery/enchanted-forest/tree-1.png";
+import enchantedTree2Url from "../../assets/scenery/enchanted-forest/tree-2.png";
+import enchantedTree3Url from "../../assets/scenery/enchanted-forest/tree-3.png";
+import enchantedTree4Url from "../../assets/scenery/enchanted-forest/tree-4.png";
 import floorStripUrl from "../../assets/scenery/forest-floor-strip.png";
 import lanternPostUrl from "../../assets/scenery/lantern-post.png";
 import moonUrl from "../../assets/scenery/moon-new-game.png";
@@ -62,6 +67,8 @@ export class PreloadScene extends Phaser.Scene {
     this.createM3Animations();
     this.createEnemyTexture();
     this.createM1Texture();
+    this.createEnchantedM0Texture();
+    this.createEnchantedM1Texture();
     this.createProjectileTexture();
     this.createPowerProjectileTexture();
     this.createCoinTexture();
@@ -78,6 +85,11 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image("scenery-bush", bushUrl);
     this.load.image("scenery-clouds", cloudsUrl);
     this.load.image("scenery-crystals", crystalsUrl);
+    this.load.image("enchanted-background", enchantedBackgroundUrl);
+    this.load.image("enchanted-tree-1", enchantedTree1Url);
+    this.load.image("enchanted-tree-2", enchantedTree2Url);
+    this.load.image("enchanted-tree-3", enchantedTree3Url);
+    this.load.image("enchanted-tree-4", enchantedTree4Url);
     this.load.image("scenery-floor-strip", floorStripUrl);
     this.load.image("scenery-lantern-post", lanternPostUrl);
     this.load.image("scenery-moon", moonUrl);
@@ -407,6 +419,83 @@ export class PreloadScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x0b1913, 1);
     graphics.strokeRoundedRect(6, 12, 34, 29, 9);
     graphics.generateTexture("enemy-m1", 46, 50);
+    graphics.destroy();
+  }
+
+  private createEnchantedM0Texture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x071a16, 0.36);
+    graphics.fillEllipse(24, 44, 38, 9);
+    graphics.lineStyle(4, 0x34563b, 1);
+    graphics.lineBetween(12, 40, 5, 47);
+    graphics.lineBetween(20, 40, 16, 49);
+    graphics.lineBetween(30, 40, 34, 49);
+    graphics.lineBetween(38, 40, 44, 47);
+    graphics.fillStyle(0x173e34, 1);
+    graphics.fillRoundedRect(7, 14, 34, 29, 12);
+    graphics.fillStyle(0x477c45, 1);
+    graphics.fillCircle(14, 14, 10);
+    graphics.fillCircle(25, 10, 12);
+    graphics.fillCircle(36, 15, 9);
+    graphics.fillStyle(0x85b95b, 0.92);
+    graphics.fillCircle(18, 8, 5);
+    graphics.fillCircle(30, 7, 5);
+    graphics.lineStyle(3, 0x6f8f51, 1);
+    graphics.lineBetween(12, 16, 8, 4);
+    graphics.lineBetween(36, 17, 41, 5);
+    graphics.lineStyle(2, 0xbaf7c5, 1);
+    graphics.strokeCircle(24, 29, 7);
+    graphics.fillStyle(0x68f0d4, 0.88);
+    graphics.fillCircle(24, 29, 3.8);
+    graphics.fillStyle(0xd9ffbd, 1);
+    graphics.fillCircle(16, 23, 2.5);
+    graphics.fillCircle(33, 23, 2.5);
+    graphics.fillStyle(0x10251e, 1);
+    graphics.fillCircle(16, 23, 1);
+    graphics.fillCircle(33, 23, 1);
+    graphics.lineStyle(2, 0x0d2c26, 1);
+    graphics.strokeRoundedRect(7, 14, 34, 29, 12);
+    graphics.generateTexture("enchanted-enemy-m0", 48, 52);
+    graphics.destroy();
+  }
+
+  private createEnchantedM1Texture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x071813, 0.36);
+    graphics.fillEllipse(23, 45, 38, 9);
+    graphics.fillStyle(0x2b4935, 1);
+    graphics.fillTriangle(8, 19, 1, 12, 10, 8);
+    graphics.fillTriangle(38, 19, 45, 12, 36, 8);
+    graphics.fillStyle(0x3d5c37, 1);
+    graphics.fillRoundedRect(6, 12, 34, 31, 9);
+    graphics.fillStyle(0x6c7e43, 1);
+    graphics.fillRoundedRect(10, 9, 26, 28, 8);
+    graphics.fillStyle(0x9fbb62, 0.86);
+    graphics.fillCircle(13, 12, 6);
+    graphics.fillCircle(24, 8, 7);
+    graphics.fillCircle(34, 13, 5);
+    graphics.lineStyle(3, 0x294b34, 1);
+    graphics.lineBetween(10, 35, 5, 47);
+    graphics.lineBetween(18, 37, 16, 49);
+    graphics.lineBetween(29, 37, 31, 49);
+    graphics.lineBetween(37, 35, 42, 47);
+    graphics.fillStyle(0x8dfff0, 1);
+    graphics.fillTriangle(14, 20, 19, 17, 19, 23);
+    graphics.fillTriangle(32, 20, 27, 17, 27, 23);
+    graphics.fillStyle(0x12332d, 1);
+    graphics.fillCircle(18, 20, 1.2);
+    graphics.fillCircle(28, 20, 1.2);
+    graphics.lineStyle(2, 0x6cebd1, 0.86);
+    graphics.beginPath();
+    graphics.moveTo(18, 29);
+    graphics.lineTo(23, 26);
+    graphics.lineTo(28, 29);
+    graphics.lineTo(23, 34);
+    graphics.closePath();
+    graphics.strokePath();
+    graphics.lineStyle(2, 0x162d22, 1);
+    graphics.strokeRoundedRect(6, 12, 34, 31, 9);
+    graphics.generateTexture("enchanted-enemy-m1", 46, 52);
     graphics.destroy();
   }
 
