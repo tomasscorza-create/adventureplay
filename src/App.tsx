@@ -39,6 +39,7 @@ export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
   const [healthPickupFeedback, setHealthPickupFeedback] = useState({ sequence: 0, restored: 0 });
+  const [damageFeedbackSequence, setDamageFeedbackSequence] = useState(0);
   const [save, setSave] = useState<SaveData>(() => createDefaultSave());
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [authError, setAuthError] = useState<string>();
@@ -59,6 +60,9 @@ export function App() {
         restored,
       }));
     });
+    const offPlayerDamaged = gameEvents.on(EVENTS.PLAYER_DAMAGED, () => {
+      setDamageFeedbackSequence((current) => current + 1);
+    });
     const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, (nextScreen) => {
       setScreen(nextScreen);
       if (nextScreen !== "playing" && nextScreen !== "paused") {
@@ -71,6 +75,7 @@ export function App() {
     return () => {
       offHud();
       offHealthPickup();
+      offPlayerDamaged();
       offScreen();
       offCompleted();
     };
@@ -295,6 +300,13 @@ export function App() {
   return (
     <main className="app-shell">
       <div id="game-root" className="game-root" />
+      {damageFeedbackSequence > 0 && (
+        <div
+          key={`damage-feedback-${damageFeedbackSequence}`}
+          className="damage-screen-flash"
+          aria-hidden="true"
+        />
+      )}
       {!needsAuth && (screen === "playing" || screen === "paused") && (
         <HUD hud={hud} healthPickupFeedback={healthPickupFeedback} />
       )}

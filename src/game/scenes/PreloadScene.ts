@@ -328,6 +328,36 @@ export class PreloadScene extends Phaser.Scene {
       frameRate: 10,
       repeat: -1,
     });
+    this.anims.create({
+      key: "enemy-m3-alert",
+      frames: [1, 2].map((frameNumber) => ({ key: `enemy-m3-run-${frameNumber}` })),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enemy-m3-attack-windup",
+      frames: [2, 1, 2].map((frameNumber) => ({ key: `enemy-m3-run-${frameNumber}` })),
+      frameRate: 10,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enemy-m3-attack",
+      frames: [3, 4, 5].map((frameNumber) => ({ key: `enemy-m3-run-${frameNumber}` })),
+      frameRate: 15,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enemy-m3-hurt",
+      frames: [5, 2].map((frameNumber) => ({ key: `enemy-m3-run-${frameNumber}` })),
+      frameRate: 14,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "enemy-m3-defeat",
+      frames: [5, 4, 2, 1].map((frameNumber) => ({ key: `enemy-m3-run-${frameNumber}` })),
+      frameRate: 12,
+      repeat: 0,
+    });
   }
 
   private createEnemyTexture(): void {

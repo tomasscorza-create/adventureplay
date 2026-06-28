@@ -7,8 +7,9 @@ import type {
   SaveData,
 } from "../../../shared/types/game";
 import { experienceByLevel } from "../../data/progression";
+import { achievementIds } from "../../data/achievements";
 
-export const SAVE_SCHEMA_VERSION = 7;
+export const SAVE_SCHEMA_VERSION = 8;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix"];
 const levelSequence = [
@@ -56,6 +57,10 @@ export const defaultSave: SaveData = {
   unlockedLevels: ["meadowOutpost"],
   completedLevels: [],
   claimedRewardBoxes: [],
+  achievements: {
+    unlockedIds: [],
+    monstersDefeated: 0,
+  },
 };
 
 export function createDefaultSave(): SaveData {
@@ -140,6 +145,19 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   player.speed = player.unlockedSkills.includes("quick-steps")
     ? PLAYER_DEFAULTS.speed + 20
     : PLAYER_DEFAULTS.speed;
+  const incomingAchievements = data.achievements;
+  const unlockedAchievementIds = achievementIds.filter((achievementId) =>
+    incomingAchievements?.unlockedIds?.includes(achievementId),
+  );
+  const monstersDefeated = Number.isFinite(incomingAchievements?.monstersDefeated)
+    ? Math.max(0, Math.floor(incomingAchievements?.monstersDefeated ?? 0))
+    : 0;
+  if (completedLevels.includes("meadowOutpost") && !unlockedAchievementIds.includes("first-level")) {
+    unlockedAchievementIds.push("first-level");
+  }
+  if (monstersDefeated >= 10 && !unlockedAchievementIds.includes("monster-hunter")) {
+    unlockedAchievementIds.push("monster-hunter");
+  }
 
   return {
     player,
@@ -152,6 +170,10 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     claimedRewardBoxes: Array.isArray(data.claimedRewardBoxes)
       ? [...new Set(data.claimedRewardBoxes)]
       : [...defaults.claimedRewardBoxes],
+    achievements: {
+      unlockedIds: unlockedAchievementIds,
+      monstersDefeated,
+    },
     checkpointId: typeof data.checkpointId === "string" ? data.checkpointId : undefined,
   };
 }

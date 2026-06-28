@@ -202,6 +202,7 @@ export const levelDefinitions: Record<string, LevelDefinition> = {
       { id: "spikes-1", type: "spike", x: 1535, y: 635, width: 95, height: 25, damage: 1 },
       { id: "pit-river-3", type: "pit", x: 1980, y: 682, width: 160, height: 38, damage: 1 },
       { id: "pit-river-4", type: "pit", x: 2660, y: 682, width: 160, height: 38, damage: 1 },
+      { id: "pit-river-4b", type: "pit", x: 3250, y: 682, width: 170, height: 38, damage: 1 },
       { id: "moving-saw-1", type: "moving", x: 3000, y: 510, width: 34, height: 34, damage: 1, axis: "y", distance: 80, speed: 58 },
       { id: "spikes-2", type: "spike", x: 3565, y: 635, width: 120, height: 25, damage: 1 },
       { id: "pit-river-5", type: "pit", x: 3940, y: 682, width: 140, height: 38, damage: 1 },
@@ -254,6 +255,7 @@ levelDefinitions.meadowOutpost2 = {
     { id: "l2-pit-river-3", type: "pit", x: 1980, y: 682, width: 160, height: 38, damage: 1 },
     { id: "l2-moving-saw-1", type: "moving", x: 2410, y: 612, width: 34, height: 34, damage: 1, axis: "x", distance: 150, speed: 88 },
     { id: "l2-pit-river-4", type: "pit", x: 2660, y: 682, width: 160, height: 38, damage: 1 },
+    { id: "l2-pit-river-4b", type: "pit", x: 3250, y: 682, width: 170, height: 38, damage: 1 },
     { id: "l2-moving-saw-2", type: "moving", x: 3000, y: 510, width: 34, height: 34, damage: 1, axis: "y", distance: 95, speed: 78 },
     { id: "l2-spikes-2", type: "spike", x: 3565, y: 635, width: 130, height: 25, damage: 1 },
     { id: "l2-pit-river-5", type: "pit", x: 3940, y: 682, width: 140, height: 38, damage: 1 },
@@ -309,6 +311,7 @@ levelDefinitions.meadowOutpost3 = {
     { id: "l3-pit-river-3", type: "pit", x: 1980, y: 682, width: 170, height: 38, damage: 1 },
     { id: "l3-moving-saw-1", type: "moving", x: 2390, y: 612, width: 34, height: 34, damage: 1, axis: "x", distance: 170, speed: 105 },
     { id: "l3-pit-river-4", type: "pit", x: 2660, y: 682, width: 170, height: 38, damage: 1 },
+    { id: "l3-pit-river-4b", type: "pit", x: 3250, y: 682, width: 170, height: 38, damage: 1 },
     { id: "l3-moving-saw-2", type: "moving", x: 3000, y: 510, width: 34, height: 34, damage: 1, axis: "y", distance: 110, speed: 94 },
     { id: "l3-spikes-2", type: "spike", x: 3555, y: 635, width: 145, height: 25, damage: 1 },
     { id: "l3-pit-river-5", type: "pit", x: 3940, y: 682, width: 150, height: 38, damage: 1 },
@@ -349,7 +352,7 @@ levelDefinitions.meadowOutpost3 = {
     ...levelDefinitions.meadowOutpost2.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
     { itemId: "smallHealthPotion", x: 6785, y: 420 },
   ],
-  healthPickups: [{ x: 8165, y: 612 }],
+  healthPickups: [{ x: 6550, y: 452 }],
   rewardBox: { id: "reward-box-l3", x: 2380, y: 487 },
   checkpoint: { id: "meadow-iii-midpoint", x: 4300, y: 610 },
 };
@@ -385,7 +388,7 @@ levelDefinitions.meadowOutpost4 = {
     ...createPathCoinSpawns(4),
     ...levelDefinitions.meadowOutpost3.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
   ],
-  healthPickups: [{ x: 8165, y: 612 }],
+  healthPickups: [{ x: 6865, y: 612 }],
   rewardBox: { id: "reward-box-l4", x: 4380, y: 542 },
   checkpoint: { id: "meadow-iv-midpoint", x: 4300, y: 610 },
 };
@@ -423,7 +426,7 @@ levelDefinitions.meadowOutpost5 = {
     ...createPathCoinSpawns(5),
     ...levelDefinitions.meadowOutpost4.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
   ],
-  healthPickups: [{ x: 7240, y: 422 }],
+  healthPickups: [{ x: 5835, y: 612 }],
   rewardBox: { id: "reward-box-l5", x: 5900, y: 462 },
   checkpoint: { id: "meadow-v-midpoint", x: 4300, y: 610 },
 };
@@ -436,6 +439,7 @@ levelDefinitions.meadowOutpost6 = {
   nextLevelId: "meadowOutpost7",
   timeLimitSeconds: 62,
   autoScrollSpeed: 98,
+  m3Intelligence: 0.55,
   platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
     { x: 270, axis: "x", distance: 86, speed: 78 },
     { x: 1010, axis: "y", distance: 80, speed: 76 },
@@ -479,6 +483,7 @@ levelDefinitions.meadowOutpost7 = {
   nextLevelId: "meadowOutpost8",
   timeLimitSeconds: 64,
   autoScrollSpeed: 104,
+  m3Intelligence: 0.65,
   platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
     { x: 770, axis: "y", distance: 78, speed: 82 },
     { x: 1700, axis: "x", distance: 108, speed: 88 },
@@ -513,6 +518,7 @@ levelDefinitions.meadowOutpost8 = {
   nextLevelId: "meadowOutpost9",
   timeLimitSeconds: 62,
   autoScrollSpeed: 110,
+  m3Intelligence: 0.75,
   platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
     { x: 270, axis: "x", distance: 92, speed: 88 },
     { x: 1010, axis: "y", distance: 88, speed: 86 },
@@ -536,7 +542,7 @@ levelDefinitions.meadowOutpost8 = {
     ...createPathCoinSpawns(8),
     ...levelDefinitions.meadowOutpost7.coins.filter((spawn) => spawn.itemId !== "bronzeCoin"),
   ],
-  healthPickups: [{ x: 7625, y: 612 }],
+  healthPickups: [{ x: 6455, y: 612 }],
   rewardBox: { id: "reward-box-l8", x: 4025, y: 392 },
   checkpoint: { id: "colossus-ii-midpoint", x: 4300, y: 610 },
 };
@@ -549,6 +555,7 @@ levelDefinitions.meadowOutpost9 = {
   nextLevelId: "meadowOutpost10",
   timeLimitSeconds: 60,
   autoScrollSpeed: 116,
+  m3Intelligence: 0.85,
   platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
     { x: 770, axis: "x", distance: 96, speed: 94 },
     { x: 1700, axis: "y", distance: 94, speed: 92 },
@@ -585,6 +592,7 @@ levelDefinitions.meadowOutpost10 = {
   nextLevelId: undefined,
   timeLimitSeconds: 58,
   autoScrollSpeed: 122,
+  m3Intelligence: 0.95,
   platforms: addPlatformMovement(levelDefinitions.meadowOutpost.platforms, [
     { x: 270, axis: "y", distance: 94, speed: 96 },
     { x: 1010, axis: "x", distance: 104, speed: 98 },

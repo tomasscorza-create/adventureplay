@@ -29,6 +29,7 @@ import { GameplayInputSystem } from "../systems/input/GameplayInputSystem";
 import { touchInputStore } from "../systems/input/TouchInputStore";
 import { InventorySystem } from "../systems/inventory/InventorySystem";
 import { MovementSystem } from "../systems/movement/MovementSystem";
+import { AchievementSystem } from "../systems/achievements/AchievementSystem";
 import { ProgressionSystem } from "../systems/progression/ProgressionSystem";
 import { gameSaveStore } from "../systems/save/GameSaveStore";
 
@@ -64,6 +65,9 @@ export class LevelScene extends Phaser.Scene {
   private pressureScrollX = 0;
   private pressureDamageCooldownMs = 0;
   private pressureLine!: Phaser.GameObjects.Rectangle;
+  private readonly achievements = new AchievementSystem();
+  private damageTakenThisLevel = false;
+  private recoveringFromPit = false;
 
   constructor() {
     super("LevelScene");
@@ -84,6 +88,8 @@ export class LevelScene extends Phaser.Scene {
     this.remainingTimeMs = this.level.timeLimitSeconds * 1000;
     this.lastHudSecond = -1;
     this.levelFinished = false;
+    this.recoveringFromPit = false;
+    this.damageTakenThisLevel = false;
     this.pressureScrollX = 0;
     this.pressureDamageCooldownMs = 0;
 
@@ -136,6 +142,7 @@ export class LevelScene extends Phaser.Scene {
   private createWorld(): void {
     this.cameras.main.setBackgroundColor("#071323");
     this.physics.world.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
+    this.physics.world.setBoundsCollision(true, true, true, false);
     this.createForestBackdrop();
     this.createGroundLayer();
     this.createScenarioDressings();
@@ -238,7 +245,7 @@ export class LevelScene extends Phaser.Scene {
       return new M3Enemy(this, enemy.x, enemy.y, [
         ...this.platforms.getChildren(),
         ...this.movingPlatforms.getChildren(),
-      ] as Phaser.GameObjects.Rectangle[]);
+      ] as Phaser.GameObjects.Rectangle[], this.level.m3Intelligence);
     }
 
     return new BasicEnemy(this, enemy.x, enemy.y, enemy.enemyId, enemy.patrolDistance);
@@ -249,6 +256,12 @@ export class LevelScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.movingPlatforms);
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.collider(this.enemies, this.movingPlatforms);
+    this.physics.add.collider(
+      this.enemies,
+      this.enemies,
+      undefined,
+      (enemyA, enemyB) => enemyA instanceof M3Enemy && enemyB instanceof M3Enemy,
+    );
     this.physics.add.collider(this.projectiles, this.platforms, (projectile) => {
       projectile.destroy();
     });
@@ -864,6 +877,15 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
+    if (enemy instanceof M3Enemy) {
+      if (!enemy.canDamagePlayer()) {
+        return;
+      }
+      this.damagePlayer(enemy.damage);
+      enemy.completeAttack();
+      return;
+    }
+
     this.damagePlayer(enemy.damage);
 
     if (enemy instanceof M2Enemy) {
@@ -900,6 +922,7 @@ export class LevelScene extends Phaser.Scene {
     gameAudio.playEnemyDefeat();
     this.createEnemyDefeatEffect(enemy);
     this.progression.addExperience(this.save.player, enemy.experienceReward);
+    this.achievements.recordEnemyDefeat(this.save.achievements);
     const coinReward = enemy.definition.coinReward;
     if (coinReward) {
       const amount = Phaser.Math.Between(coinReward.min, coinReward.max);
@@ -1005,25 +1028,25 @@ export class LevelScene extends Phaser.Scene {
     const defeated = this.player.takeDamage(amount);
     if (this.player.stats.health < previousHealth) {
       gameAudio.playPlayerHit();
+      this.showDamageFeedback(previousHealth - this.player.stats.health);
     }
 
     gameSaveStore.save(this.save);
     this.emitHud();
     if (defeated) {
-      this.levelFinished = true;
-      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+      this.finishWithDefeat();
     }
   }
 
   private handleHazardOverlap(hazard: Phaser.GameObjects.GameObject): void {
     const damage = hazard.getData("damage") as number | undefined;
     const hazardType = hazard.getData("hazardType") as LevelHazardDefinition["type"] | undefined;
-    const wasDefeated = this.player.stats.health <= (damage ?? 1);
-    this.damagePlayer(damage ?? 1);
-
-    if (hazardType === "pit" && !wasDefeated && !this.levelFinished) {
-      this.respawnPlayerAtSafePoint();
+    if (hazardType === "pit") {
+      this.handlePitFall();
+      return;
     }
+
+    this.damagePlayer(damage ?? 1);
   }
 
   private updateCameraPressure(delta: number): void {
@@ -1079,30 +1102,78 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handlePlayerFall(): void {
-    if (this.levelFinished) {
-      return;
-    }
-
-    if (this.save.player.health > 1) {
-      this.save.player.health -= 1;
-      gameAudio.playPlayerHit();
-      this.respawnPlayerAtSafePoint();
-      this.emitHud();
-      return;
-    }
-
-    this.save.player.health = 0;
-    gameAudio.playPlayerHit();
-    this.emitHud();
-    this.levelFinished = true;
-    this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+    this.handlePitFall();
   }
 
-  private respawnPlayerAtSafePoint(): void {
-    const safePoint = this.activeCheckpoint ?? this.level.playerStart;
-    this.player.setPosition(safePoint.x, safePoint.y - 60);
+  private handlePitFall(): void {
+    if (this.levelFinished || this.recoveringFromPit) {
+      return;
+    }
+
+    this.recoveringFromPit = true;
+    const previousHealth = this.save.player.health;
+    this.save.player.health = Math.max(0, this.save.player.health - 1);
+    gameAudio.playPlayerHit();
+    this.showDamageFeedback(previousHealth - this.save.player.health);
+    gameSaveStore.save(this.save);
+    this.emitHud();
+
+    if (this.save.player.health <= 0) {
+      this.finishWithDefeat();
+      return;
+    }
+
+    const safePoint = this.findPitRespawnPoint();
+    this.player.setPosition(safePoint.x, safePoint.y);
     this.player.setVelocity(0, 0);
-    this.resetPressureForSafePoint(safePoint.x);
+    this.pressureDamageCooldownMs = 1500;
+    this.time.delayedCall(250, () => {
+      this.recoveringFromPit = false;
+    });
+  }
+
+  private findPitRespawnPoint(): { x: number; y: number } {
+    const viewStart = this.cameras.main.scrollX;
+    const desiredX = viewStart + 92;
+    const searchEnd = Math.min(this.level.worldWidth - 48, viewStart + GAME_WIDTH * 0.45);
+    const groundPlatforms = this.level.platforms
+      .filter((platform) => platform.y >= 640)
+      .sort((a, b) => a.x - b.x);
+
+    for (let x = desiredX; x <= searchEnd; x += 20) {
+      const platform = groundPlatforms.find(
+        (candidate) => x >= candidate.x + 42 && x <= candidate.x + candidate.width - 42,
+      );
+      if (!platform) {
+        continue;
+      }
+
+      const blockedByHazard = this.level.hazards.some(
+        (hazard) =>
+          hazard.type !== "pit" &&
+          x >= hazard.x - 55 &&
+          x <= hazard.x + hazard.width + 55,
+      );
+      const blockedByEnemy = this.enemies.getChildren().some((child) => {
+        const enemy = child as BaseEnemy;
+        return enemy.active && Math.abs(enemy.x - x) < 105 && Math.abs(enemy.y - platform.y) < 130;
+      });
+      if (!blockedByHazard && !blockedByEnemy) {
+        return { x, y: platform.y - 60 };
+      }
+    }
+
+    const fallbackPlatform =
+      groundPlatforms.find((platform) => platform.x + platform.width - 42 >= desiredX) ??
+      groundPlatforms[groundPlatforms.length - 1];
+    return {
+      x: Phaser.Math.Clamp(
+        desiredX,
+        fallbackPlatform.x + 42,
+        fallbackPlatform.x + fallbackPlatform.width - 42,
+      ),
+      y: fallbackPlatform.y - 60,
+    };
   }
 
   private resetPressureForSafePoint(safePointX: number): void {
@@ -1111,6 +1182,28 @@ export class LevelScene extends Phaser.Scene {
     this.pressureScrollX = safeScrollX;
     this.cameras.main.scrollX = safeScrollX;
     this.pressureDamageCooldownMs = 1500;
+  }
+
+  private showDamageFeedback(amount: number): void {
+    if (amount <= 0) {
+      return;
+    }
+
+    this.damageTakenThisLevel = true;
+    this.cameras.main.shake(160, 0.009);
+    gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount });
+  }
+
+  private finishWithDefeat(): void {
+    if (this.levelFinished) {
+      return;
+    }
+
+    this.levelFinished = true;
+    this.activeCheckpoint = undefined;
+    this.save.checkpointId = undefined;
+    gameSaveStore.save(this.save);
+    this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
   }
 
   private completeLevel(): void {
@@ -1128,6 +1221,12 @@ export class LevelScene extends Phaser.Scene {
     if (this.level.nextLevelId && !this.save.unlockedLevels.includes(this.level.nextLevelId)) {
       this.save.unlockedLevels.push(this.level.nextLevelId);
     }
+
+    this.achievements.recordLevelCompleted(
+      this.save.achievements,
+      this.level.id,
+      !this.damageTakenThisLevel,
+    );
 
     gameSaveStore.save(this.save);
     gameEvents.emit(EVENTS.LEVEL_COMPLETED, { levelId: this.level.id });
@@ -1272,11 +1371,12 @@ export class LevelScene extends Phaser.Scene {
     }
 
     if (this.remainingTimeMs <= 0) {
-      this.levelFinished = true;
+      const previousHealth = this.save.player.health;
       this.save.player.health = 0;
       gameAudio.playPlayerHit();
+      this.showDamageFeedback(previousHealth);
       this.emitHud();
-      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+      this.finishWithDefeat();
     }
   }
 

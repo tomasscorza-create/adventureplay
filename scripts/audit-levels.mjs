@@ -6,6 +6,7 @@ const levels = Object.values(levelDefinitions).sort((a, b) => a.stageNumber - b.
 const levelIds = new Set(levels.map((level) => level.id));
 const rewardBoxIds = new Set();
 const groundEnemyIds = new Set(["m0", "m1", "m3"]);
+let previousM3Intelligence = 0;
 
 for (const level of levels) {
   if (level.nextLevelId && !levelIds.has(level.nextLevelId)) {
@@ -16,6 +17,21 @@ for (const level of levels) {
     errors.push(`${level.id}: rewardBox ID duplicado (${level.rewardBox.id})`);
   }
   rewardBoxIds.add(level.rewardBox.id);
+
+  if (level.stageNumber >= 6) {
+    if (
+      typeof level.m3Intelligence !== "number" ||
+      level.m3Intelligence < 0.35 ||
+      level.m3Intelligence > 1
+    ) {
+      errors.push(`${level.id}: inteligencia M3 invalida (${level.m3Intelligence})`);
+    } else {
+      if (level.m3Intelligence < previousM3Intelligence) {
+        errors.push(`${level.id}: la inteligencia M3 disminuye respecto al nivel anterior`);
+      }
+      previousM3Intelligence = level.m3Intelligence;
+    }
+  }
 
   const pathGold = level.coins
     .filter((coin) => coin.itemId === "bronzeCoin")
@@ -31,10 +47,32 @@ for (const level of levels) {
       `${level.id}: tiene ${level.healthPickups.length} corazones, esperado ${expectedHealthPickups}`,
     );
   }
+
+  const groundPlatforms = level.platforms
+    .filter((platform) => platform.y >= 640)
+    .sort((a, b) => a.x - b.x);
+  for (let index = 0; index < groundPlatforms.length - 1; index += 1) {
+    const gapStart = groundPlatforms[index].x + groundPlatforms[index].width;
+    const gapEnd = groundPlatforms[index + 1].x;
+    if (gapEnd <= gapStart) {
+      continue;
+    }
+
+    const matchingPit = level.hazards.find(
+      (hazard) =>
+        hazard.type === "pit" &&
+        hazard.x <= gapStart + 12 &&
+        hazard.x + hazard.width >= gapEnd - 12,
+    );
+    if (!matchingPit) {
+      errors.push(`${level.id}: hueco ${gapStart}-${gapEnd} sin pozo que lo cubra`);
+    }
+  }
   for (const pickup of level.healthPickups) {
-    const finalSectionStart = level.worldWidth * 0.6;
-    if (pickup.x < finalSectionStart || pickup.x > level.worldWidth) {
-      errors.push(`${level.id}: corazon en x=${pickup.x} fuera del ultimo 40%`);
+    const healthSectionStart = level.worldWidth * 0.6;
+    const healthSectionEnd = level.worldWidth * 0.8;
+    if (pickup.x < healthSectionStart || pickup.x > healthSectionEnd) {
+      errors.push(`${level.id}: corazon en x=${pickup.x} fuera del tramo 60%-80%`);
     }
 
     const nearbyCoin = level.coins.find(
@@ -90,7 +128,7 @@ for (const level of levels) {
 
   const offensiveHazards = level.hazards.filter((hazard) => hazard.type !== "pit").length;
   console.log(
-    `LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones`,
+    `LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones${level.m3Intelligence ? `, M3 IA ${level.m3Intelligence}` : ""}`,
   );
 }
 

@@ -43,7 +43,7 @@ export const enemyDefinitions: Record<string, EnemyDefinition> = {
     name: "M3",
     health: 2,
     damage: 1,
-    speed: 112,
+    speed: 140,
     experienceReward: 110,
     coinReward: { min: 12, max: 16 },
     chaseRange: 1200,

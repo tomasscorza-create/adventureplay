@@ -5,6 +5,7 @@ export const EVENTS = {
   GO_TO_MENU: "react:go-to-menu",
   HUD_UPDATED: "game:hud-updated",
   HEALTH_PICKUP_COLLECTED: "game:health-pickup-collected",
+  PLAYER_DAMAGED: "game:player-damaged",
   SCREEN_CHANGED: "game:screen-changed",
   LEVEL_COMPLETED: "game:level-completed",
 } as const;

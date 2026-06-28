@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import menuBackgroundUrl from "../../assets/menu/menu-background.webp";
+import menuAchievementsButtonUrl from "../../assets/menu/menu-achievements.webp";
 import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
 import menuGearUrl from "../../assets/menu/menu-gear.webp";
 import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
 import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
+import { achievementDefinitions } from "../../game/data/achievements";
 import { playableCharacters } from "../../game/data/characters";
 import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
@@ -12,7 +14,7 @@ import { gameAudio } from "../../shared/audio/GameAudio";
 import type { CharacterId, InventoryCategoryId, SaveData } from "../../shared/types/game";
 import { AbilityIcon } from "../components/AbilityIcon";
 
-type MenuView = "main" | "modes" | "explore" | "characters" | "inventory" | "options";
+type MenuView = "main" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options";
 
 interface MainMenuScreenProps {
   playerEmail?: string;
@@ -82,6 +84,7 @@ const mainActions = [
   { id: "start", label: "Iniciar juego", view: "modes" as const, imageUrl: menuStartButtonUrl },
   { id: "character", label: "Personaje", view: "characters" as const, imageUrl: menuCharacterButtonUrl },
   { id: "inventory", label: "Inventario", view: "inventory" as const, imageUrl: menuInventoryButtonUrl },
+  { id: "achievements", label: "Logros", view: "achievements" as const, imageUrl: menuAchievementsButtonUrl },
 ];
 
 const categoryIconLabels: Record<InventoryCategoryId, string> = {
@@ -158,6 +161,9 @@ export function MainMenuScreen({
       return isUnlocked && !isCompleted;
     })?.levelId;
   }, [save.completedLevels, save.unlockedLevels]);
+  const unlockedAchievementCount = achievementDefinitions.filter((achievement) =>
+    save.achievements.unlockedIds.includes(achievement.id),
+  ).length;
 
   return (
     <section className="overlay overlay--menu">
@@ -202,6 +208,8 @@ export function MainMenuScreen({
                     className={`menu-relic menu-relic--${action.id}`}
                     type="button"
                     key={action.id}
+                    aria-label={action.label}
+                    title={action.label}
                     style={{ "--menu-button-image": `url(${action.imageUrl})` } as CSSProperties}
                     onClick={() => runMenuAction(() => setView(action.view))}
                   >
@@ -266,7 +274,7 @@ export function MainMenuScreen({
                   <div className="reset-confirmation__copy">
                     <strong>¿Reiniciar todo el juego?</strong>
                     <p>
-                      Se borrarán ORO, inventario, niveles, cajas, personaje seleccionado y cargas de todos los héroes. La cuenta de acceso seguirá existiendo.
+                      Se borrarán ORO, inventario, niveles, cajas, logros, personaje seleccionado y cargas de todos los héroes. La cuenta de acceso seguirá existiendo.
                     </p>
                   </div>
                   <div className="reset-confirmation__actions">
@@ -370,6 +378,48 @@ export function MainMenuScreen({
                     </div>
                   </section>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {view === "achievements" && (
+            <div className="menu-chamber menu-chamber--achievements">
+              <MenuHeading eyebrow="Logros" title="Sala de trofeos" onBack={() => setView("main")} />
+
+              <div className="achievement-screen" aria-label="Logros del jugador">
+                <div className="achievement-summary">
+                  <span>Progreso de aventura</span>
+                  <strong>{unlockedAchievementCount}/{achievementDefinitions.length} completados</strong>
+                </div>
+
+                <div className="achievement-grid">
+                  {achievementDefinitions.map((achievement) => {
+                    const isUnlocked = save.achievements.unlockedIds.includes(achievement.id);
+                    const progress = achievement.getProgress(save.achievements);
+                    const progressPercent = Math.round((progress / achievement.target) * 100);
+                    return (
+                      <article
+                        className={`achievement-card${isUnlocked ? " achievement-card--completed" : ""}`}
+                        key={achievement.id}
+                      >
+                        <span className="achievement-card__seal" aria-hidden="true">
+                          {isUnlocked ? "✓" : achievement.icon}
+                        </span>
+                        <div className="achievement-card__copy">
+                          <span className="achievement-card__state">
+                            {isUnlocked ? "Completado" : "Bloqueado"}
+                          </span>
+                          <h3>{achievement.title}</h3>
+                          <p>{achievement.description}</p>
+                        </div>
+                        <div className="achievement-card__progress" aria-label={`${progress} de ${achievement.target}`}>
+                          <span style={{ width: `${progressPercent}%` }} />
+                        </div>
+                        <small>{progress}/{achievement.target}</small>
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

@@ -15,6 +15,12 @@ export type SkillId = "stronger-strike" | "quick-steps";
 export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
 
 export type InventoryCategoryId = "plansKeys" | "toolsWeapons" | "potions";
+export type AchievementId = "first-level" | "flawless-level" | "monster-hunter";
+
+export interface AchievementProgress {
+  unlockedIds: AchievementId[];
+  monstersDefeated: number;
+}
 
 export interface PlayerBaseState {
   health: number;
@@ -59,6 +65,7 @@ export interface SaveData {
   unlockedLevels: string[];
   completedLevels: string[];
   claimedRewardBoxes: string[];
+  achievements: AchievementProgress;
   checkpointId?: string;
 }
 
@@ -157,6 +164,7 @@ export interface LevelDefinition {
   worldWidth: number;
   timeLimitSeconds: number;
   autoScrollSpeed: number;
+  m3Intelligence?: number;
   playerStart: { x: number; y: number };
   platforms: PlatformDefinition[];
   hazards: LevelHazardDefinition[];

@@ -30,6 +30,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 | Controles desktop o tactiles | Sistema de input, Reglas mobile | `GameplayInputSystem.ts`, `TouchInputStore.ts`, `MobileControls.tsx` |
 | Niveles, enemigos, items o plataformas | Datos editables | `src/game/data/`, `MovingPlatform.ts` |
 | Personajes, poderes o tienda | Personajes jugables, Inventario, Reglas para progresion y guardado | `characters.ts`, `MainMenuScreen.tsx`, `GameSaveStore.ts` |
+| Logros | Datos editables, Reglas para progresion y guardado | `achievements.ts`, `AchievementSystem.ts`, `MainMenuScreen.tsx`, `GameSaveStore.ts` |
 | Persistencia o Supabase | Reglas para progresion y guardado | `GameSaveStore.ts`, `SupabaseSaveAdapter.ts`, `SaveDefaults.ts`, `supabase/migrations/` |
 | Responsive o Android | Estado mobile y Android, Reglas mobile | `src/styles.css`, `MobileControls.tsx`, configuracion Phaser |
 
@@ -66,7 +67,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - El progreso del juego requiere autenticacion Supabase y se guarda en `public.game_saves` mediante `GameSaveStore` + `SupabaseSaveAdapter`.
 - Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
 - La migracion fuente para progreso remoto esta en `supabase/migrations/20260626000000_create_game_saves.sql`.
-- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 7`; incluye heroe principal, personajes desbloqueados y cargas por personaje, y conserva `player.coins` como clave interna para el ORO.
+- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 8`; incluye heroe principal, personajes desbloqueados, cargas por personaje y progreso de logros, y conserva `player.coins` como clave interna para el ORO.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
@@ -88,10 +89,12 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/shared/supabase/client.ts`: cliente Supabase web configurado por `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
+- `src/game/data/achievements.ts`: definiciones, textos, objetivos y lectura de progreso de los logros.
+- `src/game/systems/achievements/AchievementSystem.ts`: registra derrotas y finalizaciones validas, y desbloquea logros sin depender de React.
 - `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; los PNG fuente permanecen en `diseños png/personajes/`.
 - `src/assets/menu/`: fondo y controles WebP optimizados del menu principal; los PNG fuente permanecen en `diseños png/menu/` y no deben modificarse.
 - `src/assets/enemies/m3-run-1.png` a `m3-run-5.png`: cinco cuadros transparentes y alineados de carrera lateral de M3; las fuentes permanecen en `diseños png/mounstros/`.
-- `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3, con dos puntos de vida, barra propia, animacion lateral y lectura preventiva de bordes/plataformas.
+- `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3 con estados de alerta, persecucion, salto, ataque, recuperacion, dano y derrota; tiene dos puntos de vida, barra propia y navegacion preventiva de bordes/plataformas.
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
@@ -115,6 +118,8 @@ La demo actual permite:
 
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
+- Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
+- Desbloquear los logros iniciales `Primer paso` al completar LV1, `Paso impecable` al terminar cualquier nivel sin perder salud y `Cazador de monstruos` al acumular 10 derrotas de monstruos.
 - Crear cuenta o entrar con email/password antes de jugar.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
 - En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Escoge tu personaje principal`; solo el elegido queda desbloqueado.
@@ -136,6 +141,7 @@ La demo actual permite:
 - Esquivar o golpear al ave M2, que ahora acecha y avisa brevemente antes de cada picada directa.
 - Enfrentar a M3 desde el nivel 6; los niveles 7 a 10 reducen criaturas y peligros secundarios para dar mayor presencia a este enemigo.
 - Ver a M3 perseguir al jugador en ambas direcciones con un ciclo lateral de cinco cuadros y una escala visual cercana a la del heroe.
+- Ver a M3 alertarse una sola vez al adquirir objetivo, recordar brevemente su ultima posicion, perseguir a 140 px/s y preparar una embestida de hasta 180 px/s antes de poder danar por contacto.
 - Dañar a M3 con dos ataques normales o dos disparos; cada impacto vacia la mitad de su barra roja fina. El poder letal conserva su comportamiento de eliminacion inmediata.
 - Ver a M3 detectar el final de las plataformas: salta si existe una superficie alcanzable al otro lado y se detiene si el salto no es seguro.
 - Ver un pequeno efecto visual de explosion al derrotar monstruos.
@@ -144,9 +150,10 @@ La demo actual permite:
 - Disparar proyectiles.
 - Regenerar la vida hasta el maximo de 4 consumiendo una carga persistente; cada personaje comienza con 3 cargas propias.
 - La salud maxima del jugador es siempre 4: no aumenta por nivel RPG ni mediante objetos del escenario.
-- Desde LV3 hasta LV10 aparece exactamente un corazon de salud temporal por nivel, siempre solo y en el ultimo 40% del recorrido. Cura 1 punto sin superar el maximo de 4, desaparece al tocarlo, dispara un pulso y mensaje en el HUD, y reaparece al reiniciar porque no se persiste.
+- Desde LV3 hasta LV10 aparece exactamente un corazon de salud temporal por nivel, siempre solo entre el 60% y el 80% del recorrido. Cura 1 punto sin superar el maximo de 4, desaparece al tocarlo, dispara un pulso y mensaje en el HUD, y reaparece al reiniciar porque no se persiste.
 - Lanzar un poder horizontal siempre hacia la derecha que recorre la pantalla, atraviesa el escenario, explota al interceptar un monstruo y lo elimina; cada personaje nuevo comienza con 5 cargas propias.
 - Recibir dano.
+- Cada perdida real de salud dispara un golpe visual global: tinte rojo sobre canvas y UI durante 1 segundo y una sacudida breve de camara. Debe activarse tambien por pozos, presion y dano letal, pero no durante contactos bloqueados por invulnerabilidad.
 - Derrotar enemigos.
 - Ganar experiencia.
 - Subir de nivel.
@@ -158,6 +165,8 @@ La demo actual permite:
 - Encontrar una caja de recompensa unica en cada nivel; permanece en reintentos hasta recogerla y luego no vuelve a aparecer.
 - Recibir al azar un objeto valido de inventario al abrir cada caja y conservarlo en el guardado remoto.
 - Activar checkpoint y reaparecer alli al reintentar el mismo nivel; la camara y la presion se reposicionan de forma segura.
+- Los huecos del suelo siempre son pozos atravesables: el borde inferior del mundo no actua como piso. Caer descuenta exactamente 1 punto de salud y reaparece al jugador sobre suelo seguro junto a la linea roja izquierda, conservando el progreso visible actual en vez de volver al inicio o checkpoint.
+- Un Game Over definitivo limpia `checkpointId`: `Reintentar` conserva el mismo nivel seleccionado pero siempre comienza desde `playerStart`. El checkpoint solo sirve para continuar mientras la partida del nivel sigue activa.
 - Llegar a la meta.
 - Avanzar en cadena del nivel 1 al nivel 10 al completar cada meta.
 - Desde el nivel 4, cruzar plataformas de piedra que se mueven horizontal o verticalmente.
@@ -206,6 +215,7 @@ La demo actual permite:
 - Elegir un paquete nunca compra directamente: debe abrir `Confirmar compra`, y solo esa confirmacion descuenta ORO y suma cargas.
 - Cada nivel define una sola `rewardBox`; sus recompensas posibles son los items con `inventoryCategory` en `items.ts`.
 - `SaveData.claimedRewardBoxes` registra las cajas ya abiertas para que no reaparezcan en partidas posteriores.
+- `SaveData.achievements` guarda IDs desbloqueados y el contador acumulado de monstruos derrotados; la UI solo representa esos datos y no concede logros.
 
 ## Controles actuales
 
@@ -346,7 +356,10 @@ Para agregar plataformas moviles:
 - Nuevos enemigos deben reutilizar `BaseEnemy` cuando sea posible.
 - M3 recibe exactamente un punto de dano por ataque normal aunque el heroe haya aumentado su dano RPG; debe requerir dos golpes o dos disparos. El poder letal sigue siendo la unica excepcion de un impacto.
 - La carrera de M3 usa `enemy-m3-run-1` a `enemy-m3-run-5` a 10 FPS. Mantener los cinco cuadros con el mismo lienzo, linea de suelo y escala para evitar saltos visuales.
-- M3 muestra una alerta breve al detectar al jugador y su persecucion comienza dentro de un rango de 1200 px, evitando agresion desde fuera de pantalla.
+- M3 muestra una alerta breve al detectar al jugador y su rango de persecucion escala aproximadamente de 1120 px en LV6 a 1280 px en LV10.
+- `LevelDefinition.m3Intelligence` escala de 0.55 en LV6 a 0.95 en LV10. Aumenta rango/recuerdo, anticipacion del ataque, frecuencia de embestida, correccion aerea y evaluacion de saltos; mantenerlo entre 0.35 y 1 y no reducirlo al avanzar de nivel.
+- M3 solo causa dano durante su estado `attack-lunge`; el contacto durante alerta, persecucion o recuperacion no debe herir al jugador.
+- Si M3 cae fuera del mundo por una plataforma movil o un salto limite, vuelve a su ultima superficie segura con la persecucion reiniciada, sin quedar activo debajo del escenario.
 - M3 debe consultar las superficies fisicas recibidas desde `LevelScene` antes de avanzar por un borde; solo inicia el salto de pozo si encuentra una plataforma alcanzable.
 - Proyectiles deben seguir siendo entidades separadas, no rectangulos anonimos dentro de la escena.
 - `PowerProjectile` no usa gravedad, no colisiona con plataformas y siempre conserva velocidad horizontal positiva hasta salir por el borde derecho visible.
@@ -375,7 +388,7 @@ Para agregar plataformas moviles:
 - No llamar Supabase directamente desde escenas o entidades; usar `GameSaveStore` para conservar el flujo sincronico de Phaser.
 - Para migrar a Supabase real: aplicar las migraciones con `supabase link --project-ref <project-ref>` y `supabase db push`, luego cambiar variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
 - Antes de cambiar estructura de save, pensar en versionado.
-- `Reiniciar juego` debe usar `GameSaveStore.reset()` y esperar `flush()`; restablece ORO, inventario, niveles, cajas, personaje y cargas, pero no elimina el usuario de Supabase Auth.
+- `Reiniciar juego` debe usar `GameSaveStore.reset()` y esperar `flush()`; restablece ORO, inventario, niveles, cajas, logros, personaje y cargas, pero no elimina el usuario de Supabase Auth.
 - El reinicio nunca debe ejecutarse desde el primer clic: mostrar el alcance completo y exigir `Borrar progreso`; `Cancelar` no modifica el save.
 - Durante transiciones entre niveles, Phaser muestra el efecto visual y React oculta HUD/controles usando el estado `level-transition`.
 - `LevelDefinition.stageNumber` conserva la numeracion real del escenario en HUD y transiciones; no inferirla desde el nombre tematico.
@@ -402,7 +415,7 @@ npm run audit:levels
 npm run build
 ```
 
-`audit:levels` valida los 10 niveles, IDs encadenados, presupuesto de ORO, suelo de aparicion de enemigos terrestres y que LV3-LV10 tengan un unico corazon aislado de otros elementos dentro del ultimo 40%; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`audit:levels` valida los 10 niveles, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y que LV3-LV10 tengan un unico corazon aislado de otros elementos entre el 60% y el 80%; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Si se toca UI/mobile, verificar visualmente:
 
@@ -482,3 +495,5 @@ Al actualizarla:
 Ultima revision documental: 2026-06-28. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
 
 Verificacion del checkpoint de niveles 7 a 10 y M3: `npm run build` pasa el 2026-06-27 y el smoke test en navegador confirma carga del nivel 7, sprite lateral, barra de vida y escala visual cercana al heroe. Sigue siendo recomendable recorrer manualmente los cuatro niveles completos para ajustar balance fino y saltos limite.
+
+Verificacion del checkpoint de logros, pozos e IA de M3 del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. El smoke test local confirma autenticacion, menu principal, sala de logros con progreso persistido, layout landscape 844x390 sin desbordamiento y 0 errores de consola. En esta revision no se recorrio manualmente el gameplay completo; mantener pendientes las comprobaciones jugables detalladas de esta guia.
