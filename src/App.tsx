@@ -27,7 +27,7 @@ const initialHud: HudState = {
   experienceToNextLevel: 100,
   coins: 0,
   healingCharges: 3,
-  powerCharges: 25,
+  powerCharges: 5,
   timeRemaining: 90,
   timeLimit: 90,
   progressPercent: 0,
@@ -38,6 +38,7 @@ type AuthStatus = "checking" | "signed-out" | "loading-save" | "signed-in";
 export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
+  const [healthPickupFeedback, setHealthPickupFeedback] = useState({ sequence: 0, restored: 0 });
   const [save, setSave] = useState<SaveData>(() => createDefaultSave());
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [authError, setAuthError] = useState<string>();
@@ -52,12 +53,24 @@ export function App() {
 
   useEffect(() => {
     const offHud = gameEvents.on(EVENTS.HUD_UPDATED, setHud);
-    const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, setScreen);
+    const offHealthPickup = gameEvents.on(EVENTS.HEALTH_PICKUP_COLLECTED, ({ restored }) => {
+      setHealthPickupFeedback((current) => ({
+        sequence: current.sequence + 1,
+        restored,
+      }));
+    });
+    const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, (nextScreen) => {
+      setScreen(nextScreen);
+      if (nextScreen !== "playing" && nextScreen !== "paused") {
+        setHealthPickupFeedback({ sequence: 0, restored: 0 });
+      }
+    });
     const offCompleted = gameEvents.on(EVENTS.LEVEL_COMPLETED, () => {
       setSave(gameSaveStore.load());
     });
     return () => {
       offHud();
+      offHealthPickup();
       offScreen();
       offCompleted();
     };
@@ -282,7 +295,9 @@ export function App() {
   return (
     <main className="app-shell">
       <div id="game-root" className="game-root" />
-      {!needsAuth && (screen === "playing" || screen === "paused") && <HUD hud={hud} />}
+      {!needsAuth && (screen === "playing" || screen === "paused") && (
+        <HUD hud={hud} healthPickupFeedback={healthPickupFeedback} />
+      )}
       {!needsAuth && screen === "playing" && <AbilityControls hud={hud} />}
       {!needsAuth && (screen === "playing" || screen === "paused") && <OrientationNotice />}
       {!needsAuth && screen === "playing" && <MobileControls hud={hud} />}

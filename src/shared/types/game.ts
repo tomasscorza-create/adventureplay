@@ -138,8 +138,7 @@ export interface LevelCoinSpawn {
   value?: number;
 }
 
-export interface LevelLifePickup {
-  id: string;
+export interface LevelHealthPickup {
   x: number;
   y: number;
 }
@@ -163,7 +162,7 @@ export interface LevelDefinition {
   hazards: LevelHazardDefinition[];
   enemies: LevelEnemySpawn[];
   coins: LevelCoinSpawn[];
-  lifePickups: LevelLifePickup[];
+  healthPickups: LevelHealthPickup[];
   rewardBox: LevelRewardBox;
   checkpoint: { id: string; x: number; y: number };
   goal: { x: number; y: number };

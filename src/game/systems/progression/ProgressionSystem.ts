@@ -9,9 +9,6 @@ export class ProgressionSystem {
     while (player.experience >= player.experienceToNextLevel) {
       player.experience -= player.experienceToNextLevel;
       player.level += 1;
-      player.maxHealth += 1;
-      player.health = player.maxHealth;
-      player.meleeDamage += 1;
       player.experienceToNextLevel =
         experienceByLevel[player.level] ?? player.experienceToNextLevel + 160;
 
@@ -21,8 +18,15 @@ export class ProgressionSystem {
         if (canUnlock) {
           player.unlockedSkills.push(skill.id);
           unlocked.push(skill.id);
+          if (skill.id === "stronger-strike") {
+            player.meleeDamage += 1;
+          } else if (skill.id === "quick-steps") {
+            player.speed += 20;
+          }
         }
       }
+
+      player.health = player.maxHealth;
     }
 
     return unlocked;

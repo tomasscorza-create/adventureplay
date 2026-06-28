@@ -7,6 +7,7 @@ type GameEventMap = {
   [EVENTS.RESTART_GAME]: undefined;
   [EVENTS.GO_TO_MENU]: undefined;
   [EVENTS.HUD_UPDATED]: HudState;
+  [EVENTS.HEALTH_PICKUP_COLLECTED]: { restored: number };
   [EVENTS.SCREEN_CHANGED]: GameScreen;
   [EVENTS.LEVEL_COMPLETED]: { levelId: string };
 };

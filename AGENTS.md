@@ -66,7 +66,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - El progreso del juego requiere autenticacion Supabase y se guarda en `public.game_saves` mediante `GameSaveStore` + `SupabaseSaveAdapter`.
 - Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
 - La migracion fuente para progreso remoto esta en `supabase/migrations/20260626000000_create_game_saves.sql`.
-- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 5`; incluye heroe principal, personajes desbloqueados, cargas por personaje y conserva `player.coins` como clave interna para el ORO.
+- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 7`; incluye heroe principal, personajes desbloqueados y cargas por personaje, y conserva `player.coins` como clave interna para el ORO.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
@@ -132,8 +132,8 @@ La demo actual permite:
 - Atacar cuerpo a cuerpo.
 - Ver una estela visual de espada con ventana breve de dano al atacar.
 - Enfrentar al enemigo basico rojo M0 como obstaculo quieto.
-- Derrotar al monstruo M1 con espada o saltando encima.
-- Esquivar o golpear al ave M2, que ahora acecha y hace picadas directas hacia el jugador.
+- Derrotar al monstruo M1 con espada o saltando encima; durante la persecucion comprueba bordes y solo salta pozos con llegada posible.
+- Esquivar o golpear al ave M2, que ahora acecha y avisa brevemente antes de cada picada directa.
 - Enfrentar a M3 desde el nivel 6; los niveles 7 a 10 reducen criaturas y peligros secundarios para dar mayor presencia a este enemigo.
 - Ver a M3 perseguir al jugador en ambas direcciones con un ciclo lateral de cinco cuadros y una escala visual cercana a la del heroe.
 - Dañar a M3 con dos ataques normales o dos disparos; cada impacto vacia la mitad de su barra roja fina. El poder letal conserva su comportamiento de eliminacion inmediata.
@@ -143,24 +143,26 @@ La demo actual permite:
 - Escuchar sonidos sutiles de interfaz, salto, ataque, disparo, recoleccion, golpes a monstruos, derrota de monstruos y dano recibido.
 - Disparar proyectiles.
 - Regenerar la vida hasta el maximo de 4 consumiendo una carga persistente; cada personaje comienza con 3 cargas propias.
-- Lanzar un poder horizontal siempre hacia la derecha que recorre la pantalla, atraviesa el escenario, explota al interceptar un monstruo y lo elimina; cada personaje comienza con 25 cargas propias.
+- La salud maxima del jugador es siempre 4: no aumenta por nivel RPG ni mediante objetos del escenario.
+- Desde LV3 hasta LV10 aparece exactamente un corazon de salud temporal por nivel, siempre solo y en el ultimo 40% del recorrido. Cura 1 punto sin superar el maximo de 4, desaparece al tocarlo, dispara un pulso y mensaje en el HUD, y reaparece al reiniciar porque no se persiste.
+- Lanzar un poder horizontal siempre hacia la derecha que recorre la pantalla, atraviesa el escenario, explota al interceptar un monstruo y lo elimina; cada personaje nuevo comienza con 5 cargas propias.
 - Recibir dano.
 - Derrotar enemigos.
 - Ganar experiencia.
 - Subir de nivel.
 - Recoger ORO.
 - Recoger piezas de ORO estaticas distribuidas de principio a fin; cada una vale entre 1 y 3 y se persiste inmediatamente en `save.player.coins`.
-- Recibir ORO variable al derrotar monstruos: M0 entrega 2-4, M1 entrega 4-7, M2 entrega 7-10 y M3 entrega 10-14.
+- Recibir ORO variable al derrotar monstruos: M0 entrega 2-4, M1 entrega 4-7, M2 entrega 7-10 y M3 entrega 12-16.
 - Gastar ORO desde la ficha `Ver` de cada heroe para comprar cargas de regeneracion o ataque letal con confirmacion previa.
 - Recoger piezas de inventario en el mapa.
 - Encontrar una caja de recompensa unica en cada nivel; permanece en reintentos hasta recogerla y luego no vuelve a aparecer.
 - Recibir al azar un objeto valido de inventario al abrir cada caja y conservarlo en el guardado remoto.
-- Activar checkpoint.
+- Activar checkpoint y reaparecer alli al reintentar el mismo nivel; la camara y la presion se reposicionan de forma segura.
 - Llegar a la meta.
 - Avanzar en cadena del nivel 1 al nivel 10 al completar cada meta.
 - Desde el nivel 4, cruzar plataformas de piedra que se mueven horizontal o verticalmente.
 - Saltar desde plataformas moviles; el estado de suelo contempla `blocked.down` y `touching.down` mediante `Player.isGrounded()`.
-- Afrontar una progresion aproximada de 15-20% de presion adicional por nivel mediante auto-scroll, velocidad de peligros, cantidad de enemigos y plataformas moviles.
+- Afrontar una progresion escalonada: LV1-LV3 introducen peligros con densidad creciente, LV4-LV5 combinan plataformas moviles y LV6-LV10 reducen peligros secundarios para centrar el desafio en M3.
 - En los niveles 5 y 6, esquivar peligros que quitan dos vidas y sierras letales de tres vidas.
 - En los niveles 7 a 10, afrontar la serie `Caceria del Coloso I-IV`, dominada por M3 y con menos peligros ofensivos secundarios que los niveles anteriores.
 - Ver una transicion visual de 4 segundos antes de cargar el siguiente nivel.
@@ -344,6 +346,7 @@ Para agregar plataformas moviles:
 - Nuevos enemigos deben reutilizar `BaseEnemy` cuando sea posible.
 - M3 recibe exactamente un punto de dano por ataque normal aunque el heroe haya aumentado su dano RPG; debe requerir dos golpes o dos disparos. El poder letal sigue siendo la unica excepcion de un impacto.
 - La carrera de M3 usa `enemy-m3-run-1` a `enemy-m3-run-5` a 10 FPS. Mantener los cinco cuadros con el mismo lienzo, linea de suelo y escala para evitar saltos visuales.
+- M3 muestra una alerta breve al detectar al jugador y su persecucion comienza dentro de un rango de 1200 px, evitando agresion desde fuera de pantalla.
 - M3 debe consultar las superficies fisicas recibidas desde `LevelScene` antes de avanzar por un borde; solo inicia el salto de pozo si encuentra una plataforma alcanzable.
 - Proyectiles deben seguir siendo entidades separadas, no rectangulos anonimos dentro de la escena.
 - `PowerProjectile` no usa gravedad, no colisiona con plataformas y siempre conserva velocidad horizontal positiva hasta salir por el borde derecho visible.
@@ -395,8 +398,11 @@ Para agregar plataformas moviles:
 Ejecutar:
 
 ```powershell
+npm run audit:levels
 npm run build
 ```
+
+`audit:levels` valida los 10 niveles, IDs encadenados, presupuesto de ORO, suelo de aparicion de enemigos terrestres y que LV3-LV10 tengan un unico corazon aislado de otros elementos dentro del ultimo 40%; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Si se toca UI/mobile, verificar visualmente:
 
@@ -441,7 +447,7 @@ Si se toca gameplay, verificar manualmente:
 3. Agregar animaciones placeholder por estados del jugador.
 4. Separar mejor factories/spawners de `LevelScene` si crece el contenido.
 5. Preparar loader para mapas Tiled.
-6. Ajustar mediante pruebas reales el balance de M3 y los niveles 7 a 10, ya implementados desde datos, sin volver a saturarlos con criaturas o peligros secundarios.
+6. Recorrer manualmente LV6-LV10 completos para afinar velocidades, ventanas de alerta y saltos limite de M1/M3 sin volver a saturarlos con peligros secundarios.
 7. Agregar menu de configuracion y remapeo basico.
 8. Agregar Capacitor cuando la experiencia mobile web este comoda.
 
@@ -473,6 +479,6 @@ Al actualizarla:
 5. Mantener separados el estado confirmado, las reglas obligatorias, las advertencias y los proximos pasos.
 6. Si una comprobacion no se ejecuto en el turno actual, no presentarla como validacion reciente.
 
-Ultima revision documental: 2026-06-27. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
+Ultima revision documental: 2026-06-28. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
 
 Verificacion del checkpoint de niveles 7 a 10 y M3: `npm run build` pasa el 2026-06-27 y el smoke test en navegador confirma carga del nivel 7, sprite lateral, barra de vida y escala visual cercana al heroe. Sigue siendo recomendable recorrer manualmente los cuatro niveles completos para ajustar balance fino y saltos limite.

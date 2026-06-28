@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { enemyDefinitions } from "../../data/enemies";
+import { canReachLandingSurface, hasGroundAhead } from "../../systems/enemies/GroundNavigation";
 import type { Player } from "../player/Player";
 import { BaseEnemy } from "./BaseEnemy";
 
@@ -9,16 +10,24 @@ export class M1Enemy extends BaseEnemy {
   private readonly chaseMemoryMs = 2600;
   private readonly jumpCooldownMs = 900;
   private readonly jumpPower = 420;
+  private readonly walkableSurfaces: Phaser.GameObjects.Rectangle[];
   private lastSawTargetAt = Number.NEGATIVE_INFINITY;
   private lastJumpAt = Number.NEGATIVE_INFINITY;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, patrolDistance: number) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    patrolDistance: number,
+    walkableSurfaces: Phaser.GameObjects.Rectangle[],
+  ) {
     const definition = enemyDefinitions.m1;
     if (!definition) {
       throw new Error("Unknown enemy definition: m1");
     }
 
     super(scene, x, y, "enemy-m1", definition, patrolDistance);
+    this.walkableSurfaces = walkableSurfaces;
     this.setData("stompable", true);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -54,8 +63,24 @@ export class M1Enemy extends BaseEnemy {
     }
 
     this.direction = distanceX < 0 ? -1 : 1;
-    this.setVelocityX(this.definition.speed * this.direction);
     this.setFlipX(this.direction < 0);
+
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const isGrounded = body.blocked.down || body.touching.down;
+    if (isGrounded && !hasGroundAhead(body, this.walkableSurfaces, this.direction)) {
+      if (
+        canReachLandingSurface(body, this.walkableSurfaces, this.direction, 205, 110) &&
+        now - this.lastJumpAt >= this.jumpCooldownMs
+      ) {
+        this.setVelocity(this.definition.speed * 1.9 * this.direction, -this.jumpPower);
+        this.lastJumpAt = now;
+      } else {
+        this.setVelocityX(0);
+      }
+      return;
+    }
+
+    this.setVelocityX(this.definition.speed * this.direction);
     this.tryJumpTowardTarget(target, distanceX, now);
   }
 
@@ -70,9 +95,7 @@ export class M1Enemy extends BaseEnemy {
       (this.direction < 0 && (body.blocked.left || body.touching.left)) ||
       (this.direction > 0 && (body.blocked.right || body.touching.right));
     const targetIsHigher = target.y < this.y - 34 && Math.abs(distanceX) < 420;
-    const chaseHop = Math.abs(distanceX) > 180 && now - this.lastJumpAt > 1350;
-
-    if (!isBlockedAhead && !targetIsHigher && !chaseHop) {
+    if (!isBlockedAhead && !targetIsHigher) {
       return;
     }
 

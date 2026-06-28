@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
+    "audit:levels": "node --experimental-strip-types scripts/audit-levels.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "supabase:start": "supabase start",
     "supabase:reset": "supabase db reset",

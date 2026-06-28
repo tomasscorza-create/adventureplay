@@ -3,7 +3,7 @@ import { enemyDefinitions } from "../../data/enemies";
 import type { Player } from "../player/Player";
 import { BaseEnemy } from "./BaseEnemy";
 
-type M2FlightMode = "patrol" | "track" | "dive" | "recover";
+type M2FlightMode = "patrol" | "track" | "windup" | "dive" | "recover";
 
 export class M2Enemy extends BaseEnemy {
   private readonly verticalAwareness = 430;
@@ -18,6 +18,7 @@ export class M2Enemy extends BaseEnemy {
   private flightMode: M2FlightMode = "patrol";
   private nextDiveAt = 0;
   private diveStartedAt = 0;
+  private windupUntil = 0;
   private recoverUntil = 0;
   private strikeTarget = new Phaser.Math.Vector2();
   private diveTarget = new Phaser.Math.Vector2();
@@ -66,6 +67,11 @@ export class M2Enemy extends BaseEnemy {
       return;
     }
 
+    if (this.flightMode === "windup") {
+      this.continueWindup(target);
+      return;
+    }
+
     if (this.flightMode === "recover") {
       this.recoverFromDive(target);
       return;
@@ -83,7 +89,7 @@ export class M2Enemy extends BaseEnemy {
     this.setFlipX(this.direction > 0);
 
     if (this.scene.time.now >= this.nextDiveAt) {
-      this.startDive(target);
+      this.startWindup();
     }
   }
 
@@ -116,10 +122,28 @@ export class M2Enemy extends BaseEnemy {
     );
   }
 
+  private startWindup(): void {
+    this.flightMode = "windup";
+    this.windupUntil = this.scene.time.now + 340;
+    this.setTint(0xffd45c);
+    this.setVelocity(0, -22);
+  }
+
+  private continueWindup(target: Player): void {
+    this.direction = target.x < this.x ? -1 : 1;
+    this.setFlipX(this.direction > 0);
+    this.setVelocityX(0);
+    this.setVelocityY(Math.sin(this.scene.time.now * 0.025) * 18);
+
+    if (this.scene.time.now >= this.windupUntil) {
+      this.startDive(target);
+    }
+  }
+
   private startDive(target: Player): void {
     this.flightMode = "dive";
     this.diveStartedAt = this.scene.time.now;
-    this.setTint(0xfff1a1);
+    this.setTint(0xff7b54);
     this.setDiveTarget(target);
     this.flyTowardDiveTarget();
   }

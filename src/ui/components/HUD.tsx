@@ -3,9 +3,10 @@ import type { HudState } from "../../shared/types/game";
 
 interface HUDProps {
   hud: HudState;
+  healthPickupFeedback: { sequence: number; restored: number };
 }
 
-export function HUD({ hud }: HUDProps) {
+export function HUD({ hud, healthPickupFeedback }: HUDProps) {
   const minutes = Math.floor(hud.timeRemaining / 60);
   const seconds = String(hud.timeRemaining % 60).padStart(2, "0");
   const progressStyle = {
@@ -26,11 +27,19 @@ export function HUD({ hud }: HUDProps) {
             {minutes}:{seconds}
           </span>
         </div>
-        <div className="hud__item">
+        <div
+          key={`health-feedback-${healthPickupFeedback.sequence}`}
+          className={`hud__item hud__item--health${healthPickupFeedback.sequence > 0 ? " hud__item--health-pulse" : ""}`}
+        >
           <span className="hud__label">Vida</span>
           <span className="hud__value">
             {hud.health}/{hud.maxHealth}
           </span>
+          {healthPickupFeedback.sequence > 0 && (
+            <span className="hud__health-feedback" aria-live="polite">
+              {healthPickupFeedback.restored > 0 ? "+1 VIDA" : "VIDA COMPLETA"}
+            </span>
+          )}
         </div>
         <div className="hud__item">
           <span className="hud__label">Nivel</span>

@@ -991,8 +991,39 @@ button {
 }
 
 .hud__item {
+  position: relative;
   min-width: 118px;
   padding: 9px 12px;
+}
+
+.hud__item--health-pulse {
+  animation: health-hud-pulse 700ms ease-out;
+}
+
+.hud__health-feedback {
+  position: absolute;
+  left: 50%;
+  bottom: -21px;
+  color: #ff7894;
+  font-size: 0.72rem;
+  font-weight: 950;
+  white-space: nowrap;
+  text-shadow: 0 2px 4px #19070d;
+  transform: translateX(-50%);
+  animation: health-feedback-rise 1250ms ease-out forwards;
+}
+
+@keyframes health-hud-pulse {
+  0% { border-color: rgba(242, 196, 95, 0.34); transform: scale(1); }
+  38% { border-color: #ff6d8c; box-shadow: 0 0 24px rgba(255, 72, 112, 0.72); transform: scale(1.1); }
+  100% { border-color: rgba(242, 196, 95, 0.34); transform: scale(1); }
+}
+
+@keyframes health-feedback-rise {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); }
+  20% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -16px) scale(1.04); }
 }
 
 .hud__label {

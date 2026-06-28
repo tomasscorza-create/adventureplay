@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { enemyDefinitions } from "../../data/enemies";
+import { canReachLandingSurface, hasGroundAhead } from "../../systems/enemies/GroundNavigation";
 import type { Player } from "../player/Player";
 import { BaseEnemy } from "./BaseEnemy";
 
@@ -14,6 +15,8 @@ export class M3Enemy extends BaseEnemy {
   private readonly healthBar: Phaser.GameObjects.Graphics;
   private lastJumpAt = Number.NEGATIVE_INFINITY;
   private gapBoostUntil = Number.NEGATIVE_INFINITY;
+  private alertUntil = Number.NEGATIVE_INFINITY;
+  private alerted = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -60,18 +63,35 @@ export class M3Enemy extends BaseEnemy {
       distanceY <= this.verticalAwareness;
 
     if (!targetInRange || Math.abs(distanceX) <= this.minChaseDistance) {
+      if (!targetInRange) {
+        this.alerted = false;
+        this.clearTint();
+      }
       this.setVelocityX(0);
       this.setRunningAnimation(false);
       return;
     }
+
+    if (!this.alerted) {
+      this.alerted = true;
+      this.alertUntil = this.scene.time.now + 420;
+      this.setTint(0xff9b68);
+    }
+
+    if (this.scene.time.now < this.alertUntil) {
+      this.setVelocityX(0);
+      this.setRunningAnimation(false);
+      return;
+    }
+    this.clearTint();
 
     this.direction = distanceX < 0 ? -1 : 1;
     this.setFlipX(this.direction < 0);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     const isGrounded = body.blocked.down || body.touching.down;
-    if (isGrounded && !this.hasGroundAhead(this.direction)) {
-      if (this.canReachLandingSurface(this.direction) && this.canJumpNow()) {
+    if (isGrounded && !hasGroundAhead(body, this.walkableSurfaces, this.direction)) {
+      if (canReachLandingSurface(body, this.walkableSurfaces, this.direction, 230) && this.canJumpNow()) {
         this.startGapJump();
         this.setRunningAnimation(true);
       } else {
@@ -117,41 +137,6 @@ export class M3Enemy extends BaseEnemy {
 
     this.setVelocityY(-this.jumpPower);
     this.lastJumpAt = now;
-  }
-
-  private hasGroundAhead(direction: -1 | 1): boolean {
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    const probeX = body.center.x + direction * (body.halfWidth + 18);
-    const footY = body.bottom;
-
-    return this.walkableSurfaces.some((surface) => {
-      if (!surface.active) {
-        return false;
-      }
-
-      const bounds = surface.getBounds();
-      return (
-        probeX >= bounds.left &&
-        probeX <= bounds.right &&
-        bounds.top >= footY - 12 &&
-        bounds.top <= footY + 72
-      );
-    });
-  }
-
-  private canReachLandingSurface(direction: -1 | 1): boolean {
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    const footY = body.bottom;
-
-    return this.walkableSurfaces.some((surface) => {
-      if (!surface.active) {
-        return false;
-      }
-
-      const bounds = surface.getBounds();
-      const gap = direction > 0 ? bounds.left - body.right : body.left - bounds.right;
-      return gap >= 0 && gap <= 230 && Math.abs(bounds.top - footY) <= 125;
-    });
   }
 
   private canJumpNow(): boolean {

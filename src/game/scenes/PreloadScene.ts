@@ -67,7 +67,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createCoinTexture();
     this.createInventoryPieceTexture();
     this.createRewardBoxTexture();
-    this.createLifeTexture();
+    this.createHealthHeartTexture();
     this.createSawTexture();
     this.createCheckpointTexture();
     this.createGoalTexture();
@@ -454,19 +454,19 @@ export class PreloadScene extends Phaser.Scene {
     graphics.destroy();
   }
 
-  private createLifeTexture(): void {
+  private createHealthHeartTexture(): void {
     const graphics = this.add.graphics();
     graphics.fillStyle(0x7c1d39, 1);
     graphics.fillCircle(9, 9, 6);
     graphics.fillCircle(17, 9, 6);
     graphics.fillTriangle(4, 12, 22, 12, 13, 25);
-    graphics.fillStyle(0xff86a8, 1);
+    graphics.fillStyle(0xff5f7f, 1);
     graphics.fillCircle(9, 8, 5);
     graphics.fillCircle(17, 8, 5);
     graphics.fillTriangle(5, 11, 21, 11, 13, 23);
     graphics.fillStyle(0xffd4df, 1);
     graphics.fillCircle(9, 7, 2);
-    graphics.generateTexture("life", 26, 26);
+    graphics.generateTexture("health-heart", 26, 26);
     graphics.destroy();
   }
 

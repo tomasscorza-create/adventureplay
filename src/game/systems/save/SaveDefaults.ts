@@ -8,7 +8,7 @@ import type {
 } from "../../../shared/types/game";
 import { experienceByLevel } from "../../data/progression";
 
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 7;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix"];
 const levelSequence = [
@@ -25,7 +25,7 @@ const levelSequence = [
 ];
 const defaultPowerCharges: PowerChargeState = {
   healingCharges: 3,
-  powerCharges: 25,
+  powerCharges: 5,
 };
 
 function createDefaultCharacterPowerCharges(): CharacterPowerCharges {
@@ -132,16 +132,27 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     }
   }
 
+  player.maxHealth = PLAYER_DEFAULTS.maxHealth;
+  player.health = Math.min(Math.max(0, player.health), player.maxHealth);
+  player.meleeDamage = player.unlockedSkills.includes("stronger-strike")
+    ? PLAYER_DEFAULTS.meleeDamage + 1
+    : PLAYER_DEFAULTS.meleeDamage;
+  player.speed = player.unlockedSkills.includes("quick-steps")
+    ? PLAYER_DEFAULTS.speed + 20
+    : PLAYER_DEFAULTS.speed;
+
   return {
-    ...defaults,
-    ...data,
+    player,
     selectedCharacterId,
     primaryCharacterId,
     unlockedCharacterIds,
     characterPowerCharges,
-    player,
     unlockedLevels: [...unlockedLevels],
     completedLevels,
+    claimedRewardBoxes: Array.isArray(data.claimedRewardBoxes)
+      ? [...new Set(data.claimedRewardBoxes)]
+      : [...defaults.claimedRewardBoxes],
+    checkpointId: typeof data.checkpointId === "string" ? data.checkpointId : undefined,
   };
 }
 

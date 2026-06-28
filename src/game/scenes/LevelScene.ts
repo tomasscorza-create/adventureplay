@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { gameAudio } from "../../shared/audio/GameAudio";
 import { EVENTS } from "../../shared/constants/events";
-import { GAME_HEIGHT, GAME_WIDTH, PLAYER_DEFAULTS } from "../../shared/constants/game";
+import { GAME_HEIGHT, GAME_WIDTH } from "../../shared/constants/game";
 import type {
   LevelDefinition,
   LevelHazardDefinition,
@@ -40,7 +40,7 @@ export class LevelScene extends Phaser.Scene {
   private movingPlatforms!: Phaser.Physics.Arcade.Group;
   private enemies!: Phaser.Physics.Arcade.Group;
   private coins!: Phaser.Physics.Arcade.Group;
-  private lifePickups!: Phaser.Physics.Arcade.StaticGroup;
+  private healthPickups!: Phaser.Physics.Arcade.StaticGroup;
   private rewardBox?: Phaser.Physics.Arcade.Sprite;
   private staticHazards!: Phaser.Physics.Arcade.StaticGroup;
   private movingHazards!: Phaser.Physics.Arcade.Group;
@@ -72,11 +72,14 @@ export class LevelScene extends Phaser.Scene {
   create(data: { levelId?: string }): void {
     this.level = levelDefinitions[data.levelId ?? "meadowOutpost"];
     this.save = gameSaveStore.load();
-    this.save.player.maxHealth = PLAYER_DEFAULTS.maxHealth;
     this.save.player.health = this.save.player.maxHealth;
-    this.save.checkpointId = undefined;
+    this.activeCheckpoint = this.save.checkpointId === this.level.checkpoint.id
+      ? { ...this.level.checkpoint }
+      : undefined;
+    if (this.save.checkpointId && !this.activeCheckpoint) {
+      this.save.checkpointId = undefined;
+    }
     gameSaveStore.save(this.save);
-    this.activeCheckpoint = undefined;
     this.rewardBox = undefined;
     this.remainingTimeMs = this.level.timeLimitSeconds * 1000;
     this.lastHudSecond = -1;
@@ -88,6 +91,9 @@ export class LevelScene extends Phaser.Scene {
     this.inputSystem = new GameplayInputSystem(this);
     this.createWorld();
     this.createPlayer();
+    if (this.activeCheckpoint) {
+      this.resetPressureForSafePoint(this.activeCheckpoint.x);
+    }
     this.createEntities();
     this.createCollisions();
     this.bindSceneEvents();
@@ -157,7 +163,8 @@ export class LevelScene extends Phaser.Scene {
   private createPlayer(): void {
     const start = this.activeCheckpoint ?? this.level.playerStart;
     const character = getCharacterDefinition(this.save.selectedCharacterId);
-    this.player = new Player(this, start.x, start.y, this.save.player, character);
+    const startY = this.activeCheckpoint ? start.y - 60 : start.y;
+    this.player = new Player(this, start.x, startY, this.save.player, character);
     this.cameraSystem.setBounds(this, this.level.worldWidth);
   }
 
@@ -167,7 +174,7 @@ export class LevelScene extends Phaser.Scene {
       allowGravity: false,
       immovable: true,
     });
-    this.lifePickups = this.physics.add.staticGroup();
+    this.healthPickups = this.physics.add.staticGroup();
     this.movingHazards = this.physics.add.group({ runChildUpdate: true });
     this.projectiles = this.physics.add.group({ runChildUpdate: true });
     this.powerProjectiles = this.physics.add.group({
@@ -183,10 +190,9 @@ export class LevelScene extends Phaser.Scene {
       this.coins.add(new Coin(this, coin.x, coin.y, coin.itemId, coin.value));
     }
 
-    for (const pickup of this.level.lifePickups) {
-      const life = this.lifePickups.create(pickup.x, pickup.y, "life");
-      life.setDepth(9);
-      life.setData("pickupId", pickup.id);
+    for (const pickup of this.level.healthPickups) {
+      const heart = this.healthPickups.create(pickup.x, pickup.y, "health-heart");
+      heart.setDepth(9);
     }
 
     if (!this.save.claimedRewardBoxes.includes(this.level.rewardBox.id)) {
@@ -209,13 +215,19 @@ export class LevelScene extends Phaser.Scene {
       "checkpoint",
     );
     this.checkpoint.setDepth(9);
+    if (this.activeCheckpoint) {
+      this.checkpoint.setTint(0xffffff);
+    }
     this.goal = this.physics.add.staticSprite(this.level.goal.x, this.level.goal.y, "goal");
     this.goal.setDepth(9);
   }
 
   private createEnemy(enemy: LevelDefinition["enemies"][number]): BaseEnemy {
     if (enemy.enemyId === "m1") {
-      return new M1Enemy(this, enemy.x, enemy.y, enemy.patrolDistance);
+      return new M1Enemy(this, enemy.x, enemy.y, enemy.patrolDistance, [
+        ...this.platforms.getChildren(),
+        ...this.movingPlatforms.getChildren(),
+      ] as Phaser.GameObjects.Rectangle[]);
     }
 
     if (enemy.enemyId === "m2") {
@@ -248,8 +260,8 @@ export class LevelScene extends Phaser.Scene {
       this.collectCoin(coin as Coin);
     });
 
-    this.physics.add.overlap(this.player, this.lifePickups, (_player, pickup) => {
-      this.collectLifePickup(pickup as Phaser.Physics.Arcade.Sprite);
+    this.physics.add.overlap(this.player, this.healthPickups, (_player, pickup) => {
+      this.collectHealthPickup(pickup as Phaser.Physics.Arcade.Sprite);
     });
 
     if (this.rewardBox) {
@@ -738,13 +750,19 @@ export class LevelScene extends Phaser.Scene {
     this.emitHud();
   }
 
-  private collectLifePickup(pickup: Phaser.Physics.Arcade.Sprite): void {
-    this.save.player.maxHealth += 1;
-    this.save.player.health = this.save.player.maxHealth;
+  private collectHealthPickup(pickup: Phaser.Physics.Arcade.Sprite): void {
+    const previousHealth = this.save.player.health;
+    this.save.player.health = Math.min(
+      this.save.player.maxHealth,
+      this.save.player.health + 1,
+    );
     gameAudio.playCollect();
     pickup.disableBody(true, true);
     gameSaveStore.save(this.save);
     this.emitHud();
+    gameEvents.emit(EVENTS.HEALTH_PICKUP_COLLECTED, {
+      restored: this.save.player.health - previousHealth,
+    });
   }
 
   private collectRewardBox(rewardBox: Phaser.Physics.Arcade.Sprite): void {
@@ -1050,6 +1068,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private activateCheckpoint(): void {
+    if (this.activeCheckpoint?.id === this.level.checkpoint.id) {
+      return;
+    }
+
     this.activeCheckpoint = { ...this.level.checkpoint };
     this.save.checkpointId = this.level.checkpoint.id;
     gameSaveStore.save(this.save);
@@ -1080,6 +1102,15 @@ export class LevelScene extends Phaser.Scene {
     const safePoint = this.activeCheckpoint ?? this.level.playerStart;
     this.player.setPosition(safePoint.x, safePoint.y - 60);
     this.player.setVelocity(0, 0);
+    this.resetPressureForSafePoint(safePoint.x);
+  }
+
+  private resetPressureForSafePoint(safePointX: number): void {
+    const maxScrollX = Math.max(0, this.level.worldWidth - GAME_WIDTH);
+    const safeScrollX = Phaser.Math.Clamp(safePointX - GAME_WIDTH * 0.32, 0, maxScrollX);
+    this.pressureScrollX = safeScrollX;
+    this.cameras.main.scrollX = safeScrollX;
+    this.pressureDamageCooldownMs = 1500;
   }
 
   private completeLevel(): void {
@@ -1088,6 +1119,8 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.levelFinished = true;
+    this.activeCheckpoint = undefined;
+    this.save.checkpointId = undefined;
     if (!this.save.completedLevels.includes(this.level.id)) {
       this.save.completedLevels.push(this.level.id);
     }
