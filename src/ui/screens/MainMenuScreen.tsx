@@ -6,13 +6,24 @@ import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
 import menuGearUrl from "../../assets/menu/menu-gear.webp";
 import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
 import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
-import { achievementDefinitions } from "../../game/data/achievements";
+import {
+  achievementCategories,
+  achievementDefinitions,
+  getAchievementRewardLabels,
+  type AchievementCategoryId,
+} from "../../game/data/achievements";
 import { playableCharacters } from "../../game/data/characters";
 import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
+import {
+  powerPackages,
+  type PowerPackage,
+  type PurchasablePower,
+} from "../../game/data/powerShop";
 import { gameAudio } from "../../shared/audio/GameAudio";
 import type { CharacterId, InventoryCategoryId, SaveData } from "../../shared/types/game";
 import { AbilityIcon } from "../components/AbilityIcon";
+import { AchievementIcon } from "../components/AchievementIcon";
 
 type MenuView = "main" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options";
 
@@ -31,26 +42,6 @@ interface MainMenuScreenProps {
     cost: number,
   ) => boolean;
 }
-
-type PurchasablePower = "healingCharges" | "powerCharges";
-
-interface PowerPackage {
-  amount: number;
-  cost: number;
-}
-
-const powerPackages: Record<PurchasablePower, PowerPackage[]> = {
-  healingCharges: [
-    { amount: 3, cost: 350 },
-    { amount: 5, cost: 490 },
-    { amount: 12, cost: 750 },
-  ],
-  powerCharges: [
-    { amount: 10, cost: 200 },
-    { amount: 25, cost: 390 },
-    { amount: 60, cost: 750 },
-  ],
-};
 
 const CHARACTER_UNLOCK_COST = 700;
 
@@ -75,6 +66,15 @@ const verdantLevelSlots: LevelSlot[] = [
 
 const enchantedLevelSlots: LevelSlot[] = [
   { number: 1, levelId: "enchantedGrove1", name: "Umbral encantado" },
+  { number: 2, levelId: "enchantedGrove2", name: "Raices despiertas" },
+  { number: 3, levelId: "enchantedGrove3", name: "Dosel vigilante" },
+  { number: 4, levelId: "enchantedGrove4", name: "Senderos cambiantes" },
+  { number: 5, levelId: "enchantedGrove5", name: "Corazon del bosque" },
+  { number: 6, levelId: "enchantedGrove6", name: "Santuario quebrado" },
+  { number: 7, levelId: "enchantedGrove7", name: "Caceria esmeralda I" },
+  { number: 8, levelId: "enchantedGrove8", name: "Caceria esmeralda II" },
+  { number: 9, levelId: "enchantedGrove9", name: "Caceria esmeralda III" },
+  { number: 10, levelId: "enchantedGrove10", name: "Corazon ancestral" },
 ];
 
 interface RegionDefinition {
@@ -86,7 +86,7 @@ interface RegionDefinition {
 
 const regions: RegionDefinition[] = [
   { id: "verdant-frontier", name: "Frontera Verde", status: "10 niveles", levels: verdantLevelSlots },
-  { id: "enchanted-forest", name: "Bosque encantado", status: "Nuevo", levels: enchantedLevelSlots },
+  { id: "enchanted-forest", name: "Bosque encantado", status: "10 niveles", levels: enchantedLevelSlots },
   { id: "sunken-marsh", name: "Marisma Hundida", status: "Proximamente", levels: [] },
   { id: "north-spires", name: "Agujas del Norte", status: "Proximamente", levels: [] },
 ];
@@ -118,6 +118,8 @@ export function MainMenuScreen({
   const [inspectedCharacterId, setInspectedCharacterId] = useState<CharacterId>();
   const [activeInventoryCategoryId, setActiveInventoryCategoryId] =
     useState<InventoryCategoryId>("plansKeys");
+  const [activeAchievementCategoryId, setActiveAchievementCategoryId] =
+    useState<AchievementCategoryId>("adventure");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
   const [audioSettings, setAudioSettings] = useState(() => gameAudio.getSettings());
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
@@ -178,6 +180,14 @@ export function MainMenuScreen({
   const unlockedAchievementCount = achievementDefinitions.filter((achievement) =>
     save.achievements.unlockedIds.includes(achievement.id),
   ).length;
+  const achievementGroups = achievementCategories.map((category) => {
+    const achievements = achievementDefinitions.filter((achievement) => achievement.category === category.id);
+    const completedCount = achievements.filter((achievement) =>
+      save.achievements.unlockedIds.includes(achievement.id),
+    ).length;
+
+    return { ...category, achievements, completedCount };
+  });
 
   return (
     <section className="overlay overlay--menu">
@@ -398,41 +408,116 @@ export function MainMenuScreen({
 
           {view === "achievements" && (
             <div className="menu-chamber menu-chamber--achievements">
-              <MenuHeading eyebrow="Logros" title="Sala de trofeos" onBack={() => setView("main")} />
+              <MenuHeading eyebrow="Progreso" title="Logros" onBack={() => setView("main")} />
 
               <div className="achievement-screen" aria-label="Logros del jugador">
                 <div className="achievement-summary">
-                  <span>Progreso de aventura</span>
-                  <strong>{unlockedAchievementCount}/{achievementDefinitions.length} completados</strong>
+                  <span className="achievement-summary__icon" aria-hidden="true">
+                    <AchievementIcon icon="trophy" />
+                  </span>
+                  <div className="achievement-summary__count">
+                    <strong>{unlockedAchievementCount}/{achievementDefinitions.length}</strong>
+                    <span>Completados</span>
+                  </div>
+                  <span className="achievement-summary__track" aria-hidden="true">
+                    <span style={{ width: `${Math.round((unlockedAchievementCount / achievementDefinitions.length) * 100)}%` }} />
+                  </span>
                 </div>
 
-                <div className="achievement-grid">
-                  {achievementDefinitions.map((achievement) => {
-                    const isUnlocked = save.achievements.unlockedIds.includes(achievement.id);
-                    const progress = achievement.getProgress(save);
-                    const progressPercent = Math.round((progress / achievement.target) * 100);
+                <div className="achievement-tabs" role="tablist" aria-label="Categorias de logros">
+                  {achievementGroups.map((category) => {
+                    const isActive = category.id === activeAchievementCategoryId;
                     return (
-                      <article
-                        className={`achievement-card${isUnlocked ? " achievement-card--completed" : ""}`}
-                        key={achievement.id}
+                      <button
+                        className={`achievement-tab${isActive ? " achievement-tab--active" : ""}`}
+                        id={`achievement-tab-${category.id}`}
+                        type="button"
+                        role="tab"
+                        aria-controls={`achievement-page-${category.id}`}
+                        aria-selected={isActive}
+                        key={category.id}
+                        onClick={() => runMenuAction(() => setActiveAchievementCategoryId(category.id))}
                       >
-                        <span className="achievement-card__seal" aria-hidden="true">
-                          {isUnlocked ? "✓" : achievement.icon}
+                        <span className="achievement-tab__seal" aria-hidden="true">
+                          <AchievementIcon icon={category.icon} />
                         </span>
-                        <div className="achievement-card__copy">
-                          <span className="achievement-card__state">
-                            {isUnlocked ? "Completado" : "Bloqueado"}
-                          </span>
-                          <h3>{achievement.title}</h3>
-                          <p>{achievement.description}</p>
-                        </div>
-                        <div className="achievement-card__progress" aria-label={`${progress} de ${achievement.target}`}>
-                          <span style={{ width: `${progressPercent}%` }} />
-                        </div>
-                        <small>{progress}/{achievement.target}</small>
-                      </article>
+                        <span>{category.name}</span>
+                        <strong>{category.completedCount}/{category.achievements.length}</strong>
+                      </button>
                     );
                   })}
+                </div>
+
+                <div className="achievement-pages">
+                  {achievementGroups.map((category) => (
+                    <section
+                      className={`achievement-category achievement-page${
+                        category.id === activeAchievementCategoryId ? " achievement-page--active" : ""
+                      }`}
+                      id={`achievement-page-${category.id}`}
+                      role="tabpanel"
+                      aria-labelledby={`achievement-tab-${category.id}`}
+                      key={category.id}
+                      hidden={category.id !== activeAchievementCategoryId}
+                    >
+                      <header className="achievement-category__header">
+                        <span aria-hidden="true"><AchievementIcon icon={category.icon} /></span>
+                        <h2>{category.name}</h2>
+                        <strong>{category.completedCount}/{category.achievements.length}</strong>
+                      </header>
+                      <div className="achievement-grid">
+                        {category.achievements.map((achievement) => {
+                            const isUnlocked = save.achievements.unlockedIds.includes(achievement.id);
+                            const progress = achievement.getProgress(save);
+                            const progressPercent = Math.round((progress / achievement.target) * 100);
+                            return (
+                              <article
+                                className={`achievement-card${isUnlocked ? " achievement-card--completed" : ""}`}
+                                key={achievement.id}
+                              >
+                                <div className="achievement-card__emblem" aria-hidden="true">
+                                  <span className="achievement-card__seal">
+                                    <AchievementIcon icon={achievement.icon} />
+                                  </span>
+                                  <span className="achievement-card__difficulty">
+                                    {Array.from(
+                                      { length: achievement.difficulty === "medium" ? 2 : 1 },
+                                      (_bolt, index) => (
+                                        <span className="achievement-card__bolt" key={index}>
+                                          <svg viewBox="0 0 24 24" focusable="false">
+                                            <path d="M13.8 2 5.5 13h5.8L10.2 22l8.3-11h-5.8L13.8 2Z" />
+                                          </svg>
+                                        </span>
+                                      ),
+                                    )}
+                                  </span>
+                                </div>
+                                <span
+                                  className="achievement-card__status"
+                                  aria-label={isUnlocked ? "Completado" : "Bloqueado"}
+                                  title={isUnlocked ? "Completado" : "Bloqueado"}
+                                >
+                                  <AchievementIcon icon={isUnlocked ? "check" : "lock"} />
+                                </span>
+                                <div className="achievement-card__copy">
+                                  <h3>{achievement.title}</h3>
+                                  <p>{achievement.description}</p>
+                                  <span className="achievement-card__reward">
+                                    Recompensa: {getAchievementRewardLabels(achievement.reward).join(" + ")}
+                                  </span>
+                                </div>
+                                <div className="achievement-card__footer">
+                                  <span className="achievement-card__progress" aria-label={`${progress} de ${achievement.target}`}>
+                                    <span style={{ width: `${progressPercent}%` }} />
+                                  </span>
+                                  <small>{progress}/{achievement.target}</small>
+                                </div>
+                              </article>
+                            );
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               </div>
             </div>

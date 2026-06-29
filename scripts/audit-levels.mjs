@@ -7,8 +7,22 @@ const levels = Object.values(levelDefinitions).sort((a, b) =>
 );
 const levelIds = new Set(levels.map((level) => level.id));
 const rewardBoxIds = new Set();
-const groundEnemyIds = new Set(["m0", "m1", "m3"]);
+const groundEnemyIds = new Set(["m0", "m1", "m3", "e2m3"]);
+const enchantedLevels = levels.filter((level) => level.theme === "enchanted-forest");
+const enchantedProgression = [
+  { time: 72, pressure: 52, enemies: 5, m2: 1, e2m3: 0, hazards: 2, movingPlatforms: 0 },
+  { time: 69, pressure: 60, enemies: 7, m2: 2, e2m3: 0, hazards: 4, movingPlatforms: 0 },
+  { time: 66, pressure: 68, enemies: 9, m2: 3, e2m3: 1, hazards: 5, movingPlatforms: 3 },
+  { time: 63, pressure: 78, enemies: 11, m2: 4, e2m3: 2, hazards: 7, movingPlatforms: 5 },
+  { time: 60, pressure: 88, enemies: 13, m2: 5, e2m3: 3, hazards: 9, movingPlatforms: 7 },
+  { time: 58, pressure: 100, enemies: 14, m2: 5, e2m3: 4, hazards: 10, movingPlatforms: 8 },
+  { time: 56, pressure: 108, enemies: 15, m2: 5, e2m3: 5, hazards: 11, movingPlatforms: 9 },
+  { time: 54, pressure: 116, enemies: 16, m2: 5, e2m3: 6, hazards: 12, movingPlatforms: 10 },
+  { time: 52, pressure: 124, enemies: 17, m2: 5, e2m3: 7, hazards: 13, movingPlatforms: 11 },
+  { time: 50, pressure: 132, enemies: 18, m2: 5, e2m3: 8, hazards: 14, movingPlatforms: 12 },
+];
 let previousM3Intelligence = 0;
+let previousE2M3Intelligence = 0;
 
 for (const level of levels) {
   if (level.nextLevelId && !levelIds.has(level.nextLevelId)) {
@@ -35,6 +49,22 @@ for (const level of levels) {
     }
   }
 
+  const e2m3Count = level.enemies.filter((enemy) => enemy.enemyId === "e2m3").length;
+  if (level.theme === "enchanted-forest" && e2m3Count > 0) {
+    if (
+      typeof level.m3Intelligence !== "number" ||
+      level.m3Intelligence < 0.35 ||
+      level.m3Intelligence > 1
+    ) {
+      errors.push(`${level.id}: inteligencia E2M3 invalida (${level.m3Intelligence})`);
+    } else {
+      if (level.m3Intelligence <= previousE2M3Intelligence) {
+        errors.push(`${level.id}: la inteligencia E2M3 no aumenta respecto al nivel anterior`);
+      }
+      previousE2M3Intelligence = level.m3Intelligence;
+    }
+  }
+
   const pathGold = level.coins
     .filter((coin) => coin.itemId === "bronzeCoin")
     .reduce((sum, coin) => sum + (coin.value ?? 1), 0);
@@ -43,7 +73,7 @@ for (const level of levels) {
     errors.push(`${level.id}: ORO del camino ${pathGold}, esperado ${expectedGold}`);
   }
 
-  const expectedHealthPickups = level.theme === "verdant-frontier" && level.stageNumber >= 3 ? 1 : 0;
+  const expectedHealthPickups = level.stageNumber >= 3 ? 1 : 0;
   if (level.healthPickups.length !== expectedHealthPickups) {
     errors.push(
       `${level.id}: tiene ${level.healthPickups.length} corazones, esperado ${expectedHealthPickups}`,
@@ -131,8 +161,95 @@ for (const level of levels) {
   const offensiveHazards = level.hazards.filter((hazard) => hazard.type !== "pit").length;
   const regionLabel = level.theme === "enchanted-forest" ? "Bosque encantado" : "Frontera Verde";
   console.log(
-    `${regionLabel} LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones${level.m3Intelligence ? `, M3 IA ${level.m3Intelligence}` : ""}`,
+    `${regionLabel} LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones${level.m3Intelligence ? `, ${e2m3Count > 0 ? "E2M3" : "M3"} IA ${level.m3Intelligence}` : ""}`,
   );
+}
+
+if (enchantedLevels.length !== 10) {
+  errors.push(`Bosque encantado: tiene ${enchantedLevels.length} niveles, esperado 10`);
+}
+
+for (const [index, level] of enchantedLevels.entries()) {
+  const expectedStage = index + 1;
+  const expectedProgression = enchantedProgression[index];
+  if (level.stageNumber !== expectedStage) {
+    errors.push(`Bosque encantado: falta LV${expectedStage} o la secuencia esta desordenada`);
+  }
+
+  const expectedNextLevelId = index < enchantedLevels.length - 1
+    ? enchantedLevels[index + 1].id
+    : undefined;
+  if (level.nextLevelId !== expectedNextLevelId) {
+    errors.push(
+      `${level.id}: nextLevelId ${level.nextLevelId ?? "ausente"}, esperado ${expectedNextLevelId ?? "ninguno"}`,
+    );
+  }
+
+  if (expectedProgression) {
+    const m2Count = level.enemies.filter((enemy) => enemy.enemyId === "m2").length;
+    const e2m3Count = level.enemies.filter((enemy) => enemy.enemyId === "e2m3").length;
+    const hazardCount = level.hazards.filter((hazard) => hazard.type !== "pit").length;
+    const movingPlatformCount = level.platforms.filter((platform) => platform.movement).length;
+    const actualProgression = {
+      time: level.timeLimitSeconds,
+      pressure: level.autoScrollSpeed,
+      enemies: level.enemies.length,
+      m2: m2Count,
+      e2m3: e2m3Count,
+      hazards: hazardCount,
+      movingPlatforms: movingPlatformCount,
+    };
+    for (const key of Object.keys(expectedProgression)) {
+      if (actualProgression[key] !== expectedProgression[key]) {
+        errors.push(
+          `${level.id}: ${key}=${actualProgression[key]}, esperado ${expectedProgression[key]}`,
+        );
+      }
+    }
+  }
+
+  if (index === 0) {
+    continue;
+  }
+
+  const previousLevel = enchantedLevels[index - 1];
+  const previousHazards = previousLevel.hazards.filter((hazard) => hazard.type !== "pit").length;
+  const currentHazards = level.hazards.filter((hazard) => hazard.type !== "pit").length;
+  if (level.autoScrollSpeed <= previousLevel.autoScrollSpeed) {
+    errors.push(`${level.id}: la presion roja no aumenta respecto a ${previousLevel.id}`);
+  }
+  if (level.timeLimitSeconds >= previousLevel.timeLimitSeconds) {
+    errors.push(`${level.id}: el tiempo limite no disminuye respecto a ${previousLevel.id}`);
+  }
+  if (level.enemies.length <= previousLevel.enemies.length) {
+    errors.push(`${level.id}: la cantidad de enemigos no aumenta respecto a ${previousLevel.id}`);
+  }
+  if (currentHazards <= previousHazards) {
+    errors.push(`${level.id}: los peligros ofensivos no aumentan respecto a ${previousLevel.id}`);
+  }
+}
+
+for (const enchantedLevel of enchantedLevels) {
+  const frontierLevel = levels.find(
+    (level) => level.theme === "verdant-frontier" && level.stageNumber === enchantedLevel.stageNumber,
+  );
+  if (!frontierLevel) {
+    errors.push(`${enchantedLevel.id}: no existe nivel equivalente de Frontera Verde`);
+    continue;
+  }
+
+  const enchantedThreatCount = enchantedLevel.enemies.length +
+    enchantedLevel.hazards.filter((hazard) => hazard.type !== "pit").length;
+  const frontierThreatCount = frontierLevel.enemies.length +
+    frontierLevel.hazards.filter((hazard) => hazard.type !== "pit").length;
+  const enchantedThreatDensity = enchantedThreatCount / enchantedLevel.worldWidth;
+  const frontierThreatDensity = frontierThreatCount / frontierLevel.worldWidth;
+  if (enchantedLevel.autoScrollSpeed <= frontierLevel.autoScrollSpeed) {
+    errors.push(`${enchantedLevel.id}: presion roja no supera a ${frontierLevel.id}`);
+  }
+  if (enchantedThreatDensity <= frontierThreatDensity) {
+    errors.push(`${enchantedLevel.id}: densidad de amenazas no supera a ${frontierLevel.id}`);
+  }
 }
 
 for (const warning of warnings) {

@@ -1,4 +1,4 @@
-export type GameScreen = "main-menu" | "playing" | "level-transition" | "paused" | "game-over" | "victory";
+export type GameScreen = "main-menu" | "playing" | "level-transition" | "power-shop" | "paused" | "game-over" | "victory";
 
 export type PlayerState =
   | "idle"
@@ -23,11 +23,35 @@ export type AchievementId =
   | "first-gold"
   | "first-checkpoint"
   | "first-treasure"
-  | "three-levels";
+  | "three-levels"
+  | "five-levels"
+  | "three-flawless-levels"
+  | "three-day-advance-streak"
+  | "dual-region-explorer"
+  | "monster-hunter-25"
+  | "monster-hunter-50"
+  | "ten-in-one-level"
+  | "enemy-variety"
+  | "gold-collector-250"
+  | "five-checkpoints"
+  | "five-treasures"
+  | "three-day-treasure-streak";
+
+export interface DailyStreakProgress {
+  count: number;
+  lastDay?: string;
+}
 
 export interface AchievementProgress {
   unlockedIds: AchievementId[];
   monstersDefeated: number;
+  flawlessLevelIds: string[];
+  defeatedEnemyIds: string[];
+  mostEnemiesDefeatedInLevel: number;
+  goldCollected: number;
+  activatedCheckpointIds: string[];
+  levelAdvanceStreak: DailyStreakProgress;
+  treasureStreak: DailyStreakProgress;
 }
 
 export interface PlayerBaseState {
@@ -55,6 +79,21 @@ export interface HudState extends PlayerHudState {
   progressPercent: number;
 }
 
+export interface LevelCompletionSummary {
+  levelId: string;
+  levelName: string;
+  stageNumber: number;
+  theme: LevelTheme;
+  monstersDefeated: number;
+  gameplayDurationSeconds: number;
+  goldCollected: number;
+  actionsPerMinute: number;
+  achievementIds: AchievementId[];
+  nextLevelId?: string;
+  nextLevelName?: string;
+  nextStageNumber?: number;
+}
+
 export interface PlayerStats extends PlayerBaseState {
   speed: number;
   jumpPower: number;
@@ -72,6 +111,7 @@ export interface SaveData {
   characterPowerCharges: CharacterPowerCharges;
   unlockedLevels: string[];
   completedLevels: string[];
+  claimedLevelRewards: number[];
   claimedRewardBoxes: string[];
   achievements: AchievementProgress;
   checkpointId?: string;

@@ -1,18 +1,33 @@
-import type { AchievementId, GameScreen, HudState } from "../../shared/types/game";
+import type {
+  AchievementId,
+  GameScreen,
+  HudState,
+  LevelCompletionSummary,
+} from "../../shared/types/game";
+import type { AchievementIconId, AchievementReward } from "../data/achievements";
+import type { LevelRewardDefinition } from "../data/progression";
 import { EVENTS } from "../../shared/constants/events";
 
 type GameEventMap = {
   [EVENTS.START_GAME]: { levelId: string };
   [EVENTS.RESUME_GAME]: undefined;
+  [EVENTS.PAUSE_FOR_POWER_SHOP]: undefined;
   [EVENTS.RESTART_GAME]: { levelId: string };
+  [EVENTS.CONTINUE_LEVEL]: { completedLevelId: string; nextLevelId?: string };
   [EVENTS.GO_TO_MENU]: undefined;
   [EVENTS.ACTIVE_LEVEL_CHANGED]: { levelId: string };
   [EVENTS.HUD_UPDATED]: HudState;
   [EVENTS.HEALTH_PICKUP_COLLECTED]: { restored: number };
   [EVENTS.PLAYER_DAMAGED]: { amount: number };
-  [EVENTS.ACHIEVEMENT_UNLOCKED]: { id: AchievementId; title: string; icon: string };
+  [EVENTS.PLAYER_LEVELED_UP]: { level: number; reward?: LevelRewardDefinition };
+  [EVENTS.ACHIEVEMENT_UNLOCKED]: {
+    id: AchievementId;
+    title: string;
+    icon: AchievementIconId;
+    reward: AchievementReward;
+  };
   [EVENTS.SCREEN_CHANGED]: GameScreen;
-  [EVENTS.LEVEL_COMPLETED]: { levelId: string };
+  [EVENTS.LEVEL_COMPLETED]: LevelCompletionSummary;
 };
 
 type EventKey = keyof GameEventMap;

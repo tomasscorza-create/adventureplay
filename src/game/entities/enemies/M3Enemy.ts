@@ -19,11 +19,14 @@ type M3BehaviorState =
   | "hurt"
   | "defeated";
 
+export type M3VisualVariant = "default" | "enchanted";
+
 export class M3Enemy extends BaseEnemy {
   private readonly minChaseDistance = 18;
   private readonly jumpCooldownMs: number;
   private readonly jumpPower = 455;
   private readonly intelligence: number;
+  private readonly visualVariant: M3VisualVariant;
   private readonly chaseRange: number;
   private readonly verticalAwareness: number;
   private readonly pursuitMemoryMs: number;
@@ -43,6 +46,7 @@ export class M3Enemy extends BaseEnemy {
   private contactDamageActive = false;
   private defeated = false;
   private targetAcquired = false;
+  private lastAttackTrailAt = Number.NEGATIVE_INFINITY;
   private lastSafePosition: Phaser.Math.Vector2;
 
   constructor(
@@ -51,14 +55,24 @@ export class M3Enemy extends BaseEnemy {
     y: number,
     walkableSurfaces: Phaser.GameObjects.Rectangle[],
     intelligence = 0.55,
+    visualVariant: M3VisualVariant = "default",
   ) {
-    const definition = enemyDefinitions.m3;
+    const enemyId = visualVariant === "enchanted" ? "e2m3" : "m3";
+    const definition = enemyDefinitions[enemyId];
     if (!definition) {
-      throw new Error("Unknown enemy definition: m3");
+      throw new Error(`Unknown enemy definition: ${enemyId}`);
     }
 
-    super(scene, x, y, "enemy-m3-run-1", definition, 0);
+    super(
+      scene,
+      x,
+      y,
+      visualVariant === "enchanted" ? "enchanted-m3-idle" : "enemy-m3-run-1",
+      definition,
+      0,
+    );
     this.walkableSurfaces = walkableSurfaces;
+    this.visualVariant = visualVariant;
     this.intelligence = Phaser.Math.Clamp(intelligence, 0.35, 1);
     this.chaseRange = Phaser.Math.Linear(900, 1300, this.intelligence);
     this.verticalAwareness = Phaser.Math.Linear(270, 380, this.intelligence);
@@ -69,7 +83,10 @@ export class M3Enemy extends BaseEnemy {
     this.lastSafePosition = new Phaser.Math.Vector2(x, y);
     this.nextAttackAt = scene.time.now + Phaser.Math.Linear(1200, 700, this.intelligence);
     this.setDepth(12);
-    this.setDisplaySize(84, 82);
+    this.setDisplaySize(
+      visualVariant === "enchanted" ? 94 : 84,
+      visualVariant === "enchanted" ? 86 : 82,
+    );
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(this.width * 0.48, this.height * 0.68);
@@ -78,6 +95,9 @@ export class M3Enemy extends BaseEnemy {
     this.healthBar = scene.add.graphics().setDepth(20);
     this.drawHealthBar();
     this.positionHealthBar();
+    if (visualVariant === "enchanted") {
+      this.play("enchanted-m3-idle", true);
+    }
   }
 
   override update(target?: Player): void {
@@ -133,7 +153,7 @@ export class M3Enemy extends BaseEnemy {
 
     const pursuitX = targetVisible ? target.x : this.lastKnownTargetX;
     this.direction = pursuitX < this.x ? -1 : 1;
-    this.setFlipX(this.direction < 0);
+    this.setFacing(this.direction);
 
     if (this.behaviorState === "alert") {
       if (now < this.stateUntil) {
@@ -197,7 +217,7 @@ export class M3Enemy extends BaseEnemy {
       const airDirection: -1 | 1 = (this.airTargetX ?? pursuitX) < this.x ? -1 : 1;
       const airSpeed = Phaser.Math.Linear(145, 168, this.intelligence);
       this.setVelocityX(airSpeed * airDirection);
-      this.setFlipX(airDirection < 0);
+      this.setFacing(airDirection);
       this.setBehaviorState("jump");
       return;
     }
@@ -246,13 +266,16 @@ export class M3Enemy extends BaseEnemy {
     const predictedTargetX = target.x + targetBody.velocity.x * (0.08 + this.intelligence * 0.08);
     this.attackDirection = predictedTargetX < this.x ? -1 : 1;
     this.direction = this.attackDirection;
-    this.setFlipX(this.attackDirection < 0);
+    this.setFacing(this.attackDirection);
     this.contactDamageActive = false;
     this.setVelocityX(0);
     this.setBehaviorState(
       "attack-windup",
       now + Phaser.Math.Linear(430, 230, this.intelligence),
     );
+    if (this.visualVariant === "enchanted") {
+      this.createAttackChargeEffect();
+    }
   }
 
   private updateAttackState(now: number): void {
@@ -279,6 +302,10 @@ export class M3Enemy extends BaseEnemy {
         this.beginAttackRecovery(now);
       } else {
         this.setVelocityX(180 * this.attackDirection);
+        if (this.visualVariant === "enchanted" && now - this.lastAttackTrailAt >= 70) {
+          this.lastAttackTrailAt = now;
+          this.createAttackTrail();
+        }
       }
       return;
     }
@@ -382,6 +409,9 @@ export class M3Enemy extends BaseEnemy {
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.enable = false;
     this.setBehaviorState("defeated");
+    if (this.visualVariant === "enchanted") {
+      this.createDefeatBurst();
+    }
     this.scene.tweens.add({
       targets: this,
       alpha: 0,
@@ -402,33 +432,101 @@ export class M3Enemy extends BaseEnemy {
     this.behaviorState = state;
     this.stateUntil = until;
     this.clearTint();
+    const animationPrefix = this.visualVariant === "enchanted"
+      ? "enchanted-m3"
+      : "enemy-m3";
     if (state === "alert") {
-      this.play("enemy-m3-alert", true);
-      this.setTint(0xff9b68);
+      this.play(`${animationPrefix}-alert`, true);
+      this.setTint(this.visualVariant === "enchanted" ? 0xc7ffae : 0xff9b68);
     } else if (state === "chase") {
-      this.play("enemy-m3-run", true);
+      this.play(`${animationPrefix}-run`, true);
     } else if (state === "attack-windup") {
-      this.play("enemy-m3-attack-windup", true);
-      this.setTint(0xff735c);
+      this.play(`${animationPrefix}-attack-windup`, true);
+      this.setTint(this.visualVariant === "enchanted" ? 0xaaff88 : 0xff735c);
     } else if (state === "attack-lunge") {
-      this.play("enemy-m3-attack", true);
+      this.play(`${animationPrefix}-attack`, true);
     } else if (state === "attack-recover") {
       this.anims.stop();
-      this.setTexture("enemy-m3-run-5");
-      this.setTint(0xffb09c);
+      this.setTexture(
+        this.visualVariant === "enchanted" ? "enchanted-m3-attack-1" : "enemy-m3-run-5",
+      );
+      this.setTint(this.visualVariant === "enchanted" ? 0xb8eaa6 : 0xffb09c);
     } else if (state === "jump") {
       this.anims.stop();
-      this.setTexture("enemy-m3-run-3");
+      this.setTexture(
+        this.visualVariant === "enchanted" ? "enchanted-m3-run-2" : "enemy-m3-run-3",
+      );
     } else if (state === "hurt") {
-      this.play("enemy-m3-hurt", true);
+      this.play(`${animationPrefix}-hurt`, true);
       this.setTint(0xffffff);
     } else if (state === "defeated") {
-      this.play("enemy-m3-defeat", true);
-      this.setTint(0xa44d55);
+      this.play(`${animationPrefix}-defeat`, true);
+      if (this.visualVariant === "default") {
+        this.setTint(0xa44d55);
+      }
     } else {
-      this.anims.stop();
-      this.setTexture("enemy-m3-run-1");
+      if (this.visualVariant === "enchanted") {
+        this.play("enchanted-m3-idle", true);
+      } else {
+        this.anims.stop();
+        this.setTexture("enemy-m3-run-1");
+      }
     }
+  }
+
+  private setFacing(direction: -1 | 1): void {
+    const sourceFacesLeft = this.visualVariant === "enchanted";
+    this.setFlipX(sourceFacesLeft ? direction > 0 : direction < 0);
+  }
+
+  private createAttackChargeEffect(): void {
+    const aura = this.scene.add
+      .circle(this.x, this.y - 4, 24, 0x67ff78, 0.16)
+      .setStrokeStyle(3, 0xb9ff8d, 0.88)
+      .setDepth(this.depth - 1);
+    this.scene.tweens.add({
+      targets: aura,
+      scale: 1.9,
+      alpha: 0,
+      duration: 340,
+      ease: "Sine.easeOut",
+      onComplete: () => aura.destroy(),
+    });
+  }
+
+  private createAttackTrail(): void {
+    const trail = this.scene.add
+      .image(this.x - this.attackDirection * 10, this.y, this.texture.key)
+      .setDisplaySize(this.displayWidth, this.displayHeight)
+      .setFlipX(this.flipX)
+      .setTint(0x7dff93)
+      .setAlpha(0.28)
+      .setDepth(this.depth - 1);
+    this.scene.tweens.add({
+      targets: trail,
+      x: trail.x - this.attackDirection * 18,
+      alpha: 0,
+      scaleX: trail.scaleX * 1.08,
+      scaleY: trail.scaleY * 1.08,
+      duration: 180,
+      ease: "Quad.easeOut",
+      onComplete: () => trail.destroy(),
+    });
+  }
+
+  private createDefeatBurst(): void {
+    const ring = this.scene.add
+      .circle(this.x, this.y, 18, 0x5fff74, 0.18)
+      .setStrokeStyle(4, 0xc8ff91, 0.94)
+      .setDepth(this.depth + 1);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 3.1,
+      alpha: 0,
+      duration: 420,
+      ease: "Cubic.easeOut",
+      onComplete: () => ring.destroy(),
+    });
   }
 
   private drawHealthBar(): void {

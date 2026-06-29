@@ -8,6 +8,23 @@ import m3Run2Url from "../../assets/enemies/m3-run-2.png";
 import m3Run3Url from "../../assets/enemies/m3-run-3.png";
 import m3Run4Url from "../../assets/enemies/m3-run-4.png";
 import m3Run5Url from "../../assets/enemies/m3-run-5.png";
+import enchantedM2Brake1Url from "../../assets/enemies/enchanted-m2/brake-1.png";
+import enchantedM2Brake2Url from "../../assets/enemies/enchanted-m2/brake-2.png";
+import enchantedM2Defeat1Url from "../../assets/enemies/enchanted-m2/defeat-1.png";
+import enchantedM2Defeat2Url from "../../assets/enemies/enchanted-m2/defeat-2.png";
+import enchantedM2DiveUrl from "../../assets/enemies/enchanted-m2/dive.png";
+import enchantedM2Flight1Url from "../../assets/enemies/enchanted-m2/flight-1.png";
+import enchantedM2Flight2Url from "../../assets/enemies/enchanted-m2/flight-2.png";
+import enchantedM2Flight3Url from "../../assets/enemies/enchanted-m2/flight-3.png";
+import enchantedM2RecoverUrl from "../../assets/enemies/enchanted-m2/recover.png";
+import enchantedM2WindupUrl from "../../assets/enemies/enchanted-m2/windup.png";
+import enchantedM3Attack1Url from "../../assets/enemies/enchanted-m3/attack-1.png";
+import enchantedM3Attack2Url from "../../assets/enemies/enchanted-m3/attack-2.png";
+import enchantedM3Defeat1Url from "../../assets/enemies/enchanted-m3/defeat-1.png";
+import enchantedM3Defeat2Url from "../../assets/enemies/enchanted-m3/defeat-2.png";
+import enchantedM3IdleUrl from "../../assets/enemies/enchanted-m3/idle.png";
+import enchantedM3Run1Url from "../../assets/enemies/enchanted-m3/run-1.png";
+import enchantedM3Run2Url from "../../assets/enemies/enchanted-m3/run-2.png";
 import playerKnightUrl from "../../assets/player-knight.png";
 import bushUrl from "../../assets/scenery/bush.png";
 import cloudsUrl from "../../assets/scenery/clouds.png";
@@ -58,13 +75,37 @@ export class PreloadScene extends Phaser.Scene {
     [m3Run1Url, m3Run2Url, m3Run3Url, m3Run4Url, m3Run5Url].forEach((url, index) => {
       this.load.image(`enemy-m3-run-${index + 1}`, url);
     });
+    const enchantedM2Sources = [
+      enchantedM2Flight1Url,
+      enchantedM2Flight2Url,
+      enchantedM2Flight3Url,
+      enchantedM2Brake1Url,
+      enchantedM2Brake2Url,
+      enchantedM2WindupUrl,
+      enchantedM2DiveUrl,
+      enchantedM2RecoverUrl,
+      enchantedM2Defeat1Url,
+      enchantedM2Defeat2Url,
+    ];
+    enchantedM2Sources.forEach((url, index) => {
+      this.load.image(`enchanted-m2-source-${index + 1}`, url);
+    });
+    this.load.image("enchanted-m3-idle", enchantedM3IdleUrl);
+    this.load.image("enchanted-m3-run-1", enchantedM3Run1Url);
+    this.load.image("enchanted-m3-run-2", enchantedM3Run2Url);
+    this.load.image("enchanted-m3-attack-1", enchantedM3Attack1Url);
+    this.load.image("enchanted-m3-attack-2", enchantedM3Attack2Url);
+    this.load.image("enchanted-m3-defeat-1", enchantedM3Defeat1Url);
+    this.load.image("enchanted-m3-defeat-2", enchantedM3Defeat2Url);
     this.loadSceneryAssets();
   }
 
   create(): void {
     this.createCharacterAnimations();
+    this.createEnchantedM2Frames();
     this.createM2Animations();
     this.createM3Animations();
+    this.createEnchantedM3Animations();
     this.createEnemyTexture();
     this.createM1Texture();
     this.createEnchantedM0Texture();
@@ -329,6 +370,100 @@ export class PreloadScene extends Phaser.Scene {
       frameRate: 9,
       repeat: -1,
     });
+    this.anims.create({
+      key: "enchanted-m2-flight",
+      frames: [1, 2, 3].map((frame) => ({ key: `enchanted-m2-frame-${frame}` })),
+      frameRate: 9,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m2-windup",
+      frames: [4, 5, 6, 7].map((frame) => ({ key: `enchanted-m2-frame-${frame}` })),
+      frameRate: 11,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "enchanted-m2-dive",
+      frames: [{ key: "enchanted-m2-frame-7" }],
+      frameRate: 1,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m2-recover",
+      frames: [8, 5, 4].map((frame) => ({ key: `enchanted-m2-frame-${frame}` })),
+      frameRate: 7,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "enchanted-m2-defeat",
+      frames: [9, 10].map((frame) => ({ key: `enchanted-m2-frame-${frame}` })),
+      frameRate: 6,
+      repeat: 0,
+    });
+  }
+
+  private createEnchantedM2Frames(): void {
+    const sourceCrops = [
+      { x: 0, y: 0, width: 347, height: 320 },
+      { x: 0, y: 0, width: 347, height: 320 },
+      { x: 0, y: 0, width: 347, height: 320 },
+      { x: 0, y: 0, width: 286, height: 325 },
+      { x: 0, y: 0, width: 252, height: 325 },
+      { x: 0, y: 0, width: 286, height: 325 },
+      { x: 48, y: 0, width: 238, height: 325 },
+      { x: 0, y: 0, width: 286, height: 325 },
+      { x: 0, y: 0, width: 286, height: 325 },
+      { x: 0, y: 0, width: 286, height: 325 },
+    ];
+
+    sourceCrops.forEach((crop, index) => {
+      this.createNormalizedM2Frame(
+        `enchanted-m2-frame-${index + 1}`,
+        `enchanted-m2-source-${index + 1}`,
+        crop,
+      );
+    });
+  }
+
+  private createNormalizedM2Frame(
+    textureKey: string,
+    sourceKey: string,
+    crop: { x: number; y: number; width: number; height: number },
+  ): void {
+    const sourceImage = this.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
+    const scratchCanvas = document.createElement("canvas");
+    const scratchContext = scratchCanvas.getContext("2d", { willReadFrequently: true });
+    const frameCanvas = document.createElement("canvas");
+    const frameContext = frameCanvas.getContext("2d");
+    if (!scratchContext || !frameContext) {
+      return;
+    }
+
+    const frameSize = 320;
+    const padding = 18;
+    frameCanvas.width = frameSize;
+    frameCanvas.height = frameSize;
+    const bounds = this.findVisibleBounds(sourceImage, scratchCanvas, scratchContext, crop);
+    const scale = Math.min(
+      (frameSize - padding * 2) / bounds.width,
+      (frameSize - padding * 2) / bounds.height,
+    );
+    const drawWidth = bounds.width * scale;
+    const drawHeight = bounds.height * scale;
+    const drawX = (frameSize - drawWidth) / 2;
+    const drawY = (frameSize - drawHeight) / 2;
+    frameContext.drawImage(
+      sourceImage,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      drawX,
+      drawY,
+      drawWidth,
+      drawHeight,
+    );
+    this.textures.addCanvas(textureKey, frameCanvas);
   }
 
   private createM3Animations(): void {
@@ -368,6 +503,55 @@ export class PreloadScene extends Phaser.Scene {
       key: "enemy-m3-defeat",
       frames: [5, 4, 2, 1].map((frameNumber) => ({ key: `enemy-m3-run-${frameNumber}` })),
       frameRate: 12,
+      repeat: 0,
+    });
+  }
+
+  private createEnchantedM3Animations(): void {
+    this.anims.create({
+      key: "enchanted-m3-idle",
+      frames: ["enchanted-m3-idle", "enchanted-m3-run-1"].map((key) => ({ key })),
+      frameRate: 3,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m3-alert",
+      frames: ["enchanted-m3-idle", "enchanted-m3-attack-1"].map((key) => ({ key })),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m3-run",
+      frames: ["enchanted-m3-run-1", "enchanted-m3-run-2"].map((key) => ({ key })),
+      frameRate: 9,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m3-attack-windup",
+      frames: [
+        "enchanted-m3-attack-1",
+        "enchanted-m3-idle",
+        "enchanted-m3-attack-1",
+      ].map((key) => ({ key })),
+      frameRate: 10,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m3-attack",
+      frames: ["enchanted-m3-attack-1", "enchanted-m3-attack-2"].map((key) => ({ key })),
+      frameRate: 13,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enchanted-m3-hurt",
+      frames: ["enchanted-m3-attack-1", "enchanted-m3-run-1"].map((key) => ({ key })),
+      frameRate: 13,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "enchanted-m3-defeat",
+      frames: ["enchanted-m3-defeat-1", "enchanted-m3-defeat-2"].map((key) => ({ key })),
+      frameRate: 6,
       repeat: 0,
     });
   }

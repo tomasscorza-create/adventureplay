@@ -1,14 +1,25 @@
 import { useEffect, useState } from "react";
 import { gameEvents } from "./game/events/EventBus";
+import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { createGame } from "./game/main";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
 import { SupabaseSaveAdapter } from "./game/systems/save/SupabaseSaveAdapter";
 import { createDefaultSave } from "./game/systems/save/SaveDefaults";
+import type { AchievementIconId, AchievementReward } from "./game/data/achievements";
+import type { LevelRewardDefinition } from "./game/data/progression";
 import { gameAudio } from "./shared/audio/GameAudio";
 import { EVENTS } from "./shared/constants/events";
 import { isSupabaseConfigured, supabase } from "./shared/supabase/client";
-import type { AchievementId, CharacterId, GameScreen, HudState, SaveData } from "./shared/types/game";
+import type {
+  AchievementId,
+  CharacterId,
+  GameScreen,
+  HudState,
+  LevelCompletionSummary,
+  SaveData,
+} from "./shared/types/game";
 import { AchievementUnlockToast } from "./ui/components/AchievementUnlockToast";
+import { LevelUpToast } from "./ui/components/LevelUpToast";
 import { HUD } from "./ui/components/HUD";
 import { AbilityControls } from "./ui/components/AbilityControls";
 import { MobileControls } from "./ui/components/MobileControls";
@@ -16,7 +27,9 @@ import { OrientationNotice } from "./ui/components/OrientationNotice";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
+import { LevelSummaryScreen } from "./ui/screens/LevelSummaryScreen";
 import { PauseScreen } from "./ui/screens/PauseScreen";
+import { PowerShopScreen } from "./ui/screens/PowerShopScreen";
 import { VictoryScreen } from "./ui/screens/VictoryScreen";
 
 const initialHud: HudState = {
@@ -35,16 +48,30 @@ const initialHud: HudState = {
 };
 
 type AuthStatus = "checking" | "signed-out" | "loading-save" | "signed-in";
-type AchievementNotification = { id: AchievementId; title: string; icon: string };
+type ProgressNotification = {
+  key: string;
+  kind: "achievement";
+  id: AchievementId;
+  title: string;
+  icon: AchievementIconId;
+  reward: AchievementReward;
+} | {
+  key: string;
+  kind: "level-up";
+  level: number;
+  reward?: LevelRewardDefinition;
+};
 
-const ACHIEVEMENT_NOTIFICATION_DURATION_MS = 4600;
+const PROGRESS_NOTIFICATION_DURATION_MS = 4600;
 
 export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
   const [healthPickupFeedback, setHealthPickupFeedback] = useState({ sequence: 0, restored: 0 });
   const [damageFeedbackSequence, setDamageFeedbackSequence] = useState(0);
-  const [achievementQueue, setAchievementQueue] = useState<AchievementNotification[]>([]);
+  const [progressQueue, setProgressQueue] = useState<ProgressNotification[]>([]);
+  const [levelSummary, setLevelSummary] = useState<LevelCompletionSummary>();
+  const [activePowerShop, setActivePowerShop] = useState<PurchasablePower>();
   const [activeLevelId, setActiveLevelId] = useState("meadowOutpost");
   const [save, setSave] = useState<SaveData>(() => createDefaultSave());
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
@@ -70,10 +97,28 @@ export function App() {
       setDamageFeedbackSequence((current) => current + 1);
     });
     const offAchievementUnlocked = gameEvents.on(EVENTS.ACHIEVEMENT_UNLOCKED, (achievement) => {
-      setAchievementQueue((current) => (
-        current.some((queued) => queued.id === achievement.id)
+      const notification: ProgressNotification = {
+        ...achievement,
+        key: `achievement:${achievement.id}`,
+        kind: "achievement",
+      };
+      setProgressQueue((current) => (
+        current.some((queued) => queued.key === notification.key)
           ? current
-          : [...current, achievement]
+          : [...current, notification]
+      ));
+    });
+    const offPlayerLeveledUp = gameEvents.on(EVENTS.PLAYER_LEVELED_UP, ({ level, reward }) => {
+      const notification: ProgressNotification = {
+        key: `level-up:${level}`,
+        kind: "level-up",
+        level,
+        reward,
+      };
+      setProgressQueue((current) => (
+        current.some((queued) => queued.key === notification.key)
+          ? current
+          : [...current, notification]
       ));
     });
     const offActiveLevelChanged = gameEvents.on(EVENTS.ACTIVE_LEVEL_CHANGED, ({ levelId }) => {
@@ -81,11 +126,18 @@ export function App() {
     });
     const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, (nextScreen) => {
       setScreen(nextScreen);
+      if (nextScreen !== "level-transition") {
+        setLevelSummary(undefined);
+      }
+      if (nextScreen !== "power-shop") {
+        setActivePowerShop(undefined);
+      }
       if (nextScreen !== "playing" && nextScreen !== "paused") {
         setHealthPickupFeedback({ sequence: 0, restored: 0 });
       }
     });
-    const offCompleted = gameEvents.on(EVENTS.LEVEL_COMPLETED, () => {
+    const offCompleted = gameEvents.on(EVENTS.LEVEL_COMPLETED, (summary) => {
+      setLevelSummary(summary);
       setSave(gameSaveStore.load());
     });
     return () => {
@@ -93,25 +145,29 @@ export function App() {
       offHealthPickup();
       offPlayerDamaged();
       offAchievementUnlocked();
+      offPlayerLeveledUp();
       offActiveLevelChanged();
       offScreen();
       offCompleted();
     };
   }, []);
 
-  const activeAchievement = achievementQueue[0];
+  const activeNotification = progressQueue[0];
+  const activeAchievement = activeNotification?.kind === "achievement"
+    ? activeNotification
+    : undefined;
 
   useEffect(() => {
-    if (!activeAchievement) {
+    if (!activeNotification) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setAchievementQueue((current) => current.slice(1));
-    }, ACHIEVEMENT_NOTIFICATION_DURATION_MS);
+      setProgressQueue((current) => current.slice(1));
+    }, PROGRESS_NOTIFICATION_DURATION_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeAchievement]);
+  }, [activeNotification]);
 
   useEffect(() => {
     gameSaveStore.onError((error) => {
@@ -327,6 +383,40 @@ export function App() {
     setSave(gameSaveStore.load());
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };
+  const continueAfterSummary = () => {
+    if (!levelSummary) {
+      return;
+    }
+
+    gameAudio.playUiSelect();
+    gameEvents.emit(EVENTS.CONTINUE_LEVEL, {
+      completedLevelId: levelSummary.levelId,
+      nextLevelId: levelSummary.nextLevelId,
+    });
+  };
+  const openPowerShop = (power: PurchasablePower) => {
+    gameAudio.playUiSelect();
+    setSave(gameSaveStore.load());
+    setActivePowerShop(power);
+    gameEvents.emit(EVENTS.PAUSE_FOR_POWER_SHOP, undefined);
+  };
+  const purchasePowerDuringGame = (pack: PowerPackage): boolean => {
+    if (!activePowerShop) {
+      return false;
+    }
+
+    const currentSave = gameSaveStore.load();
+    return purchaseCharacterPower(
+      currentSave.selectedCharacterId,
+      activePowerShop,
+      pack.amount,
+      pack.cost,
+    );
+  };
+  const continueFromPowerShop = () => {
+    gameAudio.playUiSelect();
+    gameEvents.emit(EVENTS.RESUME_GAME, undefined);
+  };
 
   const needsAuth = authStatus !== "signed-in";
 
@@ -340,19 +430,48 @@ export function App() {
           aria-hidden="true"
         />
       )}
-      {!needsAuth && activeAchievement && (
-        <AchievementUnlockToast
-          key={activeAchievement.id}
-          icon={activeAchievement.icon}
-          title={activeAchievement.title}
-        />
+      {!needsAuth && activeNotification && (
+        screen === "playing" || screen === "paused" || screen === "level-transition"
+      ) && (
+        activeNotification.kind === "achievement" ? (
+          <AchievementUnlockToast
+            key={activeNotification.key}
+            icon={activeNotification.icon}
+            title={activeNotification.title}
+            reward={activeNotification.reward}
+          />
+        ) : (
+          <LevelUpToast
+            key={activeNotification.key}
+            level={activeNotification.level}
+            reward={activeNotification.reward}
+          />
+        )
       )}
       {!needsAuth && (screen === "playing" || screen === "paused") && (
-        <HUD hud={hud} healthPickupFeedback={healthPickupFeedback} />
+        <HUD
+          hud={hud}
+          healthPickupFeedback={healthPickupFeedback}
+          achievementReward={activeAchievement?.reward}
+          rewardFeedbackKey={activeAchievement?.id}
+        />
       )}
-      {!needsAuth && screen === "playing" && <AbilityControls hud={hud} />}
+      {!needsAuth && screen === "playing" && (
+        <AbilityControls
+          hud={hud}
+          achievementReward={activeAchievement?.reward}
+          rewardFeedbackKey={activeAchievement?.id}
+          onOpenShop={openPowerShop}
+        />
+      )}
       {!needsAuth && (screen === "playing" || screen === "paused") && <OrientationNotice />}
-      {!needsAuth && screen === "playing" && <MobileControls hud={hud} />}
+      {!needsAuth && screen === "playing" && (
+        <MobileControls
+          hud={hud}
+          achievementReward={activeAchievement?.reward}
+          rewardFeedbackKey={activeAchievement?.id}
+        />
+      )}
       {!needsAuth && screen === "main-menu" && (
         <MainMenuScreen
           playerEmail={playerEmail}
@@ -370,6 +489,18 @@ export function App() {
       )}
       {!needsAuth && screen === "game-over" && (
         <GameOverScreen onRestart={restartGame} onMenu={goToMenu} />
+      )}
+      {!needsAuth && screen === "level-transition" && levelSummary && (
+        <LevelSummaryScreen summary={levelSummary} onContinue={continueAfterSummary} />
+      )}
+      {!needsAuth && screen === "power-shop" && activePowerShop && (
+        <PowerShopScreen
+          power={activePowerShop}
+          save={save}
+          onPurchase={purchasePowerDuringGame}
+          onContinue={continueFromPowerShop}
+          onMenu={goToMenu}
+        />
       )}
       {!needsAuth && screen === "victory" && (
         <VictoryScreen hud={hud} onRestart={restartGame} onMenu={goToMenu} />

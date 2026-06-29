@@ -1,12 +1,16 @@
 import type { CSSProperties } from "react";
+import type { AchievementReward } from "../../game/data/achievements";
+import { MAX_PLAYER_LEVEL } from "../../game/data/progression";
 import type { HudState } from "../../shared/types/game";
 
 interface HUDProps {
   hud: HudState;
   healthPickupFeedback: { sequence: number; restored: number };
+  achievementReward?: AchievementReward;
+  rewardFeedbackKey?: string;
 }
 
-export function HUD({ hud, healthPickupFeedback }: HUDProps) {
+export function HUD({ hud, healthPickupFeedback, achievementReward, rewardFeedbackKey }: HUDProps) {
   const minutes = Math.floor(hud.timeRemaining / 60);
   const seconds = String(hud.timeRemaining % 60).padStart(2, "0");
   const progressStyle = {
@@ -45,15 +49,31 @@ export function HUD({ hud, healthPickupFeedback }: HUDProps) {
           <span className="hud__label">Nivel</span>
           <span className="hud__value">{hud.level}</span>
         </div>
-        <div className="hud__item">
+        <div
+          className={`hud__item hud__item--experience${achievementReward?.experience ? " hud__item--reward-pulse" : ""}`}
+        >
           <span className="hud__label">Experiencia</span>
           <span className="hud__value">
-            {hud.experience}/{hud.experienceToNextLevel}
+            {hud.level >= MAX_PLAYER_LEVEL
+              ? "MAX"
+              : `${hud.experience}/${hud.experienceToNextLevel}`}
           </span>
+          {achievementReward?.experience && (
+            <span className="hud__reward-feedback hud__reward-feedback--xp" key={`xp-${rewardFeedbackKey}`}>
+              +{achievementReward.experience} XP
+            </span>
+          )}
         </div>
-        <div className="hud__item">
+        <div
+          className={`hud__item hud__item--gold${achievementReward?.gold ? " hud__item--reward-pulse" : ""}`}
+        >
           <span className="hud__label">ORO</span>
           <span className="hud__value">{hud.coins}</span>
+          {achievementReward?.gold && (
+            <span className="hud__reward-feedback hud__reward-feedback--gold" key={`gold-${rewardFeedbackKey}`}>
+              +{achievementReward.gold} ORO
+            </span>
+          )}
         </div>
         <div className="hud__progress" style={progressStyle} aria-label="Progreso del nivel">
           <span className="hud__progress-track">

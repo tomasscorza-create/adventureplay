@@ -59,7 +59,9 @@ export class LevelScene extends Phaser.Scene {
   private readonly inventory = new InventorySystem();
   private readonly cameraSystem = new CameraSystem();
   private unbindResume?: () => void;
+  private unbindPowerShop?: () => void;
   private unbindRestart?: () => void;
+  private unbindContinue?: () => void;
   private unbindMenu?: () => void;
   private remainingTimeMs = 0;
   private lastHudSecond = -1;
@@ -70,6 +72,12 @@ export class LevelScene extends Phaser.Scene {
   private readonly achievements = new AchievementSystem();
   private damageTakenThisLevel = false;
   private recoveringFromPit = false;
+  private monstersDefeatedThisLevel = 0;
+  private goldCollectedThisLevel = 0;
+  private unlockedAchievementsThisLevel: AchievementId[] = [];
+  private gameplayElapsedMs = 0;
+  private playerActionCount = 0;
+  private previousMovementDirection: -1 | 0 | 1 = 0;
 
   constructor() {
     super("LevelScene");
@@ -78,6 +86,15 @@ export class LevelScene extends Phaser.Scene {
   create(data: { levelId?: string }): void {
     const requestedLevelId = data.levelId ?? "meadowOutpost";
     this.level = levelDefinitions[requestedLevelId] ?? levelDefinitions.meadowOutpost;
+    this.levelFinished = false;
+    this.damageTakenThisLevel = false;
+    this.recoveringFromPit = false;
+    this.monstersDefeatedThisLevel = 0;
+    this.goldCollectedThisLevel = 0;
+    this.unlockedAchievementsThisLevel = [];
+    this.gameplayElapsedMs = 0;
+    this.playerActionCount = 0;
+    this.previousMovementDirection = 0;
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.save = gameSaveStore.load();
     this.save.player.health = this.save.player.maxHealth;
@@ -118,12 +135,14 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
+    this.gameplayElapsedMs += delta;
     this.updateLevelTimer(delta);
     if (this.levelFinished) {
       return;
     }
 
     const input = this.inputSystem.readFrame();
+    this.trackPlayerActions(input);
     this.handleMovementAudio(input);
     this.movement.update(this.player, input);
     this.handleActions(input);
@@ -164,7 +183,7 @@ export class LevelScene extends Phaser.Scene {
     this.movingPlatforms = this.physics.add.group({ runChildUpdate: true });
     for (const platform of this.level.platforms) {
       if (platform.movement) {
-        this.movingPlatforms.add(new MovingPlatform(this, platform));
+        this.movingPlatforms.add(new MovingPlatform(this, platform, this.level.theme));
       } else {
         this.createPlatform(platform);
       }
@@ -255,14 +274,28 @@ export class LevelScene extends Phaser.Scene {
     }
 
     if (enemy.enemyId === "m2") {
-      return new M2Enemy(this, enemy.x, enemy.y, enemy.patrolDistance, enemy.aggression);
+      return new M2Enemy(
+        this,
+        enemy.x,
+        enemy.y,
+        enemy.patrolDistance,
+        enemy.aggression,
+        isEnchantedForest ? "enchanted" : "default",
+      );
     }
 
-    if (enemy.enemyId === "m3") {
-      return new M3Enemy(this, enemy.x, enemy.y, [
-        ...this.platforms.getChildren(),
-        ...this.movingPlatforms.getChildren(),
-      ] as Phaser.GameObjects.Rectangle[], this.level.m3Intelligence);
+    if (enemy.enemyId === "m3" || enemy.enemyId === "e2m3") {
+      return new M3Enemy(
+        this,
+        enemy.x,
+        enemy.y,
+        [
+          ...this.platforms.getChildren(),
+          ...this.movingPlatforms.getChildren(),
+        ] as Phaser.GameObjects.Rectangle[],
+        this.level.m3Intelligence,
+        enemy.enemyId === "e2m3" ? "enchanted" : "default",
+      );
     }
 
     return new BasicEnemy(
@@ -335,9 +368,20 @@ export class LevelScene extends Phaser.Scene {
   private bindSceneEvents(): void {
     this.unbindResume = gameEvents.on(EVENTS.RESUME_GAME, () => {
       if (this.scene.isPaused()) {
+        this.save = gameSaveStore.load();
         this.scene.resume();
         gameEvents.emit(EVENTS.SCREEN_CHANGED, "playing");
+        this.emitHud();
       }
+    });
+
+    this.unbindPowerShop = gameEvents.on(EVENTS.PAUSE_FOR_POWER_SHOP, () => {
+      if (this.levelFinished || this.scene.isPaused()) {
+        return;
+      }
+
+      gameEvents.emit(EVENTS.SCREEN_CHANGED, "power-shop");
+      this.scene.pause();
     });
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
@@ -345,13 +389,34 @@ export class LevelScene extends Phaser.Scene {
       this.scene.start("LevelScene", { levelId: restartLevelId });
     });
 
+    this.unbindContinue = gameEvents.on(
+      EVENTS.CONTINUE_LEVEL,
+      ({ completedLevelId, nextLevelId }) => {
+        if (!this.levelFinished || completedLevelId !== this.level.id) {
+          return;
+        }
+
+        if (nextLevelId && levelDefinitions[nextLevelId]) {
+          this.scene.start("LevelScene", { levelId: nextLevelId });
+          return;
+        }
+
+        this.scene.start("GameOverScene", {
+          result: "victory",
+          restartLevelId: this.level.id,
+        });
+      },
+    );
+
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {
       this.scene.start("MainMenuScene");
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unbindResume?.();
+      this.unbindPowerShop?.();
       this.unbindRestart?.();
+      this.unbindContinue?.();
       this.unbindMenu?.();
       touchInputStore.reset();
       this.scene.stop("UIScene");
@@ -392,6 +457,26 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private trackPlayerActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
+    const movementDirection: -1 | 0 | 1 = input.left === input.right
+      ? 0
+      : input.left
+        ? -1
+        : 1;
+    if (movementDirection !== 0 && movementDirection !== this.previousMovementDirection) {
+      this.playerActionCount += 1;
+    }
+    this.previousMovementDirection = movementDirection;
+
+    this.playerActionCount += [
+      input.jumpJustPressed,
+      input.meleeJustPressed,
+      input.shootJustPressed,
+      input.healJustPressed,
+      input.powerJustPressed,
+    ].filter(Boolean).length;
+  }
+
   private useHealingPower(): void {
     const powerCharges = this.getActivePowerCharges();
     if (
@@ -417,14 +502,15 @@ export class LevelScene extends Phaser.Scene {
 
     powerCharges.powerCharges -= 1;
     this.player.markShooting(this.time.now);
+    const direction = this.player.facing;
     const projectile = new PowerProjectile(
       this,
-      this.player.x + 34,
+      this.player.x + 34 * direction,
       this.player.y - 7,
+      direction,
     );
     this.powerProjectiles.add(projectile);
-    projectile.setVelocity(780, 0);
-    (projectile.body as Phaser.Physics.Arcade.Body).setAllowGravity(false).setGravityY(0);
+    projectile.launch();
     gameAudio.playLethalPower();
     gameSaveStore.save(this.save);
     this.emitHud();
@@ -927,10 +1013,13 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private collectCoin(coin: Coin): void {
+    const previousGold = this.save.player.coins;
     this.inventory.collect(this.save.player, coin.itemId, coin.value);
     if (itemDefinitions[coin.itemId]?.type === "coin") {
+      const collectedGold = this.save.player.coins - previousGold;
+      this.goldCollectedThisLevel += collectedGold;
       this.announceAchievements(
-        this.achievements.recordCoinCollected(this.save.achievements),
+        this.achievements.recordGoldCollected(this.save, collectedGold),
       );
       this.createCoinGainEffect(coin.x, coin.y, coin.value);
     }
@@ -970,7 +1059,7 @@ export class LevelScene extends Phaser.Scene {
     this.inventory.collect(this.save.player, rewardItemId);
     this.save.claimedRewardBoxes.push(rewardBoxId);
     this.announceAchievements(
-      this.achievements.recordRewardBoxOpened(this.save.achievements),
+      this.achievements.recordRewardBoxOpened(this.save),
     );
     gameAudio.playCollect();
     this.createRewardBoxEffect(rewardBox.x, rewardBox.y, rewardItem.name);
@@ -1099,16 +1188,29 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handleEnemyDefeated(enemy: BaseEnemy): void {
+    this.monstersDefeatedThisLevel += 1;
     gameAudio.playEnemyDefeat();
-    this.createEnemyDefeatEffect(enemy);
-    this.progression.addExperience(this.save.player, enemy.experienceReward);
+    if (!(enemy instanceof M2Enemy && enemy.hasCustomDefeatAnimation())) {
+      this.createEnemyDefeatEffect(enemy);
+    }
+    this.progression.addExperience(this.save, enemy.experienceReward);
     this.announceAchievements(
-      this.achievements.recordEnemyDefeat(this.save.achievements),
+      this.achievements.recordEnemyDefeat(
+        this.save,
+        enemy.definition.id,
+        this.monstersDefeatedThisLevel,
+      ),
     );
     const coinReward = enemy.definition.coinReward;
     if (coinReward) {
       const amount = Phaser.Math.Between(coinReward.min, coinReward.max);
+      const previousGold = this.save.player.coins;
       this.inventory.collect(this.save.player, "bronzeCoin", amount);
+      const collectedGold = this.save.player.coins - previousGold;
+      this.goldCollectedThisLevel += collectedGold;
+      this.announceAchievements(
+        this.achievements.recordGoldCollected(this.save, collectedGold),
+      );
       this.createCoinGainEffect(enemy.x, enemy.y - 12, amount);
     }
     gameSaveStore.save(this.save);
@@ -1186,6 +1288,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private getEnemyDefeatPalette(enemyId: string): { core: number; ring: number; sparks: number[] } {
+    if (enemyId === "e2m3") {
+      return { core: 0x8dff78, ring: 0x2f9d62, sparks: [0xd4ff8c, 0x6dff91, 0x25684f] };
+    }
+
     if (enemyId === "m3") {
       return { core: 0xff6a32, ring: 0x9f1f2d, sparks: [0xffd06a, 0xe23a35, 0x5c1820] };
     }
@@ -1280,10 +1386,11 @@ export class LevelScene extends Phaser.Scene {
     this.activeCheckpoint = { ...this.level.checkpoint };
     this.save.checkpointId = this.level.checkpoint.id;
     this.announceAchievements(
-      this.achievements.recordCheckpointActivated(this.save.achievements),
+      this.achievements.recordCheckpointActivated(this.save, this.level.checkpoint.id),
     );
     gameSaveStore.save(this.save);
     this.checkpoint.setTint(0xffffff);
+    this.emitHud();
   }
 
   private handlePlayerFall(): void {
@@ -1399,7 +1506,8 @@ export class LevelScene extends Phaser.Scene {
     this.levelFinished = true;
     this.activeCheckpoint = undefined;
     this.save.checkpointId = undefined;
-    if (!this.save.completedLevels.includes(this.level.id)) {
+    const isNewCompletion = !this.save.completedLevels.includes(this.level.id);
+    if (isNewCompletion) {
       this.save.completedLevels.push(this.level.id);
     }
 
@@ -1409,148 +1517,50 @@ export class LevelScene extends Phaser.Scene {
 
     this.announceAchievements(
       this.achievements.recordLevelCompleted(
-        this.save.achievements,
+        this.save,
         this.level.id,
         !this.damageTakenThisLevel,
         this.save.completedLevels.length,
+        isNewCompletion,
       ),
     );
 
     gameSaveStore.save(this.save);
-    gameEvents.emit(EVENTS.LEVEL_COMPLETED, { levelId: this.level.id });
+    const nextLevel = this.level.nextLevelId
+      ? levelDefinitions[this.level.nextLevelId]
+      : undefined;
+    gameEvents.emit(EVENTS.LEVEL_COMPLETED, {
+      levelId: this.level.id,
+      levelName: this.level.name,
+      stageNumber: this.level.stageNumber,
+      theme: this.level.theme,
+      monstersDefeated: this.monstersDefeatedThisLevel,
+      gameplayDurationSeconds: Math.max(1, Math.round(this.gameplayElapsedMs / 1000)),
+      goldCollected: this.goldCollectedThisLevel,
+      actionsPerMinute: Math.round(
+        this.playerActionCount / Math.max(this.gameplayElapsedMs / 60_000, 1 / 60),
+      ),
+      achievementIds: [...this.unlockedAchievementsThisLevel],
+      nextLevelId: nextLevel?.id,
+      nextLevelName: nextLevel?.name,
+      nextStageNumber: nextLevel?.stageNumber,
+    });
     gameAudio.playLevelComplete();
     this.emitHud();
-
-    if (this.level.nextLevelId) {
-      this.playLevelTransition(this.level.nextLevelId);
-      return;
-    }
-
-    this.scene.start("GameOverScene", { result: "victory", restartLevelId: this.level.id });
+    this.showLevelSummary();
   }
 
-  private playLevelTransition(nextLevelId: string): void {
-    const nextLevel = levelDefinitions[nextLevelId];
-    const nextLabel = nextLevel?.name ?? "Next Level";
-    const nextStageNumber = nextLevel?.stageNumber;
-    const durationMs = 4000;
-    const centerX = GAME_WIDTH / 2;
-    const centerY = GAME_HEIGHT / 2;
-
+  private showLevelSummary(): void {
     this.physics.pause();
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "level-transition");
     this.cameras.main.stopFollow();
-    this.cameras.main.fadeOut(520, 8, 16, 24);
-    this.time.delayedCall(520, () => {
-      this.cameras.main.fadeIn(640, 8, 16, 24);
-    });
-
-    const shade = this.add
-      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x050a10, 0.9)
-      .setOrigin(0)
-      .setScrollFactor(0)
-      .setDepth(220);
-
-    const horizon = this.add
-      .rectangle(centerX, centerY + 60, 0, 3, 0x9be7dc, 0.9)
-      .setScrollFactor(0)
-      .setDepth(221);
-
-    const title = this.add
-      .text(centerX, centerY - 86, `Nivel ${this.level.stageNumber} completado`, {
-        color: "#fff4cf",
-        fontFamily: "Arial, sans-serif",
-        fontSize: "34px",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(222)
-      .setAlpha(0);
-
-    const subtitleText = nextStageNumber
-      ? `Avanzando al nivel ${nextStageNumber}: ${nextLabel}`
-      : `Avanzando a ${nextLabel}`;
-    const subtitle = this.add
-      .text(centerX, centerY - 36, subtitleText, {
-        color: "#9be7dc",
-        fontFamily: "Arial, sans-serif",
-        fontSize: "20px",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(222)
-      .setAlpha(0);
-
-    const progressBack = this.add
-      .rectangle(centerX - 210, centerY + 30, 420, 10, 0x132331, 0.95)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(222)
-      .setAlpha(0);
-
-    const progressFill = this.add
-      .rectangle(centerX - 210, centerY + 30, 1, 10, 0xf2c45f, 1)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(223)
-      .setAlpha(0);
-
-    const footer = this.add
-      .text(centerX, centerY + 88, "Preparando el siguiente tramo", {
-        color: "#d9ccb0",
-        fontFamily: "Arial, sans-serif",
-        fontSize: "16px",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(222)
-      .setAlpha(0);
-
-    this.tweens.add({
-      targets: [title, subtitle, progressBack, progressFill, footer],
-      alpha: 1,
-      duration: 520,
-      ease: "Sine.easeOut",
-    });
-
-    this.tweens.add({
-      targets: horizon,
-      width: 620,
-      alpha: 0.25,
-      duration: durationMs,
-      ease: "Cubic.easeInOut",
-    });
-
-    this.tweens.add({
-      targets: progressFill,
-      displayWidth: 420,
-      duration: durationMs - 520,
-      ease: "Sine.easeInOut",
-    });
-
-    this.tweens.add({
-      targets: shade,
-      alpha: 0.78,
-      duration: 1200,
-      yoyo: true,
-      repeat: 1,
-      ease: "Sine.easeInOut",
-    });
-
-    this.time.delayedCall(durationMs - 520, () => {
-      this.cameras.main.fadeOut(520, 8, 16, 24);
-    });
-
-    this.time.delayedCall(durationMs, () => {
-      this.scene.start("LevelScene", { levelId: nextLevelId });
-    });
   }
 
   private announceAchievements(achievementIds: AchievementId[]): void {
     for (const achievementId of achievementIds) {
+      if (!this.unlockedAchievementsThisLevel.includes(achievementId)) {
+        this.unlockedAchievementsThisLevel.push(achievementId);
+      }
       const achievement = getAchievementDefinition(achievementId);
       if (!achievement) {
         continue;
@@ -1560,6 +1570,7 @@ export class LevelScene extends Phaser.Scene {
         id: achievement.id,
         title: achievement.title,
         icon: achievement.icon,
+        reward: achievement.reward,
       });
     }
   }

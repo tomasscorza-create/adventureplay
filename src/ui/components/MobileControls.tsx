@@ -2,13 +2,16 @@ import { useEffect } from "react";
 import type { GameplayInputAction } from "../../shared/types/input";
 import { touchInputStore } from "../../game/systems/input/TouchInputStore";
 import type { HudState } from "../../shared/types/game";
+import type { AchievementReward } from "../../game/data/achievements";
 import { AbilityIcon } from "./AbilityIcon";
 
 interface MobileControlsProps {
   hud: HudState;
+  achievementReward?: AchievementReward;
+  rewardFeedbackKey?: string;
 }
 
-export function MobileControls({ hud }: MobileControlsProps) {
+export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: MobileControlsProps) {
   useEffect(() => {
     return () => touchInputStore.reset();
   }, []);
@@ -29,6 +32,8 @@ export function MobileControls({ hud }: MobileControlsProps) {
           count={hud.healingCharges}
           ariaLabel={`Regenerar vida. ${hud.healingCharges} disponibles`}
           disabled={hud.healingCharges <= 0 || hud.health >= hud.maxHealth}
+          rewardAmount={achievementReward?.healingCharges}
+          rewardFeedbackKey={rewardFeedbackKey}
           ability
         />
         <TouchButton
@@ -37,6 +42,8 @@ export function MobileControls({ hud }: MobileControlsProps) {
           count={hud.powerCharges}
           ariaLabel={`Poder letal. ${hud.powerCharges} disponibles`}
           disabled={hud.powerCharges <= 0}
+          rewardAmount={achievementReward?.powerCharges}
+          rewardFeedbackKey={rewardFeedbackKey}
           ability
         />
         <TouchButton action="jump" label="^" ariaLabel="Saltar" />
@@ -55,9 +62,21 @@ interface TouchButtonProps {
   count?: number;
   disabled?: boolean;
   ability?: boolean;
+  rewardAmount?: number;
+  rewardFeedbackKey?: string;
 }
 
-function TouchButton({ action, label, ariaLabel, compact = false, count, disabled = false, ability = false }: TouchButtonProps) {
+function TouchButton({
+  action,
+  label,
+  ariaLabel,
+  compact = false,
+  count,
+  disabled = false,
+  ability = false,
+  rewardAmount,
+  rewardFeedbackKey,
+}: TouchButtonProps) {
   const setPressed = (pressed: boolean) => (event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (pressed) {
@@ -86,6 +105,11 @@ function TouchButton({ action, label, ariaLabel, compact = false, count, disable
       {ability ? <AbilityIcon type={action === "heal" ? "heal" : "power"} /> : <span>{label}</span>}
       {ability && <span className="touch-button__key">{label}</span>}
       {ability && <small className="touch-button__count">x{count}</small>}
+      {rewardAmount && (
+        <span className="touch-button__reward-feedback" key={`${action}-${rewardFeedbackKey}`}>
+          +{rewardAmount}
+        </span>
+      )}
     </button>
   );
 }

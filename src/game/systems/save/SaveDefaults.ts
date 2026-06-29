@@ -2,14 +2,19 @@ import { PLAYER_DEFAULTS } from "../../../shared/constants/game";
 import type {
   CharacterId,
   CharacterPowerCharges,
+  DailyStreakProgress,
   PlayerStats,
   PowerChargeState,
   SaveData,
 } from "../../../shared/types/game";
-import { experienceByLevel } from "../../data/progression";
+import {
+  getExperienceToNextLevel,
+  levelRewardDefinitions,
+  MAX_PLAYER_LEVEL,
+} from "../../data/progression";
 import { achievementIds } from "../../data/achievements";
 
-export const SAVE_SCHEMA_VERSION = 8;
+export const SAVE_SCHEMA_VERSION = 12;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix"];
 const levelSequences = [
@@ -25,7 +30,18 @@ const levelSequences = [
     "meadowOutpost9",
     "meadowOutpost10",
   ],
-  ["enchantedGrove1"],
+  [
+    "enchantedGrove1",
+    "enchantedGrove2",
+    "enchantedGrove3",
+    "enchantedGrove4",
+    "enchantedGrove5",
+    "enchantedGrove6",
+    "enchantedGrove7",
+    "enchantedGrove8",
+    "enchantedGrove9",
+    "enchantedGrove10",
+  ],
 ];
 const defaultPowerCharges: PowerChargeState = {
   healingCharges: 3,
@@ -44,7 +60,7 @@ export const defaultSave: SaveData = {
     maxHealth: PLAYER_DEFAULTS.maxHealth,
     level: 1,
     experience: 0,
-    experienceToNextLevel: experienceByLevel[1],
+    experienceToNextLevel: getExperienceToNextLevel(1),
     coins: 0,
     speed: PLAYER_DEFAULTS.speed,
     jumpPower: PLAYER_DEFAULTS.jumpPower,
@@ -59,10 +75,18 @@ export const defaultSave: SaveData = {
   characterPowerCharges: createDefaultCharacterPowerCharges(),
   unlockedLevels: ["meadowOutpost", "enchantedGrove1"],
   completedLevels: [],
+  claimedLevelRewards: [1],
   claimedRewardBoxes: [],
   achievements: {
     unlockedIds: [],
     monstersDefeated: 0,
+    flawlessLevelIds: [],
+    defeatedEnemyIds: [],
+    mostEnemiesDefeatedInLevel: 0,
+    goldCollected: 0,
+    activatedCheckpointIds: [],
+    levelAdvanceStreak: { count: 0 },
+    treasureStreak: { count: 0 },
   },
 };
 
@@ -141,14 +165,43 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     }
   }
 
-  player.maxHealth = PLAYER_DEFAULTS.maxHealth;
+  player.level = Math.min(
+    MAX_PLAYER_LEVEL,
+    Math.max(1, Math.floor(Number.isFinite(player.level) ? player.level : 1)),
+  );
+  player.experienceToNextLevel = getExperienceToNextLevel(player.level);
+  player.experience = player.level >= MAX_PLAYER_LEVEL
+    ? 0
+    : Math.min(
+        Math.max(0, Math.floor(Number.isFinite(player.experience) ? player.experience : 0)),
+        player.experienceToNextLevel - 1,
+      );
+  const validRewardLevels = new Set(levelRewardDefinitions.map((reward) => reward.level));
+  const claimedLevelRewards = Array.isArray(data.claimedLevelRewards)
+    ? [...new Set(data.claimedLevelRewards.filter((level) => validRewardLevels.has(level)))]
+    : levelRewardDefinitions
+        .filter((reward) => reward.level <= player.level)
+        .map((reward) => reward.level);
+  const claimedRewardDefinitions = levelRewardDefinitions.filter((reward) =>
+    claimedLevelRewards.includes(reward.level),
+  );
+  player.maxHealth = PLAYER_DEFAULTS.maxHealth + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.maxHealth ?? 0),
+    0,
+  );
+  player.speed = PLAYER_DEFAULTS.speed + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.speed ?? 0),
+    0,
+  );
+  player.meleeDamage = PLAYER_DEFAULTS.meleeDamage + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.meleeDamage ?? 0),
+    0,
+  );
+  player.rangedDamage = PLAYER_DEFAULTS.rangedDamage + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.rangedDamage ?? 0),
+    0,
+  );
   player.health = Math.min(Math.max(0, player.health), player.maxHealth);
-  player.meleeDamage = player.unlockedSkills.includes("stronger-strike")
-    ? PLAYER_DEFAULTS.meleeDamage + 1
-    : PLAYER_DEFAULTS.meleeDamage;
-  player.speed = player.unlockedSkills.includes("quick-steps")
-    ? PLAYER_DEFAULTS.speed + 20
-    : PLAYER_DEFAULTS.speed;
   const claimedRewardBoxes = Array.isArray(data.claimedRewardBoxes)
     ? [...new Set(data.claimedRewardBoxes)]
     : [...defaults.claimedRewardBoxes];
@@ -160,6 +213,15 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   const monstersDefeated = Number.isFinite(incomingAchievements?.monstersDefeated)
     ? Math.max(0, Math.floor(incomingAchievements?.monstersDefeated ?? 0))
     : 0;
+  const flawlessLevelIds = normalizeStringArray(incomingAchievements?.flawlessLevelIds);
+  const defeatedEnemyIds = normalizeStringArray(incomingAchievements?.defeatedEnemyIds);
+  const mostEnemiesDefeatedInLevel = normalizeNonNegativeInteger(
+    incomingAchievements?.mostEnemiesDefeatedInLevel,
+  );
+  const goldCollected = normalizeNonNegativeInteger(incomingAchievements?.goldCollected);
+  const activatedCheckpointIds = normalizeStringArray(incomingAchievements?.activatedCheckpointIds);
+  const levelAdvanceStreak = normalizeDailyStreak(incomingAchievements?.levelAdvanceStreak);
+  const treasureStreak = normalizeDailyStreak(incomingAchievements?.treasureStreak);
   if (completedLevels.includes("meadowOutpost") && !unlockedAchievementIds.includes("first-level")) {
     unlockedAchievementIds.push("first-level");
   }
@@ -169,7 +231,7 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   if (monstersDefeated >= 1 && !unlockedAchievementIds.includes("first-monster")) {
     unlockedAchievementIds.push("first-monster");
   }
-  if (player.coins > 0 && !unlockedAchievementIds.includes("first-gold")) {
+  if (goldCollected > 0 && !unlockedAchievementIds.includes("first-gold")) {
     unlockedAchievementIds.push("first-gold");
   }
   if (checkpointId && !unlockedAchievementIds.includes("first-checkpoint")) {
@@ -190,10 +252,18 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     characterPowerCharges,
     unlockedLevels: [...unlockedLevels],
     completedLevels,
+    claimedLevelRewards,
     claimedRewardBoxes,
     achievements: {
       unlockedIds: unlockedAchievementIds,
       monstersDefeated,
+      flawlessLevelIds,
+      defeatedEnemyIds,
+      mostEnemiesDefeatedInLevel,
+      goldCollected,
+      activatedCheckpointIds,
+      levelAdvanceStreak,
+      treasureStreak,
     },
     checkpointId,
   };
@@ -201,4 +271,24 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
 
 function normalizeCharge(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value as number)) : fallback;
+}
+
+function normalizeNonNegativeInteger(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value as number)) : 0;
+}
+
+function normalizeStringArray(value: string[] | undefined): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((entry): entry is string => typeof entry === "string"))]
+    : [];
+}
+
+function normalizeDailyStreak(value: DailyStreakProgress | undefined): DailyStreakProgress {
+  const lastDay = typeof value?.lastDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.lastDay)
+    ? value.lastDay
+    : undefined;
+  return {
+    count: lastDay ? normalizeNonNegativeInteger(value?.count) : 0,
+    lastDay,
+  };
 }

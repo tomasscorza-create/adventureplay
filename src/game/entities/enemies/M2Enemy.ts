@@ -4,6 +4,7 @@ import type { Player } from "../player/Player";
 import { BaseEnemy } from "./BaseEnemy";
 
 type M2FlightMode = "patrol" | "track" | "windup" | "dive" | "recover";
+type M2VisualTheme = "default" | "enchanted";
 
 export class M2Enemy extends BaseEnemy {
   private readonly verticalAwareness = 430;
@@ -14,6 +15,7 @@ export class M2Enemy extends BaseEnemy {
   private readonly idleBobSpeed = 0.004;
   private readonly idleBobAmount = 22;
   private readonly aggression: number;
+  private readonly visualTheme: M2VisualTheme;
   private readonly patrolOriginY: number;
   private flightMode: M2FlightMode = "patrol";
   private nextDiveAt = 0;
@@ -22,32 +24,53 @@ export class M2Enemy extends BaseEnemy {
   private recoverUntil = 0;
   private strikeTarget = new Phaser.Math.Vector2();
   private diveTarget = new Phaser.Math.Vector2();
+  private isDefeating = false;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, patrolDistance: number, aggression = 1) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    patrolDistance: number,
+    aggression = 1,
+    visualTheme: M2VisualTheme = "default",
+  ) {
     const definition = enemyDefinitions.m2;
     if (!definition) {
       throw new Error("Unknown enemy definition: m2");
     }
 
-    super(scene, x, y, "enemy-m2", definition, patrolDistance);
+    super(
+      scene,
+      x,
+      y,
+      visualTheme === "enchanted" ? "enchanted-m2-frame-1" : "enemy-m2",
+      definition,
+      patrolDistance,
+    );
+    this.visualTheme = visualTheme;
     this.patrolOriginY = y;
     this.aggression = Phaser.Math.Clamp(aggression, 0.75, 1.65);
     this.maxTrackingVerticalSpeed = 115 + this.aggression * 42;
     this.nextDiveAt = scene.time.now + Phaser.Math.Between(450, 950);
     this.direction = -1;
     this.setDepth(13);
-    this.setScale(0.24);
-    this.play("enemy-m2-fly");
+    this.setScale(this.isEnchantedVisual() ? 0.28 : 0.24);
+    this.play(this.isEnchantedVisual() ? "enchanted-m2-flight" : "enemy-m2-fly");
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
-    body.setSize(214, 156);
-    body.setOffset(21, 96);
+    if (this.isEnchantedVisual()) {
+      body.setSize(170, 115);
+      body.setOffset(75, 112);
+    } else {
+      body.setSize(214, 156);
+      body.setOffset(21, 96);
+    }
     body.setCollideWorldBounds(false);
   }
 
   override update(target?: Player): void {
-    if (!this.active) {
+    if (!this.active || this.isDefeating) {
       return;
     }
 
@@ -86,6 +109,7 @@ export class M2Enemy extends BaseEnemy {
     this.direction = distanceX < 0 ? -1 : 1;
     this.flightMode = "track";
     this.trackTarget(target);
+    this.playFlightVisual();
     this.setFlipX(this.direction > 0);
 
     if (this.scene.time.now >= this.nextDiveAt) {
@@ -94,6 +118,7 @@ export class M2Enemy extends BaseEnemy {
   }
 
   private patrol(): void {
+    this.playFlightVisual();
     if (Math.abs(this.x - this.patrolOriginX) >= this.patrolDistance) {
       this.direction *= -1;
     }
@@ -125,7 +150,12 @@ export class M2Enemy extends BaseEnemy {
   private startWindup(): void {
     this.flightMode = "windup";
     this.windupUntil = this.scene.time.now + 340;
-    this.setTint(0xffd45c);
+    this.setRotation(0);
+    if (this.isEnchantedVisual()) {
+      this.play("enchanted-m2-windup", true);
+    } else {
+      this.setTint(0xffd45c);
+    }
     this.setVelocity(0, -22);
   }
 
@@ -143,7 +173,11 @@ export class M2Enemy extends BaseEnemy {
   private startDive(target: Player): void {
     this.flightMode = "dive";
     this.diveStartedAt = this.scene.time.now;
-    this.setTint(0xff7b54);
+    if (this.isEnchantedVisual()) {
+      this.play("enchanted-m2-dive", true);
+    } else {
+      this.setTint(0xff7b54);
+    }
     this.setDiveTarget(target);
     this.flyTowardDiveTarget();
   }
@@ -198,6 +232,10 @@ export class M2Enemy extends BaseEnemy {
     const angle = Phaser.Math.Angle.Between(this.x, this.y, this.diveTarget.x, this.diveTarget.y);
     const diveSpeed = this.definition.speed * (1.42 + this.aggression * 0.5);
     this.setVelocity(Math.cos(angle) * diveSpeed, Math.sin(angle) * diveSpeed);
+    if (this.isEnchantedVisual()) {
+      const baseAngle = this.direction > 0 ? 0 : Math.PI;
+      this.setRotation(Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(angle - baseAngle), -0.72, 0.72));
+    }
   }
 
   private startRecovery(): void {
@@ -205,7 +243,59 @@ export class M2Enemy extends BaseEnemy {
     this.flightMode = "recover";
     this.recoverUntil = now + Phaser.Math.Linear(520, 330, (this.aggression - 0.75) / 0.9);
     this.nextDiveAt = now + Phaser.Math.Linear(1650, 620, (this.aggression - 0.75) / 0.9);
-    this.setTint(0x9be7dc);
+    this.setRotation(0);
+    if (this.isEnchantedVisual()) {
+      this.play("enchanted-m2-recover", true);
+    } else {
+      this.setTint(0x9be7dc);
+    }
+  }
+
+  override takeDamage(amount: number): boolean {
+    if (!this.isEnchantedVisual()) {
+      return super.takeDamage(amount);
+    }
+    if (this.isDefeating) {
+      return false;
+    }
+
+    this.health -= amount;
+    this.setTint(0xffffff);
+    this.scene.time.delayedCall(90, () => {
+      if (this.active && !this.isDefeating) {
+        this.clearTint();
+      }
+    });
+    if (this.health > 0) {
+      return false;
+    }
+
+    this.isDefeating = true;
+    this.setVelocity(0, 0);
+    this.setRotation(0);
+    this.clearTint();
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.enable = false;
+    this.play("enchanted-m2-defeat", true);
+    this.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.disableBody(true, true);
+    });
+    return true;
+  }
+
+  hasCustomDefeatAnimation(): boolean {
+    return this.isEnchantedVisual();
+  }
+
+  private playFlightVisual(): void {
+    this.setRotation(0);
+    if (this.isEnchantedVisual()) {
+      this.play("enchanted-m2-flight", true);
+    }
+  }
+
+  private isEnchantedVisual(): boolean {
+    return this.visualTheme === "enchanted";
   }
 
   completeStrike(): void {

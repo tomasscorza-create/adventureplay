@@ -144,6 +144,106 @@ function createColossusHazards(
     }));
 }
 
+const enchantedCoinPositions = [
+  { x: 300, y: 500 },
+  { x: 520, y: 610 },
+  { x: 920, y: 470 },
+  { x: 1220, y: 395 },
+  { x: 1700, y: 470 },
+  { x: 2050, y: 400 },
+  { x: 2640, y: 470 },
+  { x: 2920, y: 390 },
+  { x: 3400, y: 480 },
+  { x: 3680, y: 405 },
+  { x: 4200, y: 470 },
+  { x: 4480, y: 400 },
+  { x: 4920, y: 475 },
+  { x: 335, y: 610 },
+  { x: 1000, y: 400 },
+  { x: 1850, y: 390 },
+  { x: 2740, y: 390 },
+  { x: 3100, y: 500 },
+  { x: 4320, y: 400 },
+  { x: 5000, y: 400 },
+];
+
+const enchantedPitTemplates: LevelHazardDefinition[] = [
+  { id: "pit-1", type: "pit", x: 650, y: 682, width: 150, height: 38, damage: 1 },
+  { id: "pit-2", type: "pit", x: 1400, y: 682, width: 160, height: 38, damage: 1 },
+  { id: "pit-3", type: "pit", x: 2300, y: 682, width: 160, height: 38, damage: 1 },
+  { id: "pit-4", type: "pit", x: 3040, y: 682, width: 180, height: 38, damage: 1 },
+  { id: "pit-5", type: "pit", x: 3900, y: 682, width: 170, height: 38, damage: 1 },
+  { id: "pit-6", type: "pit", x: 4650, y: 682, width: 150, height: 38, damage: 1 },
+];
+
+const enchantedOffensiveHazardTemplates: LevelHazardDefinition[] = [
+  { id: "thorns-1", type: "spike", x: 520, y: 635, width: 76, height: 25, damage: 1 },
+  { id: "wisp-saw-1", type: "moving", x: 3650, y: 520, width: 34, height: 34, damage: 1, axis: "y", distance: 92, speed: 88 },
+  { id: "thorns-2", type: "spike", x: 1280, y: 635, width: 82, height: 25, damage: 1 },
+  { id: "wisp-saw-2", type: "moving", x: 2850, y: 520, width: 34, height: 34, damage: 1, axis: "x", distance: 118, speed: 102 },
+  { id: "thorns-3", type: "spike", x: 2050, y: 635, width: 90, height: 25, damage: 1 },
+  { id: "wisp-saw-3", type: "moving", x: 3350, y: 500, width: 34, height: 34, damage: 1, axis: "y", distance: 110, speed: 112 },
+  { id: "thorns-4", type: "spike", x: 4450, y: 635, width: 94, height: 25, damage: 2 },
+  { id: "wisp-saw-4", type: "moving", x: 1050, y: 500, width: 34, height: 34, damage: 2, axis: "x", distance: 126, speed: 122 },
+  { id: "thorns-5", type: "spike", x: 2650, y: 635, width: 100, height: 25, damage: 2 },
+  { id: "wisp-saw-5", type: "moving", x: 1800, y: 500, width: 36, height: 36, damage: 1, axis: "y", distance: 118, speed: 126 },
+  { id: "wisp-saw-6", type: "moving", x: 2350, y: 540, width: 36, height: 36, damage: 1, axis: "y", distance: 96, speed: 132 },
+  { id: "wisp-saw-7", type: "moving", x: 4950, y: 515, width: 38, height: 38, damage: 2, axis: "x", distance: 112, speed: 138 },
+  { id: "wisp-saw-8", type: "moving", x: 725, y: 535, width: 38, height: 38, damage: 2, axis: "y", distance: 104, speed: 144 },
+  { id: "wisp-saw-9", type: "moving", x: 4000, y: 525, width: 40, height: 40, damage: 2, axis: "y", distance: 112, speed: 150 },
+];
+
+const enchantedOffensiveHazardCount = [0, 2, 4, 5, 7, 9, 10, 11, 12, 13, 14];
+
+function createEnchantedCoins(stageNumber: number): LevelCoinSpawn[] {
+  const positions = stageNumber <= 5
+    ? enchantedCoinPositions.slice(0, 13)
+    : enchantedCoinPositions;
+  const target = getPathCoinTarget(stageNumber);
+  if (target < positions.length || target > positions.length * 3) {
+    throw new Error(`Bosque encantado LV${stageNumber}: presupuesto de ORO fuera de capacidad`);
+  }
+  const values = positions.map((_, index) => 1 + ((index + stageNumber) % 3));
+  let difference = target - values.reduce((sum, value) => sum + value, 0);
+
+  while (difference !== 0) {
+    for (let index = 0; index < values.length && difference !== 0; index += 1) {
+      if (difference > 0 && values[index] < 3) {
+        values[index] += 1;
+        difference -= 1;
+      } else if (difference < 0 && values[index] > 1) {
+        values[index] -= 1;
+        difference += 1;
+      }
+    }
+  }
+
+  return positions.map((position, index) => ({
+    itemId: "bronzeCoin",
+    ...position,
+    value: values[index],
+  }));
+}
+
+function createEnchantedHazards(stageNumber: number): LevelHazardDefinition[] {
+  const prefix = `enchanted-l${stageNumber}`;
+  const speedMultiplier = stageNumber <= 5 ? 1 : 1 + (stageNumber - 5) * 0.05;
+  const distanceMultiplier = stageNumber <= 5 ? 1 : 1 + (stageNumber - 5) * 0.02;
+  return [
+    ...enchantedPitTemplates.map((hazard) => ({ ...hazard, id: `${prefix}-${hazard.id}` })),
+    ...enchantedOffensiveHazardTemplates
+      .slice(0, enchantedOffensiveHazardCount[stageNumber] ?? 0)
+      .map((hazard) => ({
+        ...hazard,
+        id: `${prefix}-${hazard.id}`,
+        speed: hazard.speed ? Math.round(hazard.speed * speedMultiplier) : undefined,
+        distance: hazard.distance
+          ? Math.round(hazard.distance * distanceMultiplier)
+          : undefined,
+      })),
+  ];
+}
+
 export const levelDefinitions: Record<string, LevelDefinition> = {
   meadowOutpost: {
     id: "meadowOutpost",
@@ -629,10 +729,10 @@ levelDefinitions.enchantedGrove1 = {
   name: "Umbral encantado",
   stageNumber: 1,
   theme: "enchanted-forest",
-  nextLevelId: undefined,
+  nextLevelId: "enchantedGrove2",
   worldWidth: 5200,
-  timeLimitSeconds: 78,
-  autoScrollSpeed: 34,
+  timeLimitSeconds: 72,
+  autoScrollSpeed: 52,
   playerStart: { x: 110, y: 548 },
   platforms: [
     { x: 0, y: 660, width: 650, height: 60 },
@@ -655,37 +755,379 @@ levelDefinitions.enchantedGrove1 = {
     { x: 4400, y: 450, width: 190, height: 28 },
     { x: 4850, y: 525, width: 190, height: 28 },
   ],
-  hazards: [
-    { id: "enchanted-pit-1", type: "pit", x: 650, y: 682, width: 150, height: 38, damage: 1 },
-    { id: "enchanted-pit-2", type: "pit", x: 1400, y: 682, width: 160, height: 38, damage: 1 },
-    { id: "enchanted-pit-3", type: "pit", x: 2300, y: 682, width: 160, height: 38, damage: 1 },
-    { id: "enchanted-pit-4", type: "pit", x: 3040, y: 682, width: 180, height: 38, damage: 1 },
-    { id: "enchanted-pit-5", type: "pit", x: 3900, y: 682, width: 170, height: 38, damage: 1 },
-    { id: "enchanted-pit-6", type: "pit", x: 4650, y: 682, width: 150, height: 38, damage: 1 },
-  ],
+  hazards: createEnchantedHazards(1),
   enemies: [
     { enemyId: "m0", x: 1180, y: 615, patrolDistance: 0 },
     { enemyId: "m1", x: 1900, y: 615, patrolDistance: 120 },
     { enemyId: "m0", x: 2700, y: 615, patrolDistance: 0 },
+    { enemyId: "m2", x: 3480, y: 390, patrolDistance: 520, aggression: 0.9 },
     { enemyId: "m1", x: 4300, y: 615, patrolDistance: 135 },
   ],
-  coins: [
-    { itemId: "bronzeCoin", x: 300, y: 500, value: 2 },
-    { itemId: "bronzeCoin", x: 520, y: 610, value: 2 },
-    { itemId: "bronzeCoin", x: 920, y: 470, value: 2 },
-    { itemId: "bronzeCoin", x: 1220, y: 395, value: 2 },
-    { itemId: "bronzeCoin", x: 1700, y: 470, value: 2 },
-    { itemId: "bronzeCoin", x: 2050, y: 400, value: 2 },
-    { itemId: "bronzeCoin", x: 2640, y: 470, value: 2 },
-    { itemId: "bronzeCoin", x: 2920, y: 390, value: 2 },
-    { itemId: "bronzeCoin", x: 3400, y: 480, value: 2 },
-    { itemId: "bronzeCoin", x: 3680, y: 405, value: 2 },
-    { itemId: "bronzeCoin", x: 4200, y: 470, value: 2 },
-    { itemId: "bronzeCoin", x: 4480, y: 400, value: 2 },
-    { itemId: "bronzeCoin", x: 4920, y: 475, value: 1 },
-  ],
+  coins: createEnchantedCoins(1),
   healthPickups: [],
   rewardBox: { id: "reward-box-enchanted-l1", x: 1040, y: 642 },
   checkpoint: { id: "enchanted-grove-midpoint", x: 2700, y: 610 },
   goal: { x: 5090, y: 595 },
+};
+
+levelDefinitions.enchantedGrove2 = {
+  ...levelDefinitions.enchantedGrove1,
+  id: "enchantedGrove2",
+  name: "Raices despiertas",
+  stageNumber: 2,
+  nextLevelId: "enchantedGrove3",
+  timeLimitSeconds: 69,
+  autoScrollSpeed: 60,
+  hazards: createEnchantedHazards(2),
+  enemies: [
+    { enemyId: "m0", x: 930, y: 615, patrolDistance: 0 },
+    { enemyId: "m1", x: 1650, y: 615, patrolDistance: 145 },
+    { enemyId: "m2", x: 2050, y: 380, patrolDistance: 540, aggression: 0.98 },
+    { enemyId: "m0", x: 2700, y: 615, patrolDistance: 0 },
+    { enemyId: "m1", x: 3300, y: 615, patrolDistance: 150 },
+    { enemyId: "m2", x: 3900, y: 370, patrolDistance: 580, aggression: 1.02 },
+    { enemyId: "m1", x: 4400, y: 615, patrolDistance: 155 },
+  ],
+  coins: createEnchantedCoins(2),
+  healthPickups: [],
+  rewardBox: { id: "reward-box-enchanted-l2", x: 1780, y: 642 },
+  checkpoint: { id: "enchanted-grove-l2-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove3 = {
+  ...levelDefinitions.enchantedGrove2,
+  id: "enchantedGrove3",
+  name: "Dosel vigilante",
+  stageNumber: 3,
+  nextLevelId: "enchantedGrove4",
+  timeLimitSeconds: 66,
+  autoScrollSpeed: 68,
+  m3Intelligence: 0.5,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 1150, axis: "y", distance: 72, speed: 76 },
+    { x: 2550, axis: "x", distance: 92, speed: 82 },
+    { x: 4130, axis: "y", distance: 82, speed: 80 },
+  ]),
+  hazards: createEnchantedHazards(3),
+  enemies: [
+    { enemyId: "m0", x: 1000, y: 615, patrolDistance: 0 },
+    { enemyId: "m1", x: 1750, y: 615, patrolDistance: 165 },
+    { enemyId: "m2", x: 2200, y: 355, patrolDistance: 570, aggression: 1.06 },
+    { enemyId: "e2m3", x: 2600, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 2950, y: 615, patrolDistance: 165 },
+    { enemyId: "m2", x: 3450, y: 365, patrolDistance: 610, aggression: 1.1 },
+    { enemyId: "m1", x: 3500, y: 615, patrolDistance: 175 },
+    { enemyId: "m0", x: 4250, y: 615, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 350, patrolDistance: 620, aggression: 1.12 },
+  ],
+  coins: createEnchantedCoins(3),
+  healthPickups: [{ x: 3820, y: 612 }],
+  rewardBox: { id: "reward-box-enchanted-l3", x: 3340, y: 642 },
+  checkpoint: { id: "enchanted-grove-l3-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove4 = {
+  ...levelDefinitions.enchantedGrove3,
+  id: "enchantedGrove4",
+  name: "Senderos cambiantes",
+  stageNumber: 4,
+  nextLevelId: "enchantedGrove5",
+  timeLimitSeconds: 63,
+  autoScrollSpeed: 78,
+  m3Intelligence: 0.65,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 880, axis: "x", distance: 78, speed: 86 },
+    { x: 1650, axis: "y", distance: 84, speed: 88 },
+    { x: 2550, axis: "x", distance: 104, speed: 94 },
+    { x: 3590, axis: "y", distance: 92, speed: 92 },
+    { x: 4400, axis: "x", distance: 98, speed: 96 },
+  ]),
+  hazards: createEnchantedHazards(4),
+  enemies: [
+    { enemyId: "m0", x: 900, y: 615, patrolDistance: 0 },
+    { enemyId: "m1", x: 1150, y: 615, patrolDistance: 175 },
+    { enemyId: "m2", x: 1500, y: 360, patrolDistance: 590, aggression: 1.14 },
+    { enemyId: "m1", x: 1800, y: 615, patrolDistance: 180 },
+    { enemyId: "e2m3", x: 2150, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 2500, y: 350, patrolDistance: 620, aggression: 1.16 },
+    { enemyId: "m1", x: 2750, y: 615, patrolDistance: 185 },
+    { enemyId: "m2", x: 3250, y: 365, patrolDistance: 640, aggression: 1.18 },
+    { enemyId: "e2m3", x: 3750, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 4250, y: 615, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 350, patrolDistance: 650, aggression: 1.2 },
+  ],
+  coins: createEnchantedCoins(4),
+  healthPickups: [{ x: 3520, y: 612 }],
+  rewardBox: { id: "reward-box-enchanted-l4", x: 4200, y: 642 },
+  checkpoint: { id: "enchanted-grove-l4-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove5 = {
+  ...levelDefinitions.enchantedGrove4,
+  id: "enchantedGrove5",
+  name: "Corazon del bosque",
+  stageNumber: 5,
+  nextLevelId: "enchantedGrove6",
+  timeLimitSeconds: 60,
+  autoScrollSpeed: 88,
+  m3Intelligence: 0.8,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 320, axis: "y", distance: 72, speed: 94 },
+    { x: 880, axis: "x", distance: 88, speed: 98 },
+    { x: 1650, axis: "y", distance: 96, speed: 100 },
+    { x: 2550, axis: "x", distance: 116, speed: 104 },
+    { x: 3310, axis: "y", distance: 94, speed: 104 },
+    { x: 4130, axis: "x", distance: 108, speed: 108 },
+    { x: 4850, axis: "y", distance: 88, speed: 110 },
+  ]),
+  hazards: createEnchantedHazards(5),
+  enemies: [
+    { enemyId: "m0", x: 900, y: 615, patrolDistance: 0 },
+    { enemyId: "m1", x: 1200, y: 615, patrolDistance: 190 },
+    { enemyId: "m2", x: 1450, y: 350, patrolDistance: 620, aggression: 1.24 },
+    { enemyId: "m1", x: 1700, y: 615, patrolDistance: 195 },
+    { enemyId: "e2m3", x: 2180, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 2450, y: 345, patrolDistance: 650, aggression: 1.28 },
+    { enemyId: "m1", x: 2750, y: 615, patrolDistance: 205 },
+    { enemyId: "m2", x: 3150, y: 360, patrolDistance: 670, aggression: 1.3 },
+    { enemyId: "m1", x: 3450, y: 615, patrolDistance: 210 },
+    { enemyId: "e2m3", x: 3750, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4050, y: 350, patrolDistance: 690, aggression: 1.33 },
+    { enemyId: "e2m3", x: 4350, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4800, y: 345, patrolDistance: 700, aggression: 1.36 },
+  ],
+  coins: createEnchantedCoins(5),
+  healthPickups: [{ x: 3850, y: 612 }],
+  rewardBox: { id: "reward-box-enchanted-l5", x: 4920, y: 642 },
+  checkpoint: { id: "enchanted-grove-l5-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove6 = {
+  ...levelDefinitions.enchantedGrove5,
+  id: "enchantedGrove6",
+  name: "Santuario quebrado",
+  stageNumber: 6,
+  nextLevelId: "enchantedGrove7",
+  timeLimitSeconds: 58,
+  autoScrollSpeed: 100,
+  m3Intelligence: 0.84,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 320, axis: "x", distance: 82, speed: 100 },
+    { x: 880, axis: "y", distance: 88, speed: 102 },
+    { x: 1150, axis: "x", distance: 98, speed: 104 },
+    { x: 1650, axis: "y", distance: 96, speed: 106 },
+    { x: 1960, axis: "x", distance: 104, speed: 108 },
+    { x: 2550, axis: "y", distance: 102, speed: 110 },
+    { x: 2820, axis: "x", distance: 112, speed: 112 },
+    { x: 3310, axis: "y", distance: 108, speed: 114 },
+  ]),
+  hazards: createEnchantedHazards(6),
+  enemies: [
+    { enemyId: "m0", x: 930, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 1150, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 1450, y: 350, patrolDistance: 650, aggression: 1.38 },
+    { enemyId: "m1", x: 1650, y: 615, patrolDistance: 210 },
+    { enemyId: "e2m3", x: 2180, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 2450, y: 345, patrolDistance: 680, aggression: 1.42 },
+    { enemyId: "m1", x: 2950, y: 615, patrolDistance: 215 },
+    { enemyId: "m2", x: 3150, y: 360, patrolDistance: 690, aggression: 1.44 },
+    { enemyId: "e2m3", x: 3500, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 3850, y: 615, patrolDistance: 0 },
+    { enemyId: "m2", x: 4150, y: 350, patrolDistance: 710, aggression: 1.46 },
+    { enemyId: "m1", x: 4300, y: 615, patrolDistance: 220 },
+    { enemyId: "e2m3", x: 4600, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 345, patrolDistance: 720, aggression: 1.48 },
+  ],
+  coins: createEnchantedCoins(6),
+  healthPickups: [{ x: 3780, y: 360 }],
+  rewardBox: { id: "reward-box-enchanted-l6", x: 1220, y: 422 },
+  checkpoint: { id: "enchanted-grove-l6-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove7 = {
+  ...levelDefinitions.enchantedGrove6,
+  id: "enchantedGrove7",
+  name: "Caceria esmeralda I",
+  stageNumber: 7,
+  nextLevelId: "enchantedGrove8",
+  timeLimitSeconds: 56,
+  autoScrollSpeed: 108,
+  m3Intelligence: 0.88,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 320, axis: "y", distance: 86, speed: 104 },
+    { x: 880, axis: "x", distance: 94, speed: 106 },
+    { x: 1150, axis: "y", distance: 96, speed: 108 },
+    { x: 1650, axis: "x", distance: 104, speed: 110 },
+    { x: 1960, axis: "y", distance: 100, speed: 112 },
+    { x: 2550, axis: "x", distance: 112, speed: 114 },
+    { x: 2820, axis: "y", distance: 106, speed: 116 },
+    { x: 3310, axis: "x", distance: 118, speed: 118 },
+    { x: 3590, axis: "y", distance: 112, speed: 120 },
+  ]),
+  hazards: createEnchantedHazards(7),
+  enemies: [
+    { enemyId: "e2m3", x: 930, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 1150, y: 615, patrolDistance: 215 },
+    { enemyId: "m2", x: 1450, y: 350, patrolDistance: 660, aggression: 1.42 },
+    { enemyId: "e2m3", x: 1900, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 2180, y: 615, patrolDistance: 0 },
+    { enemyId: "m2", x: 2450, y: 345, patrolDistance: 690, aggression: 1.46 },
+    { enemyId: "e2m3", x: 2550, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 2950, y: 615, patrolDistance: 220 },
+    { enemyId: "m2", x: 3150, y: 360, patrolDistance: 700, aggression: 1.48 },
+    { enemyId: "e2m3", x: 3500, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 3850, y: 615, patrolDistance: 0 },
+    { enemyId: "m2", x: 4150, y: 350, patrolDistance: 720, aggression: 1.5 },
+    { enemyId: "m1", x: 4300, y: 615, patrolDistance: 225 },
+    { enemyId: "e2m3", x: 4600, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 345, patrolDistance: 730, aggression: 1.52 },
+  ],
+  coins: createEnchantedCoins(7),
+  healthPickups: [{ x: 3780, y: 360 }],
+  rewardBox: { id: "reward-box-enchanted-l7", x: 1980, y: 422 },
+  checkpoint: { id: "enchanted-grove-l7-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove8 = {
+  ...levelDefinitions.enchantedGrove7,
+  id: "enchantedGrove8",
+  name: "Caceria esmeralda II",
+  stageNumber: 8,
+  nextLevelId: "enchantedGrove9",
+  timeLimitSeconds: 54,
+  autoScrollSpeed: 116,
+  m3Intelligence: 0.92,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 320, axis: "x", distance: 90, speed: 108 },
+    { x: 880, axis: "y", distance: 96, speed: 110 },
+    { x: 1150, axis: "x", distance: 104, speed: 112 },
+    { x: 1650, axis: "y", distance: 102, speed: 114 },
+    { x: 1960, axis: "x", distance: 110, speed: 116 },
+    { x: 2550, axis: "y", distance: 108, speed: 118 },
+    { x: 2820, axis: "x", distance: 118, speed: 120 },
+    { x: 3310, axis: "y", distance: 114, speed: 122 },
+    { x: 3590, axis: "x", distance: 122, speed: 124 },
+    { x: 4130, axis: "y", distance: 118, speed: 126 },
+  ]),
+  hazards: createEnchantedHazards(8),
+  enemies: [
+    { enemyId: "e2m3", x: 930, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 1150, y: 615, patrolDistance: 220 },
+    { enemyId: "m2", x: 1450, y: 350, patrolDistance: 670, aggression: 1.46 },
+    { enemyId: "e2m3", x: 1650, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 1900, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 2180, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 2450, y: 345, patrolDistance: 700, aggression: 1.5 },
+    { enemyId: "m1", x: 2550, y: 615, patrolDistance: 225 },
+    { enemyId: "e2m3", x: 2950, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 3150, y: 360, patrolDistance: 710, aggression: 1.52 },
+    { enemyId: "m1", x: 3500, y: 615, patrolDistance: 230 },
+    { enemyId: "e2m3", x: 3850, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4150, y: 350, patrolDistance: 730, aggression: 1.54 },
+    { enemyId: "m0", x: 4300, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 4600, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 345, patrolDistance: 740, aggression: 1.56 },
+  ],
+  coins: createEnchantedCoins(8),
+  healthPickups: [{ x: 3780, y: 360 }],
+  rewardBox: { id: "reward-box-enchanted-l8", x: 2860, y: 422 },
+  checkpoint: { id: "enchanted-grove-l8-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove9 = {
+  ...levelDefinitions.enchantedGrove8,
+  id: "enchantedGrove9",
+  name: "Caceria esmeralda III",
+  stageNumber: 9,
+  nextLevelId: "enchantedGrove10",
+  timeLimitSeconds: 52,
+  autoScrollSpeed: 124,
+  m3Intelligence: 0.96,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 320, axis: "y", distance: 94, speed: 112 },
+    { x: 880, axis: "x", distance: 102, speed: 114 },
+    { x: 1150, axis: "y", distance: 108, speed: 116 },
+    { x: 1650, axis: "x", distance: 110, speed: 118 },
+    { x: 1960, axis: "y", distance: 112, speed: 120 },
+    { x: 2550, axis: "x", distance: 118, speed: 122 },
+    { x: 2820, axis: "y", distance: 116, speed: 124 },
+    { x: 3310, axis: "x", distance: 124, speed: 126 },
+    { x: 3590, axis: "y", distance: 120, speed: 128 },
+    { x: 4130, axis: "x", distance: 128, speed: 130 },
+    { x: 4400, axis: "y", distance: 124, speed: 132 },
+  ]),
+  hazards: createEnchantedHazards(9),
+  enemies: [
+    { enemyId: "e2m3", x: 930, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 1150, y: 615, patrolDistance: 225 },
+    { enemyId: "m2", x: 1450, y: 350, patrolDistance: 680, aggression: 1.5 },
+    { enemyId: "e2m3", x: 1650, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 1900, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 2180, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 2450, y: 345, patrolDistance: 710, aggression: 1.54 },
+    { enemyId: "e2m3", x: 2550, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 2950, y: 615, patrolDistance: 230 },
+    { enemyId: "m2", x: 3150, y: 360, patrolDistance: 720, aggression: 1.56 },
+    { enemyId: "e2m3", x: 3450, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 3750, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 3850, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4150, y: 350, patrolDistance: 740, aggression: 1.58 },
+    { enemyId: "m1", x: 4300, y: 615, patrolDistance: 235 },
+    { enemyId: "e2m3", x: 4600, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 345, patrolDistance: 750, aggression: 1.6 },
+  ],
+  coins: createEnchantedCoins(9),
+  healthPickups: [{ x: 3780, y: 360 }],
+  rewardBox: { id: "reward-box-enchanted-l9", x: 4160, y: 502 },
+  checkpoint: { id: "enchanted-grove-l9-midpoint", x: 2700, y: 610 },
+};
+
+levelDefinitions.enchantedGrove10 = {
+  ...levelDefinitions.enchantedGrove9,
+  id: "enchantedGrove10",
+  name: "Corazon ancestral",
+  stageNumber: 10,
+  nextLevelId: undefined,
+  timeLimitSeconds: 50,
+  autoScrollSpeed: 132,
+  m3Intelligence: 1,
+  platforms: addPlatformMovement(levelDefinitions.enchantedGrove1.platforms, [
+    { x: 320, axis: "x", distance: 98, speed: 116 },
+    { x: 880, axis: "y", distance: 106, speed: 118 },
+    { x: 1150, axis: "x", distance: 112, speed: 120 },
+    { x: 1650, axis: "y", distance: 114, speed: 122 },
+    { x: 1960, axis: "x", distance: 118, speed: 124 },
+    { x: 2550, axis: "y", distance: 122, speed: 126 },
+    { x: 2820, axis: "x", distance: 120, speed: 128 },
+    { x: 3310, axis: "y", distance: 128, speed: 130 },
+    { x: 3590, axis: "x", distance: 124, speed: 132 },
+    { x: 4130, axis: "y", distance: 132, speed: 134 },
+    { x: 4400, axis: "x", distance: 128, speed: 136 },
+    { x: 4850, axis: "y", distance: 126, speed: 138 },
+  ]),
+  hazards: createEnchantedHazards(10),
+  enemies: [
+    { enemyId: "e2m3", x: 930, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 1150, y: 615, patrolDistance: 230 },
+    { enemyId: "m2", x: 1450, y: 350, patrolDistance: 690, aggression: 1.54 },
+    { enemyId: "e2m3", x: 1650, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 1900, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 2180, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 2450, y: 345, patrolDistance: 720, aggression: 1.58 },
+    { enemyId: "e2m3", x: 2550, y: 598, patrolDistance: 0 },
+    { enemyId: "m1", x: 2950, y: 615, patrolDistance: 235 },
+    { enemyId: "m2", x: 3150, y: 360, patrolDistance: 730, aggression: 1.6 },
+    { enemyId: "e2m3", x: 3450, y: 598, patrolDistance: 0 },
+    { enemyId: "m0", x: 3750, y: 615, patrolDistance: 0 },
+    { enemyId: "e2m3", x: 3850, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4150, y: 350, patrolDistance: 750, aggression: 1.62 },
+    { enemyId: "m1", x: 4300, y: 615, patrolDistance: 240 },
+    { enemyId: "e2m3", x: 4600, y: 598, patrolDistance: 0 },
+    { enemyId: "m2", x: 4750, y: 345, patrolDistance: 760, aggression: 1.65 },
+    { enemyId: "e2m3", x: 4850, y: 598, patrolDistance: 0 },
+  ],
+  coins: createEnchantedCoins(10),
+  healthPickups: [{ x: 3780, y: 360 }],
+  rewardBox: { id: "reward-box-enchanted-l10", x: 2860, y: 422 },
+  checkpoint: { id: "enchanted-grove-l10-midpoint", x: 2700, y: 610 },
 };

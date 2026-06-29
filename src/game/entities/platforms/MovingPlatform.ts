@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { PlatformDefinition } from "../../../shared/types/game";
+import type { LevelTheme, PlatformDefinition } from "../../../shared/types/game";
 
 export class MovingPlatform extends Phaser.GameObjects.Rectangle {
   private readonly visual: Phaser.GameObjects.Image;
@@ -10,7 +10,7 @@ export class MovingPlatform extends Phaser.GameObjects.Rectangle {
   private readonly speed: number;
   private direction: -1 | 1 = 1;
 
-  constructor(scene: Phaser.Scene, definition: PlatformDefinition) {
+  constructor(scene: Phaser.Scene, definition: PlatformDefinition, theme: LevelTheme) {
     super(scene, definition.x, definition.y, definition.width, definition.height, 0x000000, 0);
 
     const movement = definition.movement;
@@ -44,6 +44,10 @@ export class MovingPlatform extends Phaser.GameObjects.Rectangle {
       .setOrigin(0.5, 0)
       .setDisplaySize(definition.width, 78)
       .setDepth(5);
+    if (theme === "enchanted-forest") {
+      this.visual.setTint(0x79a66f);
+      this.shadow.setFillStyle(0x0b2824, 0.42);
+    }
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
