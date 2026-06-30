@@ -69,8 +69,9 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - El Event Bus conecta Phaser y React sin acoplarlos directamente.
 - El progreso del juego requiere autenticacion Supabase y se guarda en `public.game_saves` mediante `GameSaveStore` + `SupabaseSaveAdapter`.
 - Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
-- La migracion fuente para progreso remoto esta en `supabase/migrations/20260626000000_create_game_saves.sql`.
-- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 12`; incluye heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO.
+- Las migraciones fuente para progreso remoto estan en `supabase/migrations/`: la primera crea `game_saves` y la segunda endurece su relacion con `auth.users`, permisos y funcion de timestamp.
+- El proyecto alojado actual es `adventureplay` (`hlfyhbvzenuepojifetb`). Las migraciones `20260626000000` y `20260630000000` estan aplicadas en remoto desde el 2026-06-30; todo cambio posterior debe agregarse como una migracion nueva.
+- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 15`; incluye nombre visible, icono de perfil y estadisticas acumuladas del jugador, heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - Bosque encantado es la segunda region seleccionable y tiene LV1-LV10 implementados y encadenados desde `enchantedGrove1` hasta `enchantedGrove10`. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; reutiliza las IA/estadisticas de M0, M1, M2 y M3 con apariencias exclusivas del escenario. La variante tematica de M3 se identifica como E2M3 y domina la progresion avanzada.
@@ -90,7 +91,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/systems/`: sistemas separados por responsabilidad.
 - `src/game/systems/save/GameSaveStore.ts`: cache sincronica para Phaser y cola de persistencia remota.
 - `src/game/systems/save/SupabaseSaveAdapter.ts`: adapter async para `public.game_saves`.
-- `src/shared/supabase/client.ts`: cliente Supabase web configurado por `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+- `src/shared/supabase/client.ts`: cliente Supabase web configurado por `VITE_SUPABASE_URL` y preferentemente `VITE_SUPABASE_PUBLISHABLE_KEY`; conserva compatibilidad con `VITE_SUPABASE_ANON_KEY`.
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
 - `src/game/data/powerShop.ts`: paquetes, costos y textos compartidos por la tienda del menu y la compra durante gameplay.
@@ -130,6 +131,7 @@ La demo actual permite:
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
+- Abrir desde la esquina superior izquierda una pagina completa de perfil con estetica derivada de la sala de Logros y paginas intercambiables `Editar perfil` y `Estadisticas`. Editar perfil permite cambiar un nombre persistente de 2 a 20 caracteres, consultar el correo y elegir uno de nueve iconos sin nombres visibles. Estadisticas combina progreso historico existente con tiempo activo, acciones, APM promedio, intentos, metas y derrotas acumulados al cerrar cada recorrido.
 - Desbloquear veinte logros: ocho faciles y doce medios, distribuidos en `Aventura`, `Combate` y `Descubrimiento`.
 - Ver cada logro nuevo durante la partida mediante una tarjeta animada `Logro desbloqueado` con icono y nombre. Si se obtienen varios a la vez, React los presenta en cola sin superponerlos.
 - Ver cada subida mediante una tarjeta superior `Nivel aumentado` con el nuevo LV y sus recompensas ya acreditadas. Subidas y logros comparten una unica cola React: nunca se superponen y cada aviso espera a que termine el anterior.
@@ -141,6 +143,7 @@ La demo actual permite:
 - Crear cuenta o entrar con email/password antes de jugar.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
 - En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Escoge tu personaje principal`; solo el elegido queda desbloqueado.
+- Tras esa primera eleccion, entrar directamente a la seleccion de modos y destacar `Explorar` una sola vez. Las cuentas con heroe principal ya definido deben seguir iniciando en el menu principal.
 - Desbloquear los otros heroes por 700 ORO cada uno desde su ficha `Ver`, con confirmacion previa.
 - Abrir inventario del jugador desde el boton Inventario del menu principal.
 - Abrir opciones desde la tuerca junto a Menu principal.
@@ -278,6 +281,7 @@ El input esta unificado. No volver a leer teclado directamente desde `MovementSy
 - `src/game/systems/input/TouchInputStore.ts`: estado tactil global y cola de taps rapidos.
 - `src/game/systems/input/GameplayInputSystem.ts`: combina teclado + tactil en un frame de input.
 - `src/game/systems/movement/MovementSystem.ts`: consume `GameplayInputFrame`.
+- `MovementSystem` conserva cada pulsacion de salto durante 120 ms y permite 100 ms de gracia al abandonar una superficie. Mantener ambas tolerancias para que teclado y tactil no pierdan saltos cerca del aterrizaje o del borde; el sonido se dispara solo cuando el salto se ejecuta realmente.
 - `src/game/scenes/LevelScene.ts`: lee input una vez por frame y lo pasa a movimiento/acciones.
 - `src/shared/audio/GameAudio.ts`: capa compartida de audio procedural para musica, UI y feedback de gameplay.
 - `GameAudio` guarda preferencias locales de `musicEnabled` y `soundEnabled` para controlar musica y sonidos por separado.
@@ -521,7 +525,8 @@ Reglas obligatorias de esta curva:
 - Regenerar con la vida completa o intentar usar un poder sin cargas no debe consumir inventario.
 - No escribir directamente en `localStorage` para progreso desde escenas, entidades o componentes. `GameAudio` si usa `localStorage` solo para preferencias locales de sonido/musica.
 - No llamar Supabase directamente desde escenas o entidades; usar `GameSaveStore` para conservar el flujo sincronico de Phaser.
-- Para migrar a Supabase real: aplicar las migraciones con `supabase link --project-ref <project-ref>` y `supabase db push`, luego cambiar variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+- Para migrar a Supabase real: seguir `supabase/README.md`, revisar primero `supabase db push --dry-run`, aplicar con `supabase db push` y usar `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` en el frontend. Nunca exponer claves secretas o `service_role` en variables `VITE_*`.
+- La confirmacion de email puede estar habilitada o deshabilitada: `App.tsx` debe conservar ambos flujos. Con confirmacion, el registro muestra un aviso y espera el inicio de sesion; sin confirmacion, la sesion se carga inmediatamente.
 - Antes de cambiar estructura de save, pensar en versionado.
 - `Reiniciar juego` debe usar `GameSaveStore.reset()` y esperar `flush()`; restablece ORO, inventario, niveles, cajas, logros, personaje y cargas, pero no elimina el usuario de Supabase Auth.
 - El reinicio nunca debe ejecutarse desde el primer clic: mostrar el alcance completo y exigir `Borrar progreso`; `Cancelar` no modifica el save.
@@ -636,7 +641,7 @@ Al actualizarla:
 5. Mantener separados el estado confirmado, las reglas obligatorias, las advertencias y los proximos pasos.
 6. Si una comprobacion no se ejecuto en el turno actual, no presentarla como validacion reciente.
 
-Ultima revision documental: 2026-06-28. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
+Ultima revision documental: 2026-06-30. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
 
 Verificacion del checkpoint de niveles 7 a 10 y M3: `npm run build` pasa el 2026-06-27 y el smoke test en navegador confirma carga del nivel 7, sprite lateral, barra de vida y escala visual cercana al heroe. Sigue siendo recomendable recorrer manualmente los cuatro niveles completos para ajustar balance fino y saltos limite.
 
@@ -669,3 +674,7 @@ Verificacion de compra de poderes durante gameplay del 2026-06-28: los badges de
 Correccion visual de badges de poder del 2026-06-28: las primeras reglas de anclaje habian quedado antes del bloque legacy de `.ability-controls` y eran sobrescritas. Los overrides finales usan el hijo directo de `.app-shell`, se aplican al final de los estilos relevantes y anclan el conjunto a 8 px del borde inferior interior del canvas en desktop. Para evitar recortes, cada `+` ocupa un boton compacto separado inmediatamente a la derecha de su badge, en vez de depender de superposicion.
 
 Verificacion de logros y progresion RPG del 2026-06-29: existen 20 logros, con ocho faciles de un rayo y doce medios de dos rayos, recompensas persistentes y rachas diarias. La progresion usa una curva LV1-LV80 de 2.366.225 XP, recompensas unicas LV1-LV15, vida maxima 7, velocidad 310, dano melee 3 y dano a distancia 2 al alcanzar LV15. `PLAYER_LEVELED_UP` y `ACHIEVEMENT_UNLOCKED` comparten una cola superior React que evita superposiciones. `npm run audit:achievements`, `npm run audit:levels`, `npm run audit:progression`, `npm run build` y `git diff --check` pasan; la verificacion visual queda a cargo del usuario.
+
+Correccion de salto intermitente del 2026-06-29: `MovementSystem` conserva la pulsacion durante 120 ms para aceptar entradas inmediatamente anteriores al aterrizaje y mantiene 100 ms de gracia al abandonar una superficie. El audio se emite solo cuando el salto se ejecuta y el estado temporal se reinicia al crear cada nivel. `npm run build` y `git diff --check` pasan; la comprobacion tactil en dispositivo queda a cargo del usuario.
+
+Migracion a Supabase alojado del 2026-06-30: la migracion de endurecimiento vincula `game_saves.user_id` con `auth.users`, aplica borrado en cascada y limita los permisos de tabla al rol autenticado junto con RLS. El registro admite proyectos con o sin confirmacion de email, las credenciales de prueba ya no aparecen precargadas y `supabase/README.md` contiene el procedimiento de enlace, despliegue y verificacion. El repo quedo vinculado a `adventureplay` (`hlfyhbvzenuepojifetb`) y ambas migraciones se aplicaron en remoto. `supabase migration list`, `supabase db lint --linked`, la presencia remota de `public.game_saves` y el rechazo `401` para el rol anonimo confirman el despliegue; `supabase db reset`, `supabase db lint --local`, las tres auditorias, `npm run build` y `git diff --check` tambien pasan.

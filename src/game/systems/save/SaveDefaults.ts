@@ -4,6 +4,7 @@ import type {
   CharacterPowerCharges,
   DailyStreakProgress,
   PlayerStats,
+  ProfileIconId,
   PowerChargeState,
   SaveData,
 } from "../../../shared/types/game";
@@ -14,9 +15,10 @@ import {
 } from "../../data/progression";
 import { achievementIds } from "../../data/achievements";
 
-export const SAVE_SCHEMA_VERSION = 12;
+export const SAVE_SCHEMA_VERSION = 15;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix"];
+const profileIconIds: ProfileIconId[] = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5", "icon-6", "icon-7", "icon-8", "icon-9"];
 const levelSequences = [
   [
     "meadowOutpost",
@@ -56,6 +58,8 @@ function createDefaultCharacterPowerCharges(): CharacterPowerCharges {
 
 export const defaultSave: SaveData = {
   player: {
+    displayName: "",
+    profileIconId: "icon-1",
     health: PLAYER_DEFAULTS.maxHealth,
     maxHealth: PLAYER_DEFAULTS.maxHealth,
     level: 1,
@@ -68,6 +72,13 @@ export const defaultSave: SaveData = {
     rangedDamage: PLAYER_DEFAULTS.rangedDamage,
     unlockedSkills: [],
     inventory: [],
+  },
+  statistics: {
+    runsPlayed: 0,
+    completedRuns: 0,
+    defeats: 0,
+    gameplaySeconds: 0,
+    actions: 0,
   },
   selectedCharacterId: "ruder",
   primaryCharacterId: undefined,
@@ -120,6 +131,10 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     ...defaults.player,
     ...legacyPlayer,
   } as PlayerStats & Partial<PowerChargeState>;
+  player.displayName = normalizePlayerDisplayName(legacyPlayer?.displayName);
+  player.profileIconId = profileIconIds.includes(legacyPlayer?.profileIconId as ProfileIconId)
+    ? legacyPlayer?.profileIconId as ProfileIconId
+    : defaults.player.profileIconId;
   delete player.healingCharges;
   delete player.powerCharges;
 
@@ -222,6 +237,13 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   const activatedCheckpointIds = normalizeStringArray(incomingAchievements?.activatedCheckpointIds);
   const levelAdvanceStreak = normalizeDailyStreak(incomingAchievements?.levelAdvanceStreak);
   const treasureStreak = normalizeDailyStreak(incomingAchievements?.treasureStreak);
+  const statistics = {
+    runsPlayed: normalizeNonNegativeInteger(data.statistics?.runsPlayed),
+    completedRuns: normalizeNonNegativeInteger(data.statistics?.completedRuns),
+    defeats: normalizeNonNegativeInteger(data.statistics?.defeats),
+    gameplaySeconds: normalizeNonNegativeInteger(data.statistics?.gameplaySeconds),
+    actions: normalizeNonNegativeInteger(data.statistics?.actions),
+  };
   if (completedLevels.includes("meadowOutpost") && !unlockedAchievementIds.includes("first-level")) {
     unlockedAchievementIds.push("first-level");
   }
@@ -246,6 +268,7 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
 
   return {
     player,
+    statistics,
     selectedCharacterId,
     primaryCharacterId,
     unlockedCharacterIds,
@@ -271,6 +294,15 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
 
 function normalizeCharge(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value as number)) : fallback;
+}
+
+export function normalizePlayerDisplayName(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.length >= 2 ? normalized.slice(0, 20) : "";
 }
 
 function normalizeNonNegativeInteger(value: number | undefined): number {

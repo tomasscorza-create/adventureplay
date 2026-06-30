@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import menuBackgroundUrl from "../../assets/menu/menu-background.webp";
 import menuAchievementsButtonUrl from "../../assets/menu/menu-achievements.webp";
 import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
@@ -15,17 +15,19 @@ import {
 import { playableCharacters } from "../../game/data/characters";
 import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
+import { getProfileIconDefinition, profileIconDefinitions } from "../../game/data/profileIcons";
 import {
   powerPackages,
   type PowerPackage,
   type PurchasablePower,
 } from "../../game/data/powerShop";
 import { gameAudio } from "../../shared/audio/GameAudio";
-import type { CharacterId, InventoryCategoryId, SaveData } from "../../shared/types/game";
+import type { CharacterId, InventoryCategoryId, ProfileIconId, SaveData } from "../../shared/types/game";
 import { AbilityIcon } from "../components/AbilityIcon";
 import { AchievementIcon } from "../components/AchievementIcon";
 
-type MenuView = "main" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options";
+type MenuView = "main" | "profile" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options";
+type ProfileSectionId = "edit" | "statistics";
 
 interface MainMenuScreenProps {
   playerEmail?: string;
@@ -33,6 +35,8 @@ interface MainMenuScreenProps {
   onSignOut: () => void;
   onResetProgress: () => Promise<void>;
   onStartLevel: (levelId: string) => void;
+  onUpdatePlayerName: (displayName: string) => boolean;
+  onUpdatePlayerIcon: (profileIconId: ProfileIconId) => void;
   onSelectCharacter: (characterId: CharacterId) => void;
   onUnlockCharacter: (characterId: CharacterId, cost: number) => boolean;
   onPurchaseCharacterPower: (
@@ -44,6 +48,35 @@ interface MainMenuScreenProps {
 }
 
 const CHARACTER_UNLOCK_COST = 700;
+
+function formatCompactAmount(value: number): string {
+  const absoluteValue = Math.abs(value);
+
+  if (absoluteValue < 10_000) {
+    return value.toLocaleString("es-AR");
+  }
+
+  const [divisor, suffix] = absoluteValue >= 1_000_000_000
+    ? [1_000_000_000, "B"]
+    : absoluteValue >= 1_000_000
+      ? [1_000_000, "M"]
+      : [1_000, "K"];
+  const compactValue = value / divisor;
+  const maximumFractionDigits = Math.abs(compactValue) >= 100 ? 0 : Math.abs(compactValue) >= 10 ? 1 : 2;
+
+  return `${compactValue.toLocaleString("es-AR", { maximumFractionDigits })}${suffix}`;
+}
+
+function formatGameplayTime(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours} h ${minutes} min`;
+  }
+
+  return `${minutes} min`;
+}
 
 interface LevelSlot {
   number: number;
@@ -110,6 +143,8 @@ export function MainMenuScreen({
   onSignOut,
   onResetProgress,
   onStartLevel,
+  onUpdatePlayerName,
+  onUpdatePlayerIcon,
   onSelectCharacter,
   onUnlockCharacter,
   onPurchaseCharacterPower,
@@ -120,10 +155,22 @@ export function MainMenuScreen({
     useState<InventoryCategoryId>("plansKeys");
   const [activeAchievementCategoryId, setActiveAchievementCategoryId] =
     useState<AchievementCategoryId>("adventure");
+  const [activeProfileSectionId, setActiveProfileSectionId] = useState<ProfileSectionId>("edit");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
   const [audioSettings, setAudioSettings] = useState(() => gameAudio.getSettings());
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [isResettingProgress, setIsResettingProgress] = useState(false);
+  const [showExploreEntryHint, setShowExploreEntryHint] = useState(false);
+  const selectedCharacter = playableCharacters.find((character) => character.id === save.selectedCharacterId)
+    ?? playableCharacters[0];
+  const playerDisplayName = save.player.displayName
+    || playerEmail?.split("@")[0]?.trim()
+    || selectedCharacter.name;
+  const [isEditingPlayerName, setIsEditingPlayerName] = useState(false);
+  const [isChoosingProfileIcon, setIsChoosingProfileIcon] = useState(false);
+  const [playerNameDraft, setPlayerNameDraft] = useState(playerDisplayName);
+  const [playerNameError, setPlayerNameError] = useState<string>();
+  const selectedProfileIcon = getProfileIconDefinition(save.player.profileIconId);
   const runMenuAction = (action: () => void) => {
     gameAudio.playUiSelect();
     action();
@@ -135,6 +182,35 @@ export function MainMenuScreen({
   const toggleMusic = () => {
     gameAudio.playUiSelect();
     setAudioSettings(gameAudio.setMusicEnabled(!audioSettings.musicEnabled));
+  };
+  const openProfilePage = () => {
+    runMenuAction(() => {
+      setIsEditingPlayerName(false);
+      setIsChoosingProfileIcon(false);
+      setPlayerNameError(undefined);
+      setActiveProfileSectionId("edit");
+      setView("profile");
+    });
+  };
+  const beginPlayerNameEdit = () => {
+    runMenuAction(() => {
+      setPlayerNameDraft(playerDisplayName);
+      setPlayerNameError(undefined);
+      setIsEditingPlayerName(true);
+    });
+  };
+  const submitPlayerName = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedName = playerNameDraft.trim().replace(/\s+/g, " ");
+    if (!onUpdatePlayerName(normalizedName)) {
+      setPlayerNameError("Usa entre 2 y 20 caracteres.");
+      return;
+    }
+
+    gameAudio.playUiSelect();
+    setPlayerNameDraft(normalizedName);
+    setPlayerNameError(undefined);
+    setIsEditingPlayerName(false);
   };
 
   const inventoryGroups = useMemo(() => {
@@ -188,6 +264,18 @@ export function MainMenuScreen({
 
     return { ...category, achievements, completedCount };
   });
+  const averageActionsPerMinute = save.statistics.gameplaySeconds > 0
+    ? Math.round(save.statistics.actions / (save.statistics.gameplaySeconds / 60))
+    : 0;
+  const exploredRegionCount = new Set(
+    save.completedLevels.map((levelId) => levelDefinitions[levelId]?.theme).filter(Boolean),
+  ).size;
+  const defeatedEnemyFamilyCount = new Set(
+    save.achievements.defeatedEnemyIds.map((enemyId) => enemyId === "e2m3" ? "m3" : enemyId),
+  ).size;
+  const successfulRunPercent = save.statistics.runsPlayed > 0
+    ? Math.round((save.statistics.completedRuns / save.statistics.runsPlayed) * 100)
+    : 0;
 
   return (
     <section className="overlay overlay--menu">
@@ -204,9 +292,31 @@ export function MainMenuScreen({
               style={{ "--menu-background-image": `url(${menuBackgroundUrl})` } as CSSProperties}
             >
               <div className="home-monument__topline">
-                <span className="home-monument__plaque">Menu principal</span>
+                <button
+                  className="menu-player-profile"
+                  type="button"
+                  aria-label={`Abrir perfil de ${playerDisplayName}`}
+                  onClick={openProfilePage}
+                >
+                  <img src={selectedProfileIcon.imageUrl} alt="" aria-hidden="true" />
+                  <strong>{playerDisplayName}</strong>
+                </button>
                 <span className="session-controls">
-                  {playerEmail && <span className="session-controls__email">{playerEmail}</span>}
+                  <span className="menu-player-stats">
+                    <span className="menu-player-stat" aria-label={`Nivel ${save.player.level}`}>
+                      <svg className="menu-player-stat__icon menu-player-stat__icon--level" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2.8 15 8l5.8 1.2-4 4.3.6 5.8-5.4-2.4-5.4 2.4.6-5.8-4-4.3L9 8Z" />
+                      </svg>
+                      <strong>{save.player.level}</strong>
+                    </span>
+                    <span className="menu-player-stat" aria-label={`${save.player.coins.toLocaleString("es-AR")} ORO`}>
+                      <svg className="menu-player-stat__icon menu-player-stat__icon--gold" viewBox="0 0 24 24" aria-hidden="true">
+                        <ellipse cx="12" cy="12" rx="8" ry="9" />
+                        <path d="M9 8h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5M12 6v12" />
+                      </svg>
+                      <strong>{formatCompactAmount(save.player.coins)}</strong>
+                    </span>
+                  </span>
                   <button
                     className="options-gear"
                     type="button"
@@ -241,6 +351,222 @@ export function MainMenuScreen({
                     <span className="menu-relic__label">{action.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {view === "profile" && (
+            <div className="menu-chamber menu-chamber--profile">
+              <MenuHeading eyebrow="Perfil del jugador" title="Mi perfil" onBack={() => setView("main")} />
+
+              <div className="profile-screen" aria-label="Perfil del jugador">
+                <div className="profile-tabs" role="tablist" aria-label="Secciones del perfil">
+                  <button
+                    className={`profile-tab${activeProfileSectionId === "edit" ? " profile-tab--active" : ""}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeProfileSectionId === "edit"}
+                    onClick={() => runMenuAction(() => setActiveProfileSectionId("edit"))}
+                  >
+                    <span className="profile-tab__seal" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16v4Zm9-13 4 4M4 20l5-1-4-4-1 5Z" /></svg>
+                    </span>
+                    <span>Editar perfil</span>
+                  </button>
+                  <button
+                    className={`profile-tab${activeProfileSectionId === "statistics" ? " profile-tab--active" : ""}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeProfileSectionId === "statistics"}
+                    onClick={() => runMenuAction(() => setActiveProfileSectionId("statistics"))}
+                  >
+                    <span className="profile-tab__seal" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="M5 20V10h4v10H5Zm6 0V4h4v16h-4Zm6 0v-7h4v7h-4Z" /></svg>
+                    </span>
+                    <span>Estadísticas</span>
+                  </button>
+                </div>
+
+                {activeProfileSectionId === "edit" && (
+                <section className="profile-section">
+                  <header className="profile-section__header">
+                    <span className="profile-section__seal" aria-hidden="true">
+                      <img src={selectedProfileIcon.imageUrl} alt="" />
+                    </span>
+                    <div>
+                      <h2>Editar perfil</h2>
+                      <p>Personaliza cómo te presentas en Adventure Reigns.</p>
+                    </div>
+                  </header>
+
+                  <div className="profile-editor">
+                    <div className="profile-preview">
+                      <span className="profile-preview__portrait">
+                        <img src={selectedProfileIcon.imageUrl} alt="" aria-hidden="true" />
+                      </span>
+                      <strong>{playerDisplayName}</strong>
+                      <small>LV {save.player.level}</small>
+                    </div>
+
+                    <div className="profile-settings">
+                      <article className="profile-setting-card">
+                        <div className="profile-setting-card__copy">
+                          <span>Nombre de usuario</span>
+                          {!isEditingPlayerName && <strong>{playerDisplayName}</strong>}
+                        </div>
+                        {isEditingPlayerName ? (
+                          <form className="menu-profile-name-form" onSubmit={submitPlayerName}>
+                            <input
+                              type="text"
+                              value={playerNameDraft}
+                              minLength={2}
+                              maxLength={20}
+                              aria-label="Nuevo nombre de usuario"
+                              autoFocus
+                              onChange={(event) => {
+                                setPlayerNameDraft(event.target.value);
+                                setPlayerNameError(undefined);
+                              }}
+                            />
+                            {playerNameError && <small role="alert">{playerNameError}</small>}
+                            <span className="menu-profile-name-form__actions">
+                              <button type="button" onClick={() => setIsEditingPlayerName(false)}>Cancelar</button>
+                              <button type="submit">Guardar</button>
+                            </span>
+                          </form>
+                        ) : (
+                          <button className="profile-setting-card__action" type="button" onClick={beginPlayerNameEdit}>
+                            Editar
+                          </button>
+                        )}
+                      </article>
+
+                      <article className="profile-setting-card profile-setting-card--readonly">
+                        <div className="profile-setting-card__copy">
+                          <span>Correo de la cuenta</span>
+                          <strong>{playerEmail ?? "No disponible"}</strong>
+                        </div>
+                      </article>
+
+                      <article className="profile-setting-card profile-setting-card--icon">
+                        <div className="profile-setting-card__copy">
+                          <span>Icono</span>
+                          <strong>Elige tu retrato</strong>
+                        </div>
+                        <button
+                          className="profile-setting-card__action"
+                          type="button"
+                          onClick={() => runMenuAction(() => setIsChoosingProfileIcon((isChoosing) => !isChoosing))}
+                        >
+                          {isChoosingProfileIcon ? "Cerrar" : "Elegir"}
+                        </button>
+                        {isChoosingProfileIcon && (
+                          <div className="menu-profile-icon-grid">
+                            {profileIconDefinitions.map((icon, index) => (
+                              <button
+                                className={`menu-profile-icon-choice${icon.id === save.player.profileIconId ? " menu-profile-icon-choice--selected" : ""}`}
+                                type="button"
+                                key={icon.id}
+                                aria-label={`Elegir icono ${index + 1}`}
+                                aria-pressed={icon.id === save.player.profileIconId}
+                                onClick={() => {
+                                  gameAudio.playUiSelect();
+                                  onUpdatePlayerIcon(icon.id);
+                                }}
+                              >
+                                <img src={icon.imageUrl} alt="" aria-hidden="true" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    </div>
+                  </div>
+                </section>
+                )}
+
+                {activeProfileSectionId === "statistics" && (
+                  <section className="profile-section profile-section--statistics">
+                    <header className="profile-section__header">
+                      <span className="profile-section__seal profile-section__seal--chart" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M5 20V10h4v10H5Zm6 0V4h4v16h-4Zm6 0v-7h4v7h-4Z" /></svg>
+                      </span>
+                      <div>
+                        <h2>Estadísticas</h2>
+                        <p>Tu recorrido acumulado dentro de los escenarios.</p>
+                      </div>
+                    </header>
+
+                    <div className="profile-statistics-featured">
+                      <article className="profile-stat-card profile-stat-card--featured">
+                        <span className="profile-stat-card__icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2M9 3h6" /></svg>
+                        </span>
+                        <div><span>Tiempo en escenario</span><strong>{formatGameplayTime(save.statistics.gameplaySeconds)}</strong></div>
+                      </article>
+                      <article className="profile-stat-card profile-stat-card--featured">
+                        <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="swords" /></span>
+                        <div><span>APM promedio</span><strong>{averageActionsPerMinute}</strong></div>
+                      </article>
+                      <article className="profile-stat-card profile-stat-card--featured">
+                        <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="claw" /></span>
+                        <div><span>Monstruos derrotados</span><strong>{save.achievements.monstersDefeated.toLocaleString("es-AR")}</strong></div>
+                      </article>
+                      <article className="profile-stat-card profile-stat-card--featured">
+                        <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="coin" /></span>
+                        <div><span>ORO recogido</span><strong>{save.achievements.goldCollected.toLocaleString("es-AR")}</strong></div>
+                      </article>
+                    </div>
+
+                    <div className="profile-statistics-group">
+                      <header><h3>Progreso de aventura</h3><span>{successfulRunPercent}% de recorridos completados</span></header>
+                      <div className="profile-statistics-grid">
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="flag" /></span>
+                          <div><span>Niveles únicos</span><strong>{save.completedLevels.length}</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="map" /></span>
+                          <div><span>Regiones exploradas</span><strong>{exploredRegionCount}</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="trophy" /></span>
+                          <div><span>Logros</span><strong>{unlockedAchievementCount}/{achievementDefinitions.length}</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="shield" /></span>
+                          <div><span>Niveles perfectos</span><strong>{save.achievements.flawlessLevelIds.length}</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="chest" /></span>
+                          <div><span>Cajas abiertas</span><strong>{save.claimedRewardBoxes.length}</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="checkpoint" /></span>
+                          <div><span>Checkpoints únicos</span><strong>{save.achievements.activatedCheckpointIds.length}</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="claw" /></span>
+                          <div><span>Familias descubiertas</span><strong>{defeatedEnemyFamilyCount}/4</strong></div>
+                        </article>
+                        <article className="profile-stat-card">
+                          <span className="profile-stat-card__icon" aria-hidden="true"><AchievementIcon icon="swords" /></span>
+                          <div><span>Mejor cacería</span><strong>{save.achievements.mostEnemiesDefeatedInLevel}</strong></div>
+                        </article>
+                      </div>
+                    </div>
+
+                    <div className="profile-statistics-group">
+                      <header><h3>Recorridos</h3><span>Actividad registrada desde esta actualización</span></header>
+                      <div className="profile-statistics-grid profile-statistics-grid--runs">
+                        <article className="profile-stat-card"><div><span>Intentos jugados</span><strong>{save.statistics.runsPlayed}</strong></div></article>
+                        <article className="profile-stat-card"><div><span>Metas alcanzadas</span><strong>{save.statistics.completedRuns}</strong></div></article>
+                        <article className="profile-stat-card"><div><span>Derrotas</span><strong>{save.statistics.defeats}</strong></div></article>
+                        <article className="profile-stat-card"><div><span>Acciones registradas</span><strong>{save.statistics.actions.toLocaleString("es-AR")}</strong></div></article>
+                      </div>
+                    </div>
+                  </section>
+                )}
               </div>
             </div>
           )}
@@ -536,17 +862,12 @@ export function MainMenuScreen({
               ) : (
                 <>
                   <MenuHeading
-                    eyebrow="Personaje"
                     title={save.primaryCharacterId ? "Elegir heroe" : "Escoge tu personaje principal"}
                     onBack={() => setView("main")}
                     hideBack={!save.primaryCharacterId}
+                    centered={!save.primaryCharacterId}
+                    animatedTitle={!save.primaryCharacterId}
                   />
-
-                  {!save.primaryCharacterId && (
-                    <p className="primary-character-notice">
-                      Tu primer heroe quedara desbloqueado. Los otros personajes se podran liberar despues por 700 ORO cada uno.
-                    </p>
-                  )}
 
                   <div className="character-list" aria-label="Personajes disponibles">
                     {playableCharacters.map((character) => {
@@ -572,7 +893,8 @@ export function MainMenuScreen({
                             onClick={() => runMenuAction(() => {
                               onSelectCharacter(character.id);
                               if (isChoosingPrimary) {
-                                setView("main");
+                                setShowExploreEntryHint(true);
+                                setView("modes");
                               }
                             })}
                           />
@@ -593,15 +915,6 @@ export function MainMenuScreen({
                           <span className="character-card__veil" aria-hidden="true" />
                           <span className="character-card__identity">
                             <strong>{character.name}</strong>
-                            <span>
-                              {isChoosingPrimary
-                                ? "Elegir como principal"
-                                : !isUnlocked
-                                  ? "Bloqueado · 700 ORO"
-                                  : isSelected
-                                    ? "Heroe activo"
-                                    : "Seleccionar"}
-                            </span>
                           </span>
                           {!isUnlocked && <span className="character-card__lock" aria-hidden="true">700</span>}
                         </article>
@@ -618,7 +931,16 @@ export function MainMenuScreen({
               <MenuHeading eyebrow="Modos de juego" title="Seleccion" onBack={() => setView("main")} />
 
               <div className="mode-grid">
-                <button className="mode-tile mode-tile--active" type="button" onClick={() => runMenuAction(() => setView("explore"))}>
+                <button
+                  className={`mode-tile mode-tile--active${showExploreEntryHint ? " mode-tile--entry-hint" : ""}`}
+                  type="button"
+                  onAnimationEnd={(event) => {
+                    if (event.animationName === "explore-mode-entry-hint") {
+                      setShowExploreEntryHint(false);
+                    }
+                  }}
+                  onClick={() => runMenuAction(() => setView("explore"))}
+                >
                   <span className="mode-tile__sigil" aria-hidden="true" />
                   <span>Explorar</span>
                   <strong>Campana del continente</strong>
@@ -968,17 +1290,21 @@ function MenuHeading({
   onBack,
   backLabel = "Volver",
   hideBack = false,
+  centered = false,
+  animatedTitle = false,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   onBack: () => void;
   backLabel?: string;
   hideBack?: boolean;
+  centered?: boolean;
+  animatedTitle?: boolean;
 }) {
   return (
-    <div className="menu-heading">
+    <div className={`menu-heading${centered ? " menu-heading--centered" : ""}${animatedTitle ? " menu-heading--shimmer" : ""}`}>
       <div>
-        <span className="panel__eyebrow">{eyebrow}</span>
+        {eyebrow && <span className="panel__eyebrow">{eyebrow}</span>}
         <h2>{title}</h2>
       </div>
       {!hideBack && (

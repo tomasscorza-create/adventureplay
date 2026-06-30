@@ -4,7 +4,7 @@ import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { createGame } from "./game/main";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
 import { SupabaseSaveAdapter } from "./game/systems/save/SupabaseSaveAdapter";
-import { createDefaultSave } from "./game/systems/save/SaveDefaults";
+import { createDefaultSave, normalizePlayerDisplayName } from "./game/systems/save/SaveDefaults";
 import type { AchievementIconId, AchievementReward } from "./game/data/achievements";
 import type { LevelRewardDefinition } from "./game/data/progression";
 import { gameAudio } from "./shared/audio/GameAudio";
@@ -16,6 +16,7 @@ import type {
   GameScreen,
   HudState,
   LevelCompletionSummary,
+  ProfileIconId,
   SaveData,
 } from "./shared/types/game";
 import { AchievementUnlockToast } from "./ui/components/AchievementUnlockToast";
@@ -76,6 +77,7 @@ export function App() {
   const [save, setSave] = useState<SaveData>(() => createDefaultSave());
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [authError, setAuthError] = useState<string>();
+  const [authNotice, setAuthNotice] = useState<string>();
   const [playerEmail, setPlayerEmail] = useState<string>();
 
   useEffect(() => {
@@ -172,7 +174,7 @@ export function App() {
   useEffect(() => {
     gameSaveStore.onError((error) => {
       console.error("Could not persist game save", error);
-      setAuthError("No se pudo sincronizar el progreso. Revisa Supabase local.");
+      setAuthError("No se pudo sincronizar el progreso con Supabase. Revisa la conexion e intenta otra vez.");
     });
   }, []);
 
@@ -180,7 +182,9 @@ export function App() {
     if (!isSupabaseConfigured || !supabase) {
       gameSaveStore.disconnect();
       setAuthStatus("signed-out");
-      setAuthError("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
+      setAuthError(
+        "Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY (o VITE_SUPABASE_ANON_KEY).",
+      );
       return;
     }
 
@@ -203,6 +207,7 @@ export function App() {
 
       setAuthStatus("loading-save");
       setAuthError(undefined);
+      setAuthNotice(undefined);
 
       try {
         const nextSave = await gameSaveStore.connect(new SupabaseSaveAdapter(activeSupabase, sessionUserId));
@@ -219,7 +224,7 @@ export function App() {
           return;
         }
 
-        setAuthError("No se pudo cargar el progreso remoto. Inicia Supabase local y reintenta.");
+        setAuthError("No se pudo cargar el progreso remoto. Revisa la conexion con Supabase y reintenta.");
         setAuthStatus("signed-out");
       }
     };
@@ -251,20 +256,10 @@ export function App() {
 
     setAuthStatus("loading-save");
     setAuthError(undefined);
+    setAuthNotice(undefined);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (!error) {
-      return;
-    }
-
-    if (error.message.toLowerCase().includes("invalid login credentials")) {
-      const { error: signUpError } = await supabase.auth.signUp({ email, password });
-      if (!signUpError) {
-        return;
-      }
-
-      setAuthError(signUpError.message);
-      setAuthStatus("signed-out");
       return;
     }
 
@@ -279,10 +274,17 @@ export function App() {
 
     setAuthStatus("loading-save");
     setAuthError(undefined);
-    const { error } = await supabase.auth.signUp({ email, password });
+    setAuthNotice(undefined);
+    const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
       setAuthError(error.message);
+      setAuthStatus("signed-out");
+      return;
+    }
+
+    if (!data.session) {
+      setAuthNotice("Cuenta creada. Revisa tu email para confirmarla y luego inicia sesion.");
       setAuthStatus("signed-out");
     }
   };
@@ -335,6 +337,24 @@ export function App() {
     gameSaveStore.save(nextSave);
     setSave(nextSave);
   };
+  const updatePlayerName = (displayName: string): boolean => {
+    const normalizedName = normalizePlayerDisplayName(displayName);
+    if (!normalizedName) {
+      return false;
+    }
+
+    const nextSave = structuredClone(gameSaveStore.load());
+    nextSave.player.displayName = normalizedName;
+    gameSaveStore.save(nextSave);
+    setSave(nextSave);
+    return true;
+  };
+  const updatePlayerIcon = (profileIconId: ProfileIconId) => {
+    const nextSave = structuredClone(gameSaveStore.load());
+    nextSave.player.profileIconId = profileIconId;
+    gameSaveStore.save(nextSave);
+    setSave(nextSave);
+  };
   const unlockCharacter = (characterId: CharacterId, cost: number): boolean => {
     const currentSave = gameSaveStore.load();
     if (
@@ -380,8 +400,8 @@ export function App() {
   };
   const goToMenu = () => {
     gameAudio.playUiSelect();
-    setSave(gameSaveStore.load());
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+    setSave(gameSaveStore.load());
   };
   const continueAfterSummary = () => {
     if (!levelSummary) {
@@ -479,6 +499,8 @@ export function App() {
           onSignOut={signOut}
           onResetProgress={resetProgress}
           onStartLevel={startGame}
+          onUpdatePlayerName={updatePlayerName}
+          onUpdatePlayerIcon={updatePlayerIcon}
           onSelectCharacter={selectCharacter}
           onUnlockCharacter={unlockCharacter}
           onPurchaseCharacterPower={purchaseCharacterPower}
@@ -509,6 +531,7 @@ export function App() {
         <AuthScreen
           disabled={!isSupabaseConfigured}
           error={authError}
+          notice={authNotice}
           isLoading={authStatus === "checking" || authStatus === "loading-save"}
           onSignIn={signIn}
           onSignUp={signUp}

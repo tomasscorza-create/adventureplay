@@ -13,6 +13,7 @@ export type PlayerState =
 export type SkillId = "stronger-strike" | "quick-steps";
 
 export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
+export type ProfileIconId = "icon-1" | "icon-2" | "icon-3" | "icon-4" | "icon-5" | "icon-6" | "icon-7" | "icon-8" | "icon-9";
 
 export type InventoryCategoryId = "plansKeys" | "toolsWeapons" | "potions";
 export type AchievementId =
@@ -95,6 +96,8 @@ export interface LevelCompletionSummary {
 }
 
 export interface PlayerStats extends PlayerBaseState {
+  displayName: string;
+  profileIconId: ProfileIconId;
   speed: number;
   jumpPower: number;
   meleeDamage: number;
@@ -103,8 +106,17 @@ export interface PlayerStats extends PlayerBaseState {
   inventory: string[];
 }
 
+export interface PlayerStatistics {
+  runsPlayed: number;
+  completedRuns: number;
+  defeats: number;
+  gameplaySeconds: number;
+  actions: number;
+}
+
 export interface SaveData {
   player: PlayerStats;
+  statistics: PlayerStatistics;
   selectedCharacterId: CharacterId;
   primaryCharacterId?: CharacterId;
   unlockedCharacterIds: CharacterId[];

@@ -4,14 +4,15 @@ import { useState } from "react";
 interface AuthScreenProps {
   disabled?: boolean;
   error?: string;
+  notice?: string;
   isLoading?: boolean;
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
 }
 
-export function AuthScreen({ disabled, error, isLoading, onSignIn, onSignUp }: AuthScreenProps) {
-  const [email, setEmail] = useState("jugador@superjuego.local");
-  const [password, setPassword] = useState("superjuego123");
+export function AuthScreen({ disabled, error, notice, isLoading, onSignIn, onSignUp }: AuthScreenProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const isSubmitDisabled = disabled || isLoading || !email || password.length < 6;
 
@@ -61,6 +62,7 @@ export function AuthScreen({ disabled, error, isLoading, onSignIn, onSignUp }: A
           </label>
 
           {error && <p className="auth-error">{error}</p>}
+          {notice && <p className="auth-notice">{notice}</p>}
 
           <div className="auth-actions">
             <button className="button" disabled={isSubmitDisabled} type="submit">

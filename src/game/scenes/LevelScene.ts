@@ -78,6 +78,7 @@ export class LevelScene extends Phaser.Scene {
   private gameplayElapsedMs = 0;
   private playerActionCount = 0;
   private previousMovementDirection: -1 | 0 | 1 = 0;
+  private runStatisticsRecorded = false;
 
   constructor() {
     super("LevelScene");
@@ -95,6 +96,7 @@ export class LevelScene extends Phaser.Scene {
     this.gameplayElapsedMs = 0;
     this.playerActionCount = 0;
     this.previousMovementDirection = 0;
+    this.runStatisticsRecorded = false;
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.save = gameSaveStore.load();
     this.save.player.health = this.save.player.maxHealth;
@@ -115,6 +117,7 @@ export class LevelScene extends Phaser.Scene {
     this.pressureDamageCooldownMs = 0;
 
     touchInputStore.reset();
+    this.movement.reset();
     this.inputSystem = new GameplayInputSystem(this);
     this.createWorld();
     this.createPlayer();
@@ -143,8 +146,10 @@ export class LevelScene extends Phaser.Scene {
 
     const input = this.inputSystem.readFrame();
     this.trackPlayerActions(input);
-    this.handleMovementAudio(input);
-    this.movement.update(this.player, input);
+    const didJump = this.movement.update(this.player, input, delta);
+    if (didJump) {
+      gameAudio.playJump();
+    }
     this.handleActions(input);
     this.updateCameraPressure(delta);
     this.handlePressureLineDamage(delta);
@@ -386,6 +391,10 @@ export class LevelScene extends Phaser.Scene {
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
       const restartLevelId = levelDefinitions[levelId] ? levelId : this.level.id;
+      if (!this.levelFinished) {
+        this.recordRunStatistics("abandoned");
+        gameSaveStore.save(this.save);
+      }
       this.scene.start("LevelScene", { levelId: restartLevelId });
     });
 
@@ -409,6 +418,10 @@ export class LevelScene extends Phaser.Scene {
     );
 
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {
+      if (!this.levelFinished) {
+        this.recordRunStatistics("abandoned");
+        gameSaveStore.save(this.save);
+      }
       this.scene.start("MainMenuScene");
     });
 
@@ -543,12 +556,6 @@ export class LevelScene extends Phaser.Scene {
         cross.destroy();
       },
     });
-  }
-
-  private handleMovementAudio(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
-    if (input.jumpJustPressed && this.player.isGrounded()) {
-      gameAudio.playJump();
-    }
   }
 
   private pauseGame(): void {
@@ -1494,6 +1501,7 @@ export class LevelScene extends Phaser.Scene {
     this.levelFinished = true;
     this.activeCheckpoint = undefined;
     this.save.checkpointId = undefined;
+    this.recordRunStatistics("defeat");
     gameSaveStore.save(this.save);
     this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
   }
@@ -1525,6 +1533,7 @@ export class LevelScene extends Phaser.Scene {
       ),
     );
 
+    this.recordRunStatistics("completed");
     gameSaveStore.save(this.save);
     const nextLevel = this.level.nextLevelId
       ? levelDefinitions[this.level.nextLevelId]
@@ -1554,6 +1563,23 @@ export class LevelScene extends Phaser.Scene {
     this.physics.pause();
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "level-transition");
     this.cameras.main.stopFollow();
+  }
+
+  private recordRunStatistics(result: "completed" | "defeat" | "abandoned"): void {
+    if (this.runStatisticsRecorded) {
+      return;
+    }
+
+    this.runStatisticsRecorded = true;
+    this.save.statistics.runsPlayed += 1;
+    this.save.statistics.gameplaySeconds += Math.max(1, Math.round(this.gameplayElapsedMs / 1000));
+    this.save.statistics.actions += this.playerActionCount;
+
+    if (result === "completed") {
+      this.save.statistics.completedRuns += 1;
+    } else if (result === "defeat") {
+      this.save.statistics.defeats += 1;
+    }
   }
 
   private announceAchievements(achievementIds: AchievementId[]): void {
