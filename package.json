@@ -9,6 +9,7 @@
     "audit:achievements": "node --experimental-strip-types scripts/audit-achievements.mjs",
     "audit:levels": "node --experimental-strip-types scripts/audit-levels.mjs",
     "audit:progression": "node --experimental-strip-types scripts/audit-progression.mjs",
+    "pwa:assets": "pwa-assets-generator --preset minimal-2023 public/favicon.svg",
     "preview": "vite preview --host 127.0.0.1",
     "supabase:start": "supabase start",
     "supabase:reset": "supabase db reset",
@@ -25,6 +26,8 @@
   },
   "devDependencies": {
     "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6"
+    "@types/react-dom": "^19.1.6",
+    "@vite-pwa/assets-generator": "^1.0.2",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

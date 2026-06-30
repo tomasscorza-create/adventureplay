@@ -1,11 +1,14 @@
 import Phaser from "phaser";
 import type { CharacterDefinition, PlayerState, PlayerStats } from "../../../shared/types/game";
+import { weaponDefinitions } from "../../data/weapons";
+import { EquippedWeapon } from "./EquippedWeapon";
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
   state: PlayerState = "idle";
   facing: -1 | 1 = 1;
   private readonly animationPrefix: string;
+  private readonly equippedWeapon?: EquippedWeapon;
   private invulnerableUntil = 0;
   private lastShotAt = 0;
   private lastMeleeAt = 0;
@@ -22,11 +25,31 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setCollideWorldBounds(true);
     this.setDragX(1800);
     this.setDepth(12);
+    const weaponDefinition = character.weaponId
+      ? weaponDefinitions[character.weaponId]
+      : undefined;
+    if (weaponDefinition && character.weaponAttachmentFrames) {
+      this.equippedWeapon = new EquippedWeapon(
+        scene,
+        weaponDefinition,
+        character.weaponAttachmentFrames,
+      );
+    }
     this.playAnimation("idle");
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(28, 44);
     body.setOffset(34, 32);
+  }
+
+  override preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.equippedWeapon?.syncWithPlayer(this, this.state, this.facing, delta);
+  }
+
+  override destroy(fromScene?: boolean): void {
+    this.equippedWeapon?.destroy(fromScene);
+    super.destroy(fromScene);
   }
 
   setFacing(direction: -1 | 1): void {
@@ -128,6 +151,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
 
     return this.stats.health <= 0;
+  }
+
+  markDefeated(): void {
+    this.state = "dead";
+    this.actionLockedUntil = Number.POSITIVE_INFINITY;
+    this.setVelocity(0, 0);
+    this.playAnimation("dead");
   }
 
   private playAnimation(state: PlayerState): void {

@@ -3,6 +3,7 @@ import type { Player } from "../../entities/player/Player";
 
 const JUMP_BUFFER_MS = 120;
 const COYOTE_TIME_MS = 100;
+const SUPPORTED_UPWARD_SPEED_RATIO = 0.45;
 
 export class MovementSystem {
   private jumpBufferRemainingMs = 0;
@@ -25,7 +26,8 @@ export class MovementSystem {
     }
 
     const body = player.body as Phaser.Physics.Arcade.Body;
-    const isStableOnGround = player.isGrounded() && body.velocity.y >= 0;
+    const isRisingFromOwnJump = body.velocity.y < -player.stats.jumpPower * SUPPORTED_UPWARD_SPEED_RATIO;
+    const isStableOnGround = player.isGrounded() && !isRisingFromOwnJump;
     this.coyoteTimeRemainingMs = isStableOnGround
       ? COYOTE_TIME_MS
       : Math.max(0, this.coyoteTimeRemainingMs - delta);

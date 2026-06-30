@@ -5,8 +5,35 @@ import {
   levelRewardDefinitions,
   MAX_PLAYER_LEVEL,
 } from "../src/game/data/progression.ts";
+import {
+  getNextCharacterUnlockRequirement,
+  initialCharacterIds,
+} from "../src/game/data/characterUnlocks.ts";
 
 const errors = [];
+if (JSON.stringify(initialCharacterIds) !== JSON.stringify(["dunel", "ruder", "sarix"])) {
+  errors.push("La eleccion inicial debe limitarse a Dunel, Ruder y Sarix");
+}
+
+const expectedCharacterUnlocks = [
+  { requiredLevel: 4, cost: 700 },
+  { requiredLevel: 8, cost: 7_000 },
+  { requiredLevel: 12, cost: 70_000 },
+  { requiredLevel: 12, cost: 140_000 },
+  { requiredLevel: 12, cost: 280_000 },
+];
+for (const [paidUnlockCount, expected] of expectedCharacterUnlocks.entries()) {
+  const requirement = getNextCharacterUnlockRequirement(
+    Array.from({ length: paidUnlockCount + 1 }, () => "ruder"),
+  );
+  if (
+    requirement.requiredLevel !== expected.requiredLevel
+    || requirement.cost !== expected.cost
+  ) {
+    errors.push(`El desbloqueo de personaje #${paidUnlockCount + 1} no coincide con la progresion esperada`);
+  }
+}
+
 const requirements = Array.from(
   { length: MAX_PLAYER_LEVEL - 1 },
   (_entry, index) => getExperienceToNextLevel(index + 1),

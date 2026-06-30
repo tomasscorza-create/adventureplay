@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { gameEvents } from "./game/events/EventBus";
+import {
+  canChooseInitialCharacter,
+  getNextCharacterUnlockRequirement,
+} from "./game/data/characterUnlocks";
 import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { createGame } from "./game/main";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
@@ -9,6 +13,7 @@ import type { AchievementIconId, AchievementReward } from "./game/data/achieveme
 import type { LevelRewardDefinition } from "./game/data/progression";
 import { gameAudio } from "./shared/audio/GameAudio";
 import { EVENTS } from "./shared/constants/events";
+import { MOBILE_GAMEPLAY_QUERY } from "./shared/constants/game";
 import { isSupabaseConfigured, supabase } from "./shared/supabase/client";
 import type {
   AchievementId,
@@ -25,6 +30,8 @@ import { HUD } from "./ui/components/HUD";
 import { AbilityControls } from "./ui/components/AbilityControls";
 import { MobileControls } from "./ui/components/MobileControls";
 import { OrientationNotice } from "./ui/components/OrientationNotice";
+import { PwaUpdatePrompt } from "./ui/components/PwaUpdatePrompt";
+import { PwaInstallPrompt } from "./ui/components/PwaInstallPrompt";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
@@ -64,6 +71,22 @@ type ProgressNotification = {
 };
 
 const PROGRESS_NOTIFICATION_DURATION_MS = 4600;
+function useMobileGameplayControls() {
+  const [usesMobileControls, setUsesMobileControls] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia(MOBILE_GAMEPLAY_QUERY).matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_GAMEPLAY_QUERY);
+    const syncControls = () => setUsesMobileControls(mediaQuery.matches);
+
+    syncControls();
+    mediaQuery.addEventListener("change", syncControls);
+    return () => mediaQuery.removeEventListener("change", syncControls);
+  }, []);
+
+  return usesMobileControls;
+}
 
 export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
@@ -79,6 +102,7 @@ export function App() {
   const [authError, setAuthError] = useState<string>();
   const [authNotice, setAuthNotice] = useState<string>();
   const [playerEmail, setPlayerEmail] = useState<string>();
+  const usesMobileGameplayControls = useMobileGameplayControls();
 
   useEffect(() => {
     const game = createGame("game-root");
@@ -322,7 +346,10 @@ export function App() {
   const selectCharacter = (characterId: CharacterId) => {
     const currentSave = gameSaveStore.load();
     const isChoosingPrimary = !currentSave.primaryCharacterId;
-    if (!isChoosingPrimary && !currentSave.unlockedCharacterIds.includes(characterId)) {
+    if (
+      (isChoosingPrimary && !canChooseInitialCharacter(characterId))
+      || (!isChoosingPrimary && !currentSave.unlockedCharacterIds.includes(characterId))
+    ) {
       return;
     }
 
@@ -355,18 +382,20 @@ export function App() {
     gameSaveStore.save(nextSave);
     setSave(nextSave);
   };
-  const unlockCharacter = (characterId: CharacterId, cost: number): boolean => {
+  const unlockCharacter = (characterId: CharacterId): boolean => {
     const currentSave = gameSaveStore.load();
+    const requirement = getNextCharacterUnlockRequirement(currentSave.unlockedCharacterIds);
     if (
       !currentSave.primaryCharacterId ||
       currentSave.unlockedCharacterIds.includes(characterId) ||
-      currentSave.player.coins < cost
+      currentSave.player.level < requirement.requiredLevel ||
+      currentSave.player.coins < requirement.cost
     ) {
       return false;
     }
 
     const nextSave = structuredClone(currentSave);
-    nextSave.player.coins -= cost;
+    nextSave.player.coins -= requirement.cost;
     nextSave.unlockedCharacterIds.push(characterId);
     gameSaveStore.save(nextSave);
     setSave(nextSave);
@@ -476,7 +505,7 @@ export function App() {
           rewardFeedbackKey={activeAchievement?.id}
         />
       )}
-      {!needsAuth && screen === "playing" && (
+      {!needsAuth && screen === "playing" && !usesMobileGameplayControls && (
         <AbilityControls
           hud={hud}
           achievementReward={activeAchievement?.reward}
@@ -485,7 +514,7 @@ export function App() {
         />
       )}
       {!needsAuth && (screen === "playing" || screen === "paused") && <OrientationNotice />}
-      {!needsAuth && screen === "playing" && (
+      {!needsAuth && screen === "playing" && usesMobileGameplayControls && (
         <MobileControls
           hud={hud}
           achievementReward={activeAchievement?.reward}
@@ -537,6 +566,10 @@ export function App() {
           onSignUp={signUp}
         />
       )}
+      <PwaInstallPrompt
+        visible={needsAuth || screen === "main-menu" || screen === "game-over" || screen === "victory"}
+      />
+      <PwaUpdatePrompt />
     </main>
   );
 }

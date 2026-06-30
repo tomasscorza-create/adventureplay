@@ -15,9 +15,9 @@ import {
 } from "../../data/progression";
 import { achievementIds } from "../../data/achievements";
 
-export const SAVE_SCHEMA_VERSION = 15;
+export const SAVE_SCHEMA_VERSION = 16;
 
-const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix"];
+const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix", "faust"];
 const profileIconIds: ProfileIconId[] = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5", "icon-6", "icon-7", "icon-8", "icon-9"];
 const levelSequences = [
   [

@@ -1,6 +1,8 @@
 import Phaser from "phaser";
+import { faustAnimationRanges } from "../data/faustAnimation";
 import amyUrl from "../../assets/characters/amy.png";
 import dunelUrl from "../../assets/characters/dunel.png";
+import faustUrl from "../../assets/characters/faust.png";
 import sarixUrl from "../../assets/characters/sarix.png";
 import m2Url from "../../assets/enemies/m2.png";
 import m3Run1Url from "../../assets/enemies/m3-run-1.png";
@@ -54,6 +56,7 @@ import platformMidBUrl from "../../assets/terrain/platform-mid-b.png";
 import platformRightUrl from "../../assets/terrain/platform-right.png";
 import surfaceGrassDetailUrl from "../../assets/terrain/surface-grass-detail.png";
 import surfaceRocksUrl from "../../assets/terrain/surface-rocks.png";
+import sword1Url from "../../assets/weapons/sword-1.png";
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -68,6 +71,11 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image("character-source-amy", amyUrl);
     this.load.image("character-source-dunel", dunelUrl);
     this.load.image("character-source-sarix", sarixUrl);
+    this.load.spritesheet("character-faust", faustUrl, {
+      frameWidth: 96,
+      frameHeight: 80,
+    });
+    this.load.image("weapon-sword-1", sword1Url);
     this.load.spritesheet("enemy-m2", m2Url, {
       frameWidth: 256,
       frameHeight: 363,
@@ -160,6 +168,21 @@ export class PreloadScene extends Phaser.Scene {
 
     for (const textureKey of ["character-ruder", "character-amy", "character-dunel", "character-sarix"]) {
       this.createPlayerAnimations(textureKey);
+    }
+    this.createFaustAnimations();
+  }
+
+  private createFaustAnimations(): void {
+    for (const [state, range] of Object.entries(faustAnimationRanges)) {
+      this.anims.create({
+        key: `character-faust-${state}`,
+        frames: this.anims.generateFrameNumbers("character-faust", {
+          start: range.start,
+          end: range.end,
+        }),
+        frameRate: range.frameRate,
+        repeat: range.repeat,
+      });
     }
   }
 

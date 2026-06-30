@@ -1,17 +1,30 @@
-import { useMemo, useState } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, WheelEvent } from "react";
 import menuBackgroundUrl from "../../assets/menu/menu-background.webp";
 import menuAchievementsButtonUrl from "../../assets/menu/menu-achievements.webp";
 import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
 import menuGearUrl from "../../assets/menu/menu-gear.webp";
 import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
 import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
+import exploreMapUrl from "../../assets/menu/explore-map/complete.webp";
+import activeVolcanoMapUrl from "../../assets/menu/explore-map/active-volcano.webp";
+import enchantedForestMapUrl from "../../assets/menu/explore-map/enchanted-forest.webp";
+import iceMountainsMapUrl from "../../assets/menu/explore-map/ice-mountains.webp";
+import modernJungleMapUrl from "../../assets/menu/explore-map/modern-jungle.webp";
+import mysteriousPyramidsMapUrl from "../../assets/menu/explore-map/mysterious-pyramids.webp";
+import treasureMineMapUrl from "../../assets/menu/explore-map/treasure-mine.webp";
+import verdantFrontierMapUrl from "../../assets/menu/explore-map/verdant-frontier.webp";
 import {
   achievementCategories,
   achievementDefinitions,
   getAchievementRewardLabels,
   type AchievementCategoryId,
 } from "../../game/data/achievements";
+import {
+  canChooseInitialCharacter,
+  getNextCharacterUnlockRequirement,
+  initialCharacterIds,
+} from "../../game/data/characterUnlocks";
 import { playableCharacters } from "../../game/data/characters";
 import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
@@ -38,7 +51,7 @@ interface MainMenuScreenProps {
   onUpdatePlayerName: (displayName: string) => boolean;
   onUpdatePlayerIcon: (profileIconId: ProfileIconId) => void;
   onSelectCharacter: (characterId: CharacterId) => void;
-  onUnlockCharacter: (characterId: CharacterId, cost: number) => boolean;
+  onUnlockCharacter: (characterId: CharacterId) => boolean;
   onPurchaseCharacterPower: (
     characterId: CharacterId,
     power: "healingCharges" | "powerCharges",
@@ -47,7 +60,15 @@ interface MainMenuScreenProps {
   ) => boolean;
 }
 
-const CHARACTER_UNLOCK_COST = 700;
+function getCarouselOffset(index: number, activeIndex: number, total: number): number {
+  let offset = index - activeIndex;
+  if (offset > total / 2) {
+    offset -= total;
+  } else if (offset < -total / 2) {
+    offset += total;
+  }
+  return offset;
+}
 
 function formatCompactAmount(value: number): string {
   const absoluteValue = Math.abs(value);
@@ -114,14 +135,30 @@ interface RegionDefinition {
   id: string;
   name: string;
   status: string;
+  mapImageUrl: string;
   levels: LevelSlot[];
 }
 
 const regions: RegionDefinition[] = [
-  { id: "verdant-frontier", name: "Frontera Verde", status: "10 niveles", levels: verdantLevelSlots },
-  { id: "enchanted-forest", name: "Bosque encantado", status: "10 niveles", levels: enchantedLevelSlots },
-  { id: "sunken-marsh", name: "Marisma Hundida", status: "Proximamente", levels: [] },
-  { id: "north-spires", name: "Agujas del Norte", status: "Proximamente", levels: [] },
+  {
+    id: "verdant-frontier",
+    name: "Frontera Verde",
+    status: "10 niveles",
+    mapImageUrl: verdantFrontierMapUrl,
+    levels: verdantLevelSlots,
+  },
+  {
+    id: "enchanted-forest",
+    name: "Bosque Encantado",
+    status: "10 niveles",
+    mapImageUrl: enchantedForestMapUrl,
+    levels: enchantedLevelSlots,
+  },
+  { id: "modern-jungle", name: "La Jungla Moderna", status: "Próximamente", mapImageUrl: modernJungleMapUrl, levels: [] },
+  { id: "treasure-mine", name: "Mina del Tesoro", status: "Próximamente", mapImageUrl: treasureMineMapUrl, levels: [] },
+  { id: "ice-mountains", name: "Montañas de Hielo", status: "Próximamente", mapImageUrl: iceMountainsMapUrl, levels: [] },
+  { id: "mysterious-pyramids", name: "Pirámides Misteriosas", status: "Próximamente", mapImageUrl: mysteriousPyramidsMapUrl, levels: [] },
+  { id: "active-volcano", name: "Volcán Activo", status: "Próximamente", mapImageUrl: activeVolcanoMapUrl, levels: [] },
 ];
 
 const mainActions = [
@@ -157,12 +194,41 @@ export function MainMenuScreen({
     useState<AchievementCategoryId>("adventure");
   const [activeProfileSectionId, setActiveProfileSectionId] = useState<ProfileSectionId>("edit");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
+  const [previewRegionId, setPreviewRegionId] = useState<string>();
   const [audioSettings, setAudioSettings] = useState(() => gameAudio.getSettings());
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [isResettingProgress, setIsResettingProgress] = useState(false);
   const [showExploreEntryHint, setShowExploreEntryHint] = useState(false);
+  const [activeCharacterId, setActiveCharacterId] = useState<CharacterId>(save.selectedCharacterId);
+  const characterSwipeStartX = useRef<number | undefined>(undefined);
+  const characterSwipeConsumed = useRef(false);
+  const characterWheelLockedUntil = useRef(0);
   const selectedCharacter = playableCharacters.find((character) => character.id === save.selectedCharacterId)
     ?? playableCharacters[0];
+  const carouselCharacters = useMemo(() => {
+    const initialOrder = [
+      ...initialCharacterIds
+        .map((characterId) => playableCharacters.find((character) => character.id === characterId))
+        .filter((character) => character !== undefined),
+      ...playableCharacters.filter(
+        (character) => !canChooseInitialCharacter(character.id),
+      ),
+    ];
+    if (!save.primaryCharacterId) {
+      return initialOrder;
+    }
+    return [
+      ...initialOrder.filter((character) => save.unlockedCharacterIds.includes(character.id)),
+      ...initialOrder.filter((character) => !save.unlockedCharacterIds.includes(character.id)),
+    ];
+  }, [save.primaryCharacterId, save.unlockedCharacterIds]);
+  const activeCharacterIndex = Math.max(
+    0,
+    carouselCharacters.findIndex((character) => character.id === activeCharacterId),
+  );
+  const nextCharacterUnlockRequirement = getNextCharacterUnlockRequirement(
+    save.unlockedCharacterIds,
+  );
   const playerDisplayName = save.player.displayName
     || playerEmail?.split("@")[0]?.trim()
     || selectedCharacter.name;
@@ -174,6 +240,60 @@ export function MainMenuScreen({
   const runMenuAction = (action: () => void) => {
     gameAudio.playUiSelect();
     action();
+  };
+  const moveCharacterCarousel = (direction: -1 | 1) => {
+    gameAudio.playUiSelect();
+    const nextIndex = (
+      activeCharacterIndex + direction + carouselCharacters.length
+    ) % carouselCharacters.length;
+    setActiveCharacterId(carouselCharacters[nextIndex].id);
+  };
+  const showCharacterInCarousel = (index: number) => {
+    if (index === activeCharacterIndex) {
+      return;
+    }
+    gameAudio.playUiSelect();
+    setActiveCharacterId(carouselCharacters[index].id);
+  };
+  const handleCharacterCarouselWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const now = performance.now();
+    if (now < characterWheelLockedUntil.current) {
+      return;
+    }
+    const dominantDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.deltaY;
+    if (Math.abs(dominantDelta) < 12) {
+      return;
+    }
+    characterWheelLockedUntil.current = now + 320;
+    moveCharacterCarousel(dominantDelta > 0 ? 1 : -1);
+  };
+  const handleCharacterCarouselKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+    event.preventDefault();
+    moveCharacterCarousel(event.key === "ArrowRight" ? 1 : -1);
+  };
+  const handleCharacterPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    characterSwipeStartX.current = event.clientX;
+    characterSwipeConsumed.current = false;
+  };
+  const handleCharacterPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const startX = characterSwipeStartX.current;
+    characterSwipeStartX.current = undefined;
+    if (startX === undefined) {
+      return;
+    }
+    const distance = event.clientX - startX;
+    if (Math.abs(distance) >= 44) {
+      characterSwipeConsumed.current = true;
+      moveCharacterCarousel(distance < 0 ? 1 : -1);
+      window.setTimeout(() => {
+        characterSwipeConsumed.current = false;
+      }, 0);
+    }
   };
   const toggleSound = () => {
     gameAudio.playUiSelect();
@@ -240,7 +360,8 @@ export function MainMenuScreen({
     });
   }, [save.player.inventory]);
 
-  const activeRegion = regions.find((region) => region.id === activeRegionId) ?? regions[0];
+  const selectedRegion = regions.find((region) => region.id === activeRegionId) ?? regions[0];
+  const activeRegion = regions.find((region) => region.id === previewRegionId) ?? selectedRegion;
   const activeLevelSlots = activeRegion.levels;
   const nextPlayableLevelId = useMemo(() => {
     return activeLevelSlots.find((slot) => {
@@ -869,36 +990,90 @@ export function MainMenuScreen({
                     animatedTitle={!save.primaryCharacterId}
                   />
 
-                  <div className="character-list" aria-label="Personajes disponibles">
-                    {playableCharacters.map((character) => {
+                  <div
+                    className="character-carousel"
+                    role="region"
+                    aria-roledescription="carrusel"
+                    aria-label="Personajes disponibles"
+                    tabIndex={0}
+                    onWheel={handleCharacterCarouselWheel}
+                    onKeyDown={handleCharacterCarouselKeyDown}
+                  >
+                    <button
+                      className="character-carousel__arrow character-carousel__arrow--previous"
+                      type="button"
+                      aria-label="Mostrar heroe anterior"
+                      onClick={() => moveCharacterCarousel(-1)}
+                    >
+                      <span aria-hidden="true">‹</span>
+                    </button>
+                    <div
+                      className="character-carousel__stage"
+                      onPointerDown={handleCharacterPointerDown}
+                      onPointerUp={handleCharacterPointerUp}
+                      onPointerCancel={() => {
+                        characterSwipeStartX.current = undefined;
+                        characterSwipeConsumed.current = false;
+                      }}
+                    >
+                    {carouselCharacters.map((character, index) => {
                       const isSelected = Boolean(
                         save.primaryCharacterId && character.id === save.selectedCharacterId,
                       );
                       const isChoosingPrimary = !save.primaryCharacterId;
-                      const isUnlocked = isChoosingPrimary || save.unlockedCharacterIds.includes(character.id);
+                      const isUnlocked = isChoosingPrimary
+                        ? canChooseInitialCharacter(character.id)
+                        : save.unlockedCharacterIds.includes(character.id);
+                      const carouselOffset = getCarouselOffset(
+                        index,
+                        activeCharacterIndex,
+                        carouselCharacters.length,
+                      );
+                      const carouselPosition = carouselOffset === 0
+                        ? "active"
+                        : carouselOffset === -1
+                          ? "previous"
+                          : carouselOffset === 1
+                            ? "next"
+                            : carouselOffset < 0
+                              ? "far-previous"
+                              : "far-next";
+                      const isActive = carouselOffset === 0;
                       return (
                         <article
                           className={`character-card character-card--${character.id}${
                             isSelected ? " character-card--selected" : ""
-                          }${isUnlocked ? "" : " character-card--locked"}`}
+                          }${isUnlocked ? "" : " character-card--locked"} character-card--carousel-${carouselPosition}`}
                           key={character.id}
                           data-character-id={character.id}
+                          aria-hidden={!isActive}
                         >
                           <button
                             className="character-card__select"
                             type="button"
-                            aria-label={`Seleccionar a ${character.name}`}
+                            aria-label={isActive ? `Seleccionar a ${character.name}` : `Mostrar a ${character.name}`}
                             aria-pressed={isSelected}
-                            disabled={!isUnlocked}
-                            onClick={() => runMenuAction(() => {
-                              onSelectCharacter(character.id);
-                              if (isChoosingPrimary) {
-                                setShowExploreEntryHint(true);
-                                setView("modes");
+                            disabled={isActive && !isUnlocked}
+                            tabIndex={isActive ? 0 : -1}
+                            onClick={() => {
+                              if (characterSwipeConsumed.current) {
+                                characterSwipeConsumed.current = false;
+                                return;
                               }
-                            })}
+                              runMenuAction(() => {
+                                if (!isActive) {
+                                  setActiveCharacterId(character.id);
+                                  return;
+                                }
+                                onSelectCharacter(character.id);
+                                if (isChoosingPrimary) {
+                                  setShowExploreEntryHint(true);
+                                  setView("modes");
+                                }
+                              });
+                            }}
                           />
-                          {!isChoosingPrimary && (
+                          {!isChoosingPrimary && isActive && (
                             <button
                               className="character-card__view"
                               type="button"
@@ -913,13 +1088,50 @@ export function MainMenuScreen({
                             alt=""
                           />
                           <span className="character-card__veil" aria-hidden="true" />
+                          {!isUnlocked && (
+                            <span className="character-card__lock-emblem" aria-hidden="true">
+                              <svg viewBox="0 0 64 64">
+                                <path d="M18 29v-8c0-8 6-14 14-14s14 6 14 14v8" />
+                                <rect x="12" y="27" width="40" height="31" rx="8" />
+                                <circle cx="32" cy="41" r="4" />
+                                <path d="M32 45v6" />
+                              </svg>
+                            </span>
+                          )}
                           <span className="character-card__identity">
                             <strong>{character.name}</strong>
                           </span>
-                          {!isUnlocked && <span className="character-card__lock" aria-hidden="true">700</span>}
+                          {!isUnlocked && isActive && (
+                            <span className="character-card__lock" aria-hidden="true">
+                              {isChoosingPrimary
+                                ? "Bloqueado"
+                                : `LV ${nextCharacterUnlockRequirement.requiredLevel} · ${formatCompactAmount(nextCharacterUnlockRequirement.cost)}`}
+                            </span>
+                          )}
                         </article>
                       );
                     })}
+                    </div>
+                    <button
+                      className="character-carousel__arrow character-carousel__arrow--next"
+                      type="button"
+                      aria-label="Mostrar siguiente heroe"
+                      onClick={() => moveCharacterCarousel(1)}
+                    >
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <div className="character-carousel__dots" aria-label="Posicion del carrusel">
+                      {carouselCharacters.map((character, index) => (
+                        <button
+                          className={index === activeCharacterIndex ? "character-carousel__dot character-carousel__dot--active" : "character-carousel__dot"}
+                          type="button"
+                          key={character.id}
+                          aria-label={`Mostrar a ${character.name}`}
+                          aria-current={index === activeCharacterIndex ? "true" : undefined}
+                          onClick={() => showCharacterInCarousel(index)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -964,34 +1176,62 @@ export function MainMenuScreen({
               <MenuHeading eyebrow="Explorar" title="Continente de Arvand" onBack={() => setView("modes")} backLabel="Modos" />
 
               <div className="explore-layout">
-                <div className="continent-map" aria-label="Mapa de regiones">
-                  <span className="continent-map__compass" aria-hidden="true" />
-                  {regions.map((region, index) => (
-                    <button
-                      className={`region-piece region-piece--${index + 1}${
-                        region.id === activeRegion.id ? " region-piece--active" : ""
-                      }${region.id === "enchanted-forest" ? " region-piece--enchanted" : ""}`}
-                      type="button"
-                      key={region.id}
-                      disabled={region.levels.length === 0}
-                      onClick={() => runMenuAction(() => setActiveRegionId(region.id))}
-                    >
-                      <span>{region.name}</span>
-                      <strong>{region.status}</strong>
-                    </button>
-                  ))}
-                </div>
+                <section className="map-column" aria-label="Regiones del continente">
+                  <div className="map-column__header">
+                    <span>Mapa de regiones</span>
+                    <strong>{regions.length} regiones</strong>
+                  </div>
 
-                <div
+                  <div className="map-scroll" role="region" aria-label="Desplazar mapa de regiones" tabIndex={0}>
+                    <div className="continent-map explore-map" onPointerLeave={() => setPreviewRegionId(undefined)}>
+                      <img className="explore-map__base" src={exploreMapUrl} alt="" aria-hidden="true" />
+                      {regions.map((region) => (
+                        <button
+                          className={`explore-map__region explore-map__region--${region.id}${
+                            region.id === activeRegion.id ? " explore-map__region--active" : ""
+                          }`}
+                          type="button"
+                          key={region.id}
+                          onClick={() => runMenuAction(() => setActiveRegionId(region.id))}
+                          onPointerEnter={() => setPreviewRegionId(region.id)}
+                          onPointerLeave={() => setPreviewRegionId(undefined)}
+                          onFocus={() => setPreviewRegionId(region.id)}
+                          onBlur={() => setPreviewRegionId(undefined)}
+                          aria-label={`${region.name}. ${region.status}`}
+                          aria-pressed={region.id === selectedRegion.id}
+                        >
+                          <img src={region.mapImageUrl} alt="" aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section
                   className={`level-column level-column--${activeRegion.id}`}
                   aria-label={`Niveles de ${activeRegion.name}`}
                 >
                   <div className="level-column__header">
                     <span>{activeRegion.name}</span>
-                    <strong>{activeLevelSlots.length} {activeLevelSlots.length === 1 ? "nivel" : "niveles"}</strong>
+                    <strong>
+                      {activeLevelSlots.length > 0
+                        ? `${activeLevelSlots.length} ${activeLevelSlots.length === 1 ? "nivel" : "niveles"}`
+                        : activeRegion.status}
+                    </strong>
                   </div>
 
-                  <div className="level-list">
+                  <div
+                    className="level-list"
+                    role="region"
+                    aria-label={`Desplazar niveles de ${activeRegion.name}`}
+                    tabIndex={0}
+                  >
+                    {activeLevelSlots.length === 0 && (
+                      <div className="level-list__empty">
+                        <strong>Próximamente</strong>
+                        <span>Esta región será un escenario jugable en una próxima expansión.</span>
+                      </div>
+                    )}
                     {activeLevelSlots.map((slot) => {
                       const levelExists = Boolean(slot.levelId && levelDefinitions[slot.levelId]);
                       const isUnlocked = Boolean(slot.levelId && save.unlockedLevels.includes(slot.levelId));
@@ -1025,7 +1265,7 @@ export function MainMenuScreen({
                       );
                     })}
                   </div>
-                </div>
+                </section>
               </div>
             </div>
           )}
@@ -1062,6 +1302,10 @@ function CharacterDetail({
 
   const powerCharges = save.characterPowerCharges[characterId];
   const isUnlocked = save.unlockedCharacterIds.includes(characterId);
+  const unlockRequirement = getNextCharacterUnlockRequirement(save.unlockedCharacterIds);
+  const hasUnlockLevel = save.player.level >= unlockRequirement.requiredLevel;
+  const canAffordUnlock = save.player.coins >= unlockRequirement.cost;
+  const canUnlock = hasUnlockLevel && canAffordUnlock;
   const requestPackage = (power: PurchasablePower, pack: PowerPackage) => {
     gameAudio.playUiSelect();
     setPurchaseMessage(undefined);
@@ -1113,15 +1357,17 @@ function CharacterDetail({
             <button
               className="character-unlock-trigger"
               type="button"
-              disabled={save.player.coins < CHARACTER_UNLOCK_COST}
+              disabled={!canUnlock}
               onClick={() => {
                 gameAudio.playUiSelect();
                 setShowUnlockConfirmation(true);
               }}
             >
               <span className="character-shop-trigger__coin" aria-hidden="true">O</span>
-              <span>Desbloquear a {character.name}</span>
-              <strong>{CHARACTER_UNLOCK_COST} ORO</strong>
+              <span>
+                Desbloquear a {character.name} · LV {unlockRequirement.requiredLevel}
+              </span>
+              <strong>{formatCompactAmount(unlockRequirement.cost)} ORO</strong>
             </button>
           )}
 
@@ -1196,11 +1442,15 @@ function CharacterDetail({
           )}
           {showUnlockConfirmation && !isUnlocked && (
             <div className="purchase-confirmation" role="dialog" aria-modal="true" aria-label="Confirmar desbloqueo">
-              <span className="purchase-confirmation__icon" aria-hidden="true">700</span>
+              <span className="purchase-confirmation__icon" aria-hidden="true">
+                LV{unlockRequirement.requiredLevel}
+              </span>
               <div className="purchase-confirmation__copy">
                 <strong>Desbloquear a {character.name}</strong>
-                <span>El personaje quedara disponible permanentemente en esta cuenta.</span>
-                <b>{CHARACTER_UNLOCK_COST} ORO</b>
+                <span>
+                  Desbloqueo permanente #{unlockRequirement.unlockNumber}. Requiere LV {unlockRequirement.requiredLevel}.
+                </span>
+                <b>{unlockRequirement.cost.toLocaleString("es-AR")} ORO</b>
               </div>
               <div className="purchase-confirmation__actions">
                 <button
@@ -1218,9 +1468,13 @@ function CharacterDetail({
                   type="button"
                   onClick={() => {
                     gameAudio.playUiSelect();
-                    const unlocked = onUnlock(characterId, CHARACTER_UNLOCK_COST);
+                    const unlocked = onUnlock(characterId);
                     setShowUnlockConfirmation(false);
-                    setPurchaseMessage(unlocked ? `${character.name} fue desbloqueado.` : "No tienes suficiente ORO.");
+                    setPurchaseMessage(
+                      unlocked
+                        ? `${character.name} fue desbloqueado.`
+                        : "No cumples el nivel o el ORO requerido.",
+                    );
                   }}
                 >
                   Confirmar desbloqueo

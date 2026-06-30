@@ -12,7 +12,8 @@ export type PlayerState =
 
 export type SkillId = "stronger-strike" | "quick-steps";
 
-export type CharacterId = "ruder" | "amy" | "dunel" | "sarix";
+export type CharacterId = "ruder" | "amy" | "dunel" | "sarix" | "faust";
+export type WeaponId = "sword-1";
 export type ProfileIconId = "icon-1" | "icon-2" | "icon-3" | "icon-4" | "icon-5" | "icon-6" | "icon-7" | "icon-8" | "icon-9";
 
 export type InventoryCategoryId = "plansKeys" | "toolsWeapons" | "potions";
@@ -136,6 +137,21 @@ export interface CharacterDefinition {
   animationPrefix: string;
   portraitUrl: string;
   description: string;
+  weaponId?: WeaponId;
+  weaponAttachmentFrames?: WeaponAttachmentFrame[];
+}
+
+export interface WeaponDefinition {
+  id: WeaponId;
+  textureKey: string;
+  scale: number;
+  origin: { x: number; y: number };
+}
+
+export interface WeaponAttachmentFrame {
+  x: number;
+  y: number;
+  angle: number;
 }
 
 export interface EnemyDefinition {

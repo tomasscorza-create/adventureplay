@@ -71,10 +71,13 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
 - Las migraciones fuente para progreso remoto estan en `supabase/migrations/`: la primera crea `game_saves` y la segunda endurece su relacion con `auth.users`, permisos y funcion de timestamp.
 - El proyecto alojado actual es `adventureplay` (`hlfyhbvzenuepojifetb`). Las migraciones `20260626000000` y `20260630000000` estan aplicadas en remoto desde el 2026-06-30; todo cambio posterior debe agregarse como una migracion nueva.
-- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 15`; incluye nombre visible, icono de perfil y estadisticas acumuladas del jugador, heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO.
+- El despliegue publico actual esta en `https://adventureplay.netlify.app/` y se construye desde `main` del repositorio `tomasscorza-create/adventureplay`. Netlify requiere `npm run build`, directorio publicado `dist`, `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` con alcance de build.
+- Supabase Auth debe conservar `https://adventureplay.netlify.app` como `Site URL` y como Redirect URL exacta para confirmaciones de email, recuperacion y retornos de autenticacion. No asumir que este ajuste del Dashboard se versiona en `supabase/config.toml`, porque ese archivo sigue describiendo el stack local.
+- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 16`; incluye nombre visible, icono de perfil y estadisticas acumuladas del jugador, cinco heroes, heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - Bosque encantado es la segunda region seleccionable y tiene LV1-LV10 implementados y encadenados desde `enchantedGrove1` hasta `enchantedGrove10`. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; reutiliza las IA/estadisticas de M0, M1, M2 y M3 con apariencias exclusivas del escenario. La variante tematica de M3 se identifica como E2M3 y domina la progresion avanzada.
+- La web es instalable como PWA movil bajo el nombre `Adventure Play`: usa manifiesto landscape/fullscreen, iconos Android/iOS y service worker generado en produccion. Las actualizaciones esperan confirmacion del jugador para no recargar una partida activa.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
 
 ## Estructura principal
@@ -83,6 +86,9 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/ui/screens/MainMenuScreen.tsx`: flujo React de menu principal, seleccion de personaje, modos, mapa de regiones y seleccion de niveles.
 - `src/main.tsx`: entrada React.
 - `src/styles.css`: layout global, HUD, overlays, controles tactiles, responsive y orientacion.
+- `vite.config.ts`: manifiesto PWA, estrategia de actualizacion y politica de cache; las solicitudes a Supabase deben seguir usando red y no cachearse en el service worker.
+- `public/favicon.svg`: fuente editable de los iconos PWA; ejecutar `npm run pwa:assets` despues de modificarla.
+- `src/ui/components/PwaUpdatePrompt.tsx`: aviso no intrusivo que permite aplicar o posponer una nueva version.
 - `src/game/main.ts`: crea la instancia Phaser.
 - `src/game/config/gameConfig.ts`: configuracion Phaser, escenas, escala y fisicas Arcade.
 - `src/game/events/EventBus.ts`: Event Bus tipado entre React y Phaser.
@@ -98,12 +104,15 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/data/achievements.ts`: definiciones, textos, objetivos y lectura de progreso de los logros.
 - `src/game/systems/achievements/AchievementSystem.ts`: registra derrotas y finalizaciones validas, y desbloquea logros sin depender de React.
 - `src/ui/components/AchievementUnlockToast.tsx`: aviso React en cola para logros desbloqueados durante gameplay; recibe eventos tipados desde Phaser y no contiene logica de concesion.
-- `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; los PNG fuente permanecen en `diseños png/personajes/`.
-- `src/assets/menu/`: fondo y controles WebP optimizados del menu principal; los PNG fuente permanecen en `diseños png/menu/` y no deben modificarse.
-- `src/assets/enemies/m3-run-1.png` a `m3-run-5.png`: cinco cuadros transparentes y alineados de carrera lateral de M3; las fuentes permanecen en `diseños png/mounstros/`.
-- `src/assets/scenery/enchanted-forest/`: fondo y cuatro arboles por capas de Bosque encantado; las fuentes permanecen en `diseños png/escenarios/escenario 2/`.
-- `src/assets/enemies/enchanted-m2/`: diez poses fuente del M2 de Bosque encantado; los originales permanecen en `diseños png/mounstros/del escenario 2/M2/` y se normalizan a cuadros 320x320 durante `PreloadScene`.
-- `src/assets/enemies/enchanted-m3/`: siete poses de E2M3 para reposo, carrera, ataque y derrota; los originales permanecen en `diseños png/mounstros/del escenario 2/M3/`.
+- `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; las fuentes maestras pueden archivarse fuera del repositorio.
+- `src/assets/characters/faust.png`: hoja normalizada 96x80 de Faust con 45 cuadros para reposo, carrera, salto, caida, ataque, dano y muerte. Incluye intermedios deterministas para suavizar el movimiento sin cambiar su identidad y se regenera junto con `faust-animation.json` mediante `scripts/prepare-faust-assets.py`; si las fuentes ya estan fuera del repo, pasar su carpeta como primer argumento.
+- `src/assets/weapons/sword-1.png`: arma separada de Faust. `weapons.ts` define su aspecto y los anclajes por cuadro para que el cuerpo no dependa de una espada concreta.
+- `src/assets/menu/`: fondo y controles WebP optimizados del menu principal; las fuentes maestras pueden archivarse fuera del repositorio.
+- `src/assets/ui/profile-icons/`: nueve iconos de perfil autocontenidos; `profileIcons.ts` no depende de la carpeta de diseños.
+- `src/assets/enemies/m3-run-1.png` a `m3-run-5.png`: cinco cuadros transparentes y alineados de carrera lateral de M3; las fuentes maestras pueden archivarse fuera del repositorio.
+- `src/assets/scenery/enchanted-forest/`: fondo y cuatro arboles por capas de Bosque encantado; las fuentes maestras pueden archivarse fuera del repositorio.
+- `src/assets/enemies/enchanted-m2/`: diez poses fuente del M2 de Bosque encantado, normalizadas a cuadros 320x320 durante `PreloadScene`; los originales pueden archivarse fuera del repositorio.
+- `src/assets/enemies/enchanted-m3/`: siete poses de E2M3 para reposo, carrera, ataque y derrota; los originales pueden archivarse fuera del repositorio.
 - `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3 con estados de alerta, persecucion, salto, ataque, recuperacion, dano y derrota; tiene dos puntos de vida, barra propia y navegacion preventiva de bordes/plataformas.
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
@@ -130,6 +139,7 @@ La demo actual permite:
 
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
+- En landscape movil, el titulo del menu principal queda centrado arriba y los cuatro accesos se distribuyen en una grilla de dos columnas por dos filas.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
 - Abrir desde la esquina superior izquierda una pagina completa de perfil con estetica derivada de la sala de Logros y paginas intercambiables `Editar perfil` y `Estadisticas`. Editar perfil permite cambiar un nombre persistente de 2 a 20 caracteres, consultar el correo y elegir uno de nueve iconos sin nombres visibles. Estadisticas combina progreso historico existente con tiempo activo, acciones, APM promedio, intentos, metas y derrotas acumulados al cerrar cada recorrido.
 - Desbloquear veinte logros: ocho faciles y doce medios, distribuidos en `Aventura`, `Combate` y `Descubrimiento`.
@@ -142,15 +152,16 @@ La demo actual permite:
 - El aviso de desbloqueo, la tarjeta de la sala y el resumen de nivel muestran la recompensa. Durante gameplay, el HUD anima `+ ORO` o `+ XP` junto al contador correspondiente y los controles de poder animan las cargas recibidas.
 - Crear cuenta o entrar con email/password antes de jugar.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
-- En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Escoge tu personaje principal`; solo el elegido queda desbloqueado.
+- En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Escoge tu personaje principal`; solo Dunel, Ruder y Sarix pueden elegirse inicialmente, Amy y Faust aparecen bloqueados, y solo el elegido queda desbloqueado.
 - Tras esa primera eleccion, entrar directamente a la seleccion de modos y destacar `Explorar` una sola vez. Las cuentas con heroe principal ya definido deben seguir iniciando en el menu principal.
-- Desbloquear los otros heroes por 700 ORO cada uno desde su ficha `Ver`, con confirmacion previa.
+- Desbloquear heroes restantes desde su ficha `Ver`, con confirmacion previa y una progresion global: #1 requiere LV4/700 ORO, #2 LV8/7000, #3 LV12/70000 y desde #4 se conserva LV12 mientras el precio se duplica a 140000, 280000 y sucesivos.
 - Abrir inventario del jugador desde el boton Inventario del menu principal.
 - Abrir opciones desde la tuerca junto a Menu principal.
 - Encender o apagar sonido y musica por separado desde Opciones.
 - Salir de la cuenta desde la seccion Cuenta dentro de Opciones; el acceso ya no vive junto a la tuerca del menu principal.
 - Reiniciar todo el progreso desde Opciones con confirmacion destructiva, conservando la cuenta de autenticacion pero restaurando el save inicial.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
+- En el explorador, el mapa de regiones izquierdo y la lista de niveles derecha tienen cabeceras fijas y scroll independiente; el contenedor general no debe capturar el desplazamiento de ambos paneles.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1 a 10 de Frontera Verde.
 - Seleccionar Bosque encantado como segunda region y jugar sus niveles 1 a 10; solo `Umbral encantado` comienza desbloqueado y los siguientes se abren en cadena.
@@ -209,6 +220,7 @@ La demo actual permite:
 - Ver al completar cada nivel un resumen animado con monstruos derrotados, tiempo activo del recorrido, ORO recogido, APM del intento, logros desbloqueados, nivel superado y siguiente destino. La partida solo avanza al pulsar `Proximo`; el ultimo nivel usa `Finalizar`.
 - Ver victoria.
 - Ver game over.
+- Antes de abrir Game Over, reproducir la animacion de derrota completa durante 620 ms con la fisica del jugador deshabilitada; `Player.markDefeated()` cubre tambien derrotas por tiempo o presion que no pasan por `takeDamage()`.
 - Pausar.
 - Guardar progreso basico en `public.game_saves` para el usuario autenticado.
 - Guardar el personaje seleccionado en `public.game_saves`.
@@ -219,17 +231,21 @@ La demo actual permite:
 ## Personajes jugables
 
 - Personaje inicial y fallback: Ruder.
-- Personajes disponibles actuales: Ruder, Amy, Dunel y Sarix.
+- Personajes disponibles actuales: Ruder, Amy, Dunel, Sarix y Faust.
 - La seleccion se guarda como `selectedCharacterId` dentro de `SaveData`.
 - `primaryCharacterId` registra la eleccion inicial y `unlockedCharacterIds` controla que heroes pueden seleccionarse.
 - Cada personaje conserva cargas independientes en `SaveData.characterPowerCharges`; cambiar de heroe actualiza inmediatamente los contadores sin compartir consumos.
-- La pantalla Elegir heroe usa retratos WebP optimizados y solo muestra foto, nombre, estado de seleccion y boton `Ver`; hacer clic en la card selecciona al personaje.
+- La pantalla Elegir heroe usa un carrusel circular de los cinco retratos WebP: los heroes desbloqueados siempre se agrupan primero y los bloqueados quedan despues; en una cuenta nueva el orden inicial comienza Dunel, Ruder, Sarix, Amy y Faust. Solo el heroe central aparece en primer plano; los anteriores/siguientes quedan apilados atras con escala, profundidad y desenfoque. Se navega con flechas, teclado, rueda, indicadores o deslizamiento tactil; solo la card central selecciona al personaje y conserva el boton `Ver`.
+- Las cards bloqueadas oscurecen, desaturan y difuminan con fuerza el retrato, y muestran un candado grande centrado ademas de la etiqueta compacta con nivel/precio. No usar solo color o una cifra pequena para comunicar el bloqueo.
 - `Ver` abre una ficha interna con las dos cantidades de poderes y el acceso a la tienda de ORO.
 - Dentro de la tienda, seleccionar un paquete solo prepara la operacion; el dialogo muestra heroe, cantidad y costo antes de permitir confirmar o cancelar.
-- Durante la eleccion inicial no hay salida al menu ni botones `Ver`: las cuatro cards sirven para escoger el heroe principal.
-- Tras elegirlo, las otras cards quedan bloqueadas, conservan `Ver` y muestran el costo de desbloqueo de 700 ORO.
+- Durante la eleccion inicial no hay salida al menu ni botones `Ver`: cualquiera de los cinco heroes puede llevarse al centro del carrusel y elegirse como principal.
+- Tras elegirlo, los otros cuatro heroes quedan bloqueados, conservan `Ver` y comparten el requisito del proximo desbloqueo global; comprar uno no libera ni abarata los restantes.
+- `src/game/data/characterUnlocks.ts` es la unica fuente de heroes iniciales, nivel requerido y costo creciente. `App.tsx` vuelve a calcular el requisito al confirmar para que la UI no pueda enviar un precio obsoleto o menor.
 - `src/game/data/characters.ts` define nombre, textura y prefijo de animacion por personaje.
-- `PreloadScene` normaliza los spritesheets de Amy, Dunel y Sarix a la misma grilla jugable 96x80 que Ruder.
+- `PreloadScene` normaliza los spritesheets de Amy, Dunel y Sarix a la misma grilla jugable 96x80 que Ruder. Faust ya ingresa como hoja 96x80 preparada desde sus fuentes independientes.
+- Faust usa `Espada 1` como `EquippedWeapon`: el arma se renderiza separada del cuerpo, sigue la mano derecha mediante los 45 anclajes de `faust-animation.json`, interpola posicion y giro por frame del motor, refleja ambos al cambiar de direccion y conserva un angulo estable durante el disparo.
+- Las futuras espadas deben agregarse en `src/game/data/weapons.ts` y cargarse en `PreloadScene`; no volver a hornearlas dentro de los cuadros de Faust.
 - `Player` recibe un `CharacterDefinition`; no debe volver a depender de una textura fija como `"player"`.
 
 ## Inventario
@@ -267,11 +283,14 @@ Desktop:
 Mobile:
 
 - Controles tactiles en `MobileControls`.
-- Movimiento: botones `<` y `>`.
-- Acciones: `Q+` regenerar, `E*` poder letal, `^` salto, `J` ataque, `K` disparo.
-- Pausa: `||` arriba a la derecha.
+- Movimiento: dos controles translucidos con chevrones SVG a la izquierda.
+- Acciones normales: salto, espada y disparo usan iconos SVG en una fila compacta a la derecha.
+- Acciones especiales: regeneracion y poder letal conservan icono, tecla y contador en una segunda fila mas baja y separada de las acciones normales.
+- Pausa: icono SVG arriba a la derecha.
 - En vertical aparece aviso de orientacion y se ocultan controles.
 - En horizontal movil aparece HUD compacto arriba izquierda y controles abajo.
+- Durante gameplay React monta un solo conjunto de controles: `MobileControls` para puntero tactil o viewport compacto, y `AbilityControls` para escritorio amplio con puntero fino. No volver a montar ambos y depender solo de CSS para ocultar uno.
+- `MOBILE_GAMEPLAY_QUERY` en `shared/constants/game.ts` es la fuente comun que decide controles y zoom; no duplicar la media query entre React y Phaser.
 
 ## Sistema de input
 
@@ -282,6 +301,7 @@ El input esta unificado. No volver a leer teclado directamente desde `MovementSy
 - `src/game/systems/input/GameplayInputSystem.ts`: combina teclado + tactil en un frame de input.
 - `src/game/systems/movement/MovementSystem.ts`: consume `GameplayInputFrame`.
 - `MovementSystem` conserva cada pulsacion de salto durante 120 ms y permite 100 ms de gracia al abandonar una superficie. Mantener ambas tolerancias para que teclado y tactil no pierdan saltos cerca del aterrizaje o del borde; el sonido se dispara solo cuando el salto se ejecuta realmente.
+- El apoyo no debe exigir `velocity.y >= 0`: las plataformas flotantes ascendentes pueden transmitir una velocidad negativa moderada mientras el jugador sigue sobre ellas. `MovementSystem` solo considera ascenso propio cuando supera el 45% del impulso de salto, manteniendo el salto disponible sobre piezas estaticas y moviles de ambas regiones sin habilitar dobles saltos.
 - `src/game/scenes/LevelScene.ts`: lee input una vez por frame y lo pasa a movimiento/acciones.
 - `src/shared/audio/GameAudio.ts`: capa compartida de audio procedural para musica, UI y feedback de gameplay.
 - `GameAudio` guarda preferencias locales de `musicEnabled` y `soundEnabled` para controlar musica y sonidos por separado.
@@ -297,13 +317,21 @@ El proyecto todavia no esta empaquetado con Capacitor. Esta preparado a nivel we
 
 Ya existe:
 
+- PWA instalable en Android y iOS con nombre, colores e iconos propios.
+- Modo `fullscreen`, orientacion `landscape`, `viewport-fit=cover` y metadatos para la pantalla de inicio.
+- Service worker de produccion que precarga el cliente del juego y limpia caches antiguos.
+- Actualizacion manual mediante aviso React; no cambiar a recarga automatica mientras pueda interrumpir una partida.
+- Boton de instalacion propio en telefonos: solo se muestra fuera del modo instalado y fuera del gameplay activo; usa `beforeinstallprompt` cuando esta disponible y ofrece instrucciones manuales en iOS u otros navegadores.
 - Canvas responsive con Phaser `Scale.FIT`.
 - Bloqueo de scroll/overscroll en CSS.
 - `touch-action: none` para evitar gestos molestos durante la partida.
 - Controles tactiles.
 - Aviso en vertical.
 - Layout landscape movil.
+- Camara de gameplay con zoom `1.15` en el mismo perfil mobile/compacto que activa `MobileControls`; escritorio conserva `1.0`. Los calculos de seguimiento usan el ancho mundial visible despues del zoom para mantener los limites laterales correctos.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
+
+La PWA mejora instalacion, carga repetida y disponibilidad del cliente web, pero no convierte el guardado remoto en offline: autenticacion y progreso siguen necesitando Supabase. No agregar cache para sus endpoints ni restaurar progreso local como sustituto.
 
 Pendiente antes de Play Store:
 
@@ -315,6 +343,7 @@ Pendiente antes de Play Store:
 - Generar `.aab`.
 - Firmar build de produccion.
 - Probar en dispositivo fisico Android.
+- Completar identidad/verificacion del desarrollador, politica de privacidad, Data safety, clasificacion de contenido y demas declaraciones externas de Play Console. Consultar `docs/android-pwa-readiness.md`; no afirmar certificacion desde el codigo web.
 
 ## Datos editables
 
@@ -375,6 +404,7 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 - La identidad de la region vive en assets, parallax, terreno, decoracion y skins; tiempo, progreso, camara, presion roja, checkpoint, meta, guardado y colisiones se reutilizan.
 - Los niveles permanecen en `levels.ts`. No crear arrays de plataformas, enemigos o peligros dentro de `LevelScene`.
 - El mapa y sus listas de niveles viven en React, dentro de `MainMenuScreen.tsx`. Cada region declara sus propios `LevelSlot`.
+- El mapa de Explorar usa `src/assets/menu/explore-map/complete.webp` como base y siete recortes regionales alineados. Los nombres no se escriben sobre la ilustracion: hover, foco o clic resaltan el recorte y el titulo correcto aparece en el panel derecho. Las fuentes maestras pueden archivarse fuera del repositorio.
 - El primer nivel de cada region se agrega a `levelSequences` en `SaveDefaults.ts`. La normalizacion debe desbloquearlo tanto en saves nuevos como existentes.
 - Los enemigos reutilizados aceptan una textura por tema. `BasicEnemy` y `M1Enemy` conservan IA, stats, dano y recompensas; solo cambia su `textureKey`.
 - Si un enemigo tematico tiene varias poses, la IA sigue siendo la fuente del estado y la animacion solo lo representa. No crear temporizadores visuales paralelos que puedan desincronizar ataque, recuperacion o muerte.
@@ -385,7 +415,7 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 
 1. Revisar `git status --short` y no restaurar, mover ni borrar assets fuente que el usuario haya reorganizado.
 2. Definir un ID estable de tema y region. Para Bosque encantado se usa `theme: "enchanted-forest"` y el primer nivel es `enchantedGrove1`.
-3. Inspeccionar dimensiones, transparencia y funcion de los assets antes de copiarlos. Mantener las fuentes en `diseños png/escenarios/<escenario>/` y copiar solo los archivos usados a `src/assets/scenery/<tema>/`.
+3. Inspeccionar dimensiones, transparencia y funcion de los assets antes de copiarlos. Mantener las fuentes en un archivo maestro externo y copiar solo los archivos usados a `src/assets/scenery/<tema>/`.
 4. Cargar todos los assets de gameplay en `PreloadScene` con claves agrupadas por tema. No cargar rutas finales directamente desde `LevelScene`.
 5. Crear primero un nivel minimo recorrible en `levels.ts`: `worldWidth`, tiempo, auto-scroll, inicio, suelo, plataformas, pozos, ORO, caja, checkpoint y meta. Usar IDs unicos para caja, checkpoint y peligros.
 6. Agregar la region y sus slots en `MainMenuScreen.tsx`. Diferenciar el estado activo con clases CSS tematicas colocadas despues de las reglas generales que puedan sobrescribirlas.
@@ -403,7 +433,7 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 - Disponibilidad: desbloqueado por normalizacion en saves nuevos y existentes, independiente del avance de Frontera Verde.
 - Base compartida: 5200 px, seis pozos, plataformas bajas/elevadas, ORO, caja, checkpoint y meta; LV1 comienza con 72 segundos y auto-scroll 52.
 - Direccion visual: fondo luminoso verde azulado, cuatro arboles transparentes en capas de parallax, luciernagas, piedra humeda verde azulada, musgo y raices.
-- Assets de runtime: `src/assets/scenery/enchanted-forest/`; fuentes: `diseños png/escenarios/escenario 2/`.
+- Assets de runtime: `src/assets/scenery/enchanted-forest/`; las fuentes maestras se conservan en el archivo externo de diseño.
 - Enemigos actuales: M0 inmoviles, M1 perseguidores, M2 aereos y E2M3 terrestre. M0 usa skin de musgo/raices; M1 usa skin de corteza/runa; M2 y E2M3 conservan sus IA originales con animaciones tematicas sincronizadas por estado.
 - Pipeline de M2: los PNG se cargan como fuentes, se recortan para retirar guias blancas, se centran en cuadros transparentes 320x320 y forman las animaciones `enchanted-m2-flight`, `enchanted-m2-windup`, `enchanted-m2-dive`, `enchanted-m2-recover` y `enchanted-m2-defeat`.
 - Pipeline de E2M3: los siete PNG 272x240 se cargan sin recortar para conservar su alineacion y forman `enchanted-m3-idle`, `enchanted-m3-run`, `enchanted-m3-alert`, `enchanted-m3-attack-windup`, `enchanted-m3-attack`, `enchanted-m3-hurt` y `enchanted-m3-defeat`. `M3Enemy` selecciona esta variante visual sin duplicar la IA.
@@ -518,10 +548,10 @@ Reglas obligatorias de esta curva:
 - La seleccion de personaje vive en `SaveData.selectedCharacterId`.
 - Las cargas de poderes viven en `save.characterPowerCharges[save.selectedCharacterId]`; cada uso valido debe guardarse inmediatamente con `GameSaveStore`.
 - Las compras descuentan `save.player.coins`, acreditan solo al `characterId` de la ficha abierta y persisten ambos cambios juntos mediante `GameSaveStore`.
-- Desbloquear un heroe descuenta 700 de `save.player.coins` y agrega su ID a `save.unlockedCharacterIds`; no seleccionarlo automaticamente.
+- Desbloquear un heroe exige y descuenta el requisito actual de `characterUnlocks.ts`, agrega su ID a `save.unlockedCharacterIds` y no lo selecciona automaticamente. El numero de compras pagadas se deriva de `unlockedCharacterIds.length - 1`, por lo que no requiere un contador duplicado en el save.
 - Nunca ejecutar una compra desde el primer clic del paquete ni desde eventos de la card: exigir el boton explicito `Confirmar compra`.
 - La normalizacion de schema 3 a 4 asigna las cargas globales antiguas al personaje que estaba seleccionado y entrega los defaults 3/25 al resto.
-- La normalizacion de schema 4 a 5 conserva los cuatro heroes desbloqueados en cuentas existentes; solo saves nuevos o reiniciados empiezan sin `primaryCharacterId` y con `unlockedCharacterIds` vacio.
+- La normalizacion de schema 4 a 5 conserva los heroes entonces existentes desbloqueados en cuentas antiguas; los saves actuales mantienen solo sus heroes ya desbloqueados y reciben cargas por defecto para Faust sin desbloquearlo automaticamente.
 - Regenerar con la vida completa o intentar usar un poder sin cargas no debe consumir inventario.
 - No escribir directamente en `localStorage` para progreso desde escenas, entidades o componentes. `GameAudio` si usa `localStorage` solo para preferencias locales de sonido/musica.
 - No llamar Supabase directamente desde escenas o entidades; usar `GameSaveStore` para conservar el flujo sincronico de Phaser.
@@ -542,11 +572,13 @@ Reglas obligatorias de esta curva:
 - El juego debe priorizar landscape en Android.
 - En vertical debe mantenerse el aviso de orientacion salvo que el usuario pida jugabilidad vertical real.
 - Los controles tactiles deben ocupar bordes inferiores y no tapar el centro del gameplay.
+- Separar visualmente movimiento, acciones normales y poderes; usar superficies translucidas e iconos en lugar de bloques opacos con letras como contenido principal.
 - Pausa debe quedar arriba derecha y lejos del HUD.
 - HUD movil debe ser compacto y legible.
 - Mantener safe areas con `env(safe-area-inset-*)`.
 - No usar hover como unica senal de interaccion.
 - No depender de `pointer: coarse` solamente; hay pruebas de navegador con pointer fino y viewport chico.
+- Las superficies de pantalla completa deben conservar fallback `vh`/`vw` y preferir `dvh`/`dvw` cuando esten disponibles para respetar las barras dinamicas del navegador movil.
 - Probar al menos: desktop 1280x720, portrait 390x844, landscape 844x390.
 
 ## Verificacion obligatoria antes de entregar cambios
@@ -585,7 +617,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - Llevar a M3 hacia un pozo y confirmar que salta solo cuando existe una plataforma alcanzable, sin caminar directamente al vacio.
 - Recoger ORO.
 - Abrir Personaje, entrar con `Ver`, elegir un paquete, cancelar sin cambios y confirmar otra compra comprobando ORO y cargas.
-- Validar con un save nuevo que la eleccion principal sea obligatoria; luego comprobar bloqueo, costo 700, cancelacion y desbloqueo persistente de otro heroe.
+- Validar con un save nuevo que solo Dunel, Ruder y Sarix puedan elegirse inicialmente; luego comprobar bloqueo de los otros cuatro heroes, requisitos LV4/700, LV8/7000, LV12/70000, duplicacion posterior, cancelacion y desbloqueo persistente.
 - Abrir Opciones y comprobar que `Salir de la cuenta` y `Reiniciar juego` estan dentro de Cuenta; cancelar el reinicio sin alterar datos.
 - Completar nivel.
 
@@ -611,6 +643,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 7. Probar manualmente Bosque encantado LV1-LV10 completos y ajustar saltos, lectura de piedra, densidad de arboles, M2, E2M3 y velocidad de presion.
 8. Agregar menu de configuracion y remapeo basico.
 9. Agregar Capacitor cuando la experiencia mobile web este comoda.
+10. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
 
 ## Advertencias actuales
 
@@ -678,3 +711,17 @@ Verificacion de logros y progresion RPG del 2026-06-29: existen 20 logros, con o
 Correccion de salto intermitente del 2026-06-29: `MovementSystem` conserva la pulsacion durante 120 ms para aceptar entradas inmediatamente anteriores al aterrizaje y mantiene 100 ms de gracia al abandonar una superficie. El audio se emite solo cuando el salto se ejecuta y el estado temporal se reinicia al crear cada nivel. `npm run build` y `git diff --check` pasan; la comprobacion tactil en dispositivo queda a cargo del usuario.
 
 Migracion a Supabase alojado del 2026-06-30: la migracion de endurecimiento vincula `game_saves.user_id` con `auth.users`, aplica borrado en cascada y limita los permisos de tabla al rol autenticado junto con RLS. El registro admite proyectos con o sin confirmacion de email, las credenciales de prueba ya no aparecen precargadas y `supabase/README.md` contiene el procedimiento de enlace, despliegue y verificacion. El repo quedo vinculado a `adventureplay` (`hlfyhbvzenuepojifetb`) y ambas migraciones se aplicaron en remoto. `supabase migration list`, `supabase db lint --linked`, la presencia remota de `public.game_saves` y el rechazo `401` para el rol anonimo confirman el despliegue; `supabase db reset`, `supabase db lint --local`, las tres auditorias, `npm run build` y `git diff --check` tambien pasan.
+
+Despliegue web verificado el 2026-06-30: `https://adventureplay.netlify.app/` responde HTTP 200 y entrega el bundle `assets/index-CJiAaQsA.js`. La inspeccion HTTP del artefacto confirma que contiene `hlfyhbvzenuepojifetb.supabase.co` y no contiene `127.0.0.1:55421`; por tanto, el build publico apunta a Supabase alojado y no al Docker local. Esta comprobacion no sustituye la prueba visual ni un alta/login real, que siguen a cargo del usuario salvo peticion explicita.
+
+Primera version PWA del 2026-06-30: `vite-plugin-pwa` genera manifiesto `Adventure Play`, service worker y 82 entradas precacheadas (aprox. 8.9 MiB). La instalacion solicita landscape/fullscreen, incluye iconos 64/192/512, maskable y Apple Touch, mantiene Supabase en `NetworkOnly` y ofrece actualizacion manual mediante `PwaUpdatePrompt`. Las tres auditorias y `npm run build` pasan; la instalacion, apertura standalone y actualizacion en movil real quedan a cargo del usuario.
+
+Revision Android/PWA del 2026-06-30: el manifiesto declara fallbacks de presentacion modernos y `PwaInstallPrompt` ofrece instalacion rapida solo en telefonos no instalados, con dialogo nativo Chromium y ayuda manual cuando el navegador no expone esa API. `docs/android-pwa-readiness.md` separa la PWA web de un futuro APK/AAB y registra los requisitos externos vigentes de API objetivo, identidad, firma, privacidad y Data safety que no pueden certificarse desde el repositorio.
+
+Mapa ilustrado de Explorar del 2026-06-30: el grafico CSS fue sustituido por el mapa completo y siete recortes regionales WebP alineados, derivados sin modificar las fuentes maestras. Hover, foco y clic resaltan el recorte; el panel derecho muestra `Frontera Verde`, `Bosque Encantado`, `La Jungla Moderna`, `Mina del Tesoro`, `Montañas de Hielo`, `Pirámides Misteriosas` o `Volcán Activo`, y las cinco regiones futuras permanecen seleccionables como `Próximamente`. No colocar nombres sobre la ilustracion. Las tres auditorias, `npm run build` y `git diff --check` pasan; la comprobacion visual final queda a cargo del usuario.
+
+Desacople de fuentes de diseño del 2026-06-30: los nueve iconos de perfil usados en runtime viven en `src/assets/ui/profile-icons/`, no quedan imports desde `diseños png` y esa carpeta esta ignorada para poder archivarla fuera del repo. El build y el deploy usan exclusivamente assets bajo `src`/`public`; `prepare-faust-assets.py` conserva compatibilidad con una carpeta fuente externa recibida como primer argumento.
+
+Correccion UI movil del 2026-06-30: el menu principal landscape coloca el titulo arriba y los cuatro accesos en grilla 2x2. `App.tsx` selecciona de forma excluyente controles tactiles o de escritorio mediante media query, eliminando el doble render de poderes que ocurria cuando el override desktop `min-width: 721px` reactivaba `AbilityControls` en un telefono landscape. Los contenedores fullscreen incorporan `dvh`/`dvw` con fallback y el monumento del menu descuenta safe areas. La prueba de navegador confirma que Auth cabe sin scroll ni recorte en 844x390 y 390x844, con 0 errores de consola; menu y gameplay quedaron detras de autenticacion y requieren comprobacion visual final del usuario.
+
+Scroll independiente del explorador del 2026-06-30: `MainMenuScreen` divide el mapa y los niveles en dos paneles con cabeceras fijas, regiones de scroll accesibles por teclado y tactil, overscroll contenido y scrollbar tematico. `menu-chamber--map` conserva el encabezado global fuera del desplazamiento y limita su alto con `dvh`/safe areas; el mapa mantiene un lienzo minimo desplazable y la lista derecha desplaza solo sus niveles. Las tres auditorias, `npm run build` y `git diff --check` deben pasar; la comprobacion visual final queda a cargo del usuario.

@@ -63,6 +63,7 @@ export class LevelScene extends Phaser.Scene {
   private unbindRestart?: () => void;
   private unbindContinue?: () => void;
   private unbindMenu?: () => void;
+  private unbindCameraZoom?: () => void;
   private remainingTimeMs = 0;
   private lastHudSecond = -1;
   private levelFinished = false;
@@ -121,6 +122,7 @@ export class LevelScene extends Phaser.Scene {
     this.inputSystem = new GameplayInputSystem(this);
     this.createWorld();
     this.createPlayer();
+    this.unbindCameraZoom = this.cameraSystem.bindResponsiveZoom(this);
     if (this.activeCheckpoint) {
       this.resetPressureForSafePoint(this.activeCheckpoint.x);
     }
@@ -431,6 +433,7 @@ export class LevelScene extends Phaser.Scene {
       this.unbindRestart?.();
       this.unbindContinue?.();
       this.unbindMenu?.();
+      this.unbindCameraZoom?.();
       touchInputStore.reset();
       this.scene.stop("UIScene");
     });
@@ -1346,7 +1349,8 @@ export class LevelScene extends Phaser.Scene {
 
   private updateCameraPressure(delta: number): void {
     const camera = this.cameras.main;
-    const maxScrollX = Math.max(0, this.level.worldWidth - GAME_WIDTH);
+    const visibleWorldWidth = this.cameraSystem.getVisibleWorldWidth(this);
+    const maxScrollX = Math.max(0, this.level.worldWidth - visibleWorldWidth);
     this.pressureScrollX = Math.max(this.pressureScrollX, camera.scrollX);
     this.pressureScrollX = Math.min(
       maxScrollX,
@@ -1354,7 +1358,7 @@ export class LevelScene extends Phaser.Scene {
     );
 
     const playerTargetX = Phaser.Math.Clamp(
-      this.player.x - GAME_WIDTH * 0.38,
+      this.player.x - visibleWorldWidth * 0.38,
       0,
       maxScrollX,
     );
@@ -1503,7 +1507,12 @@ export class LevelScene extends Phaser.Scene {
     this.save.checkpointId = undefined;
     this.recordRunStatistics("defeat");
     gameSaveStore.save(this.save);
-    this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+    this.player.markDefeated();
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    playerBody.enable = false;
+    this.time.delayedCall(620, () => {
+      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+    });
   }
 
   private completeLevel(): void {

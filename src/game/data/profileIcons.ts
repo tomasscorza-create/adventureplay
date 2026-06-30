@@ -1,12 +1,12 @@
-import icon1Url from "../../../diseños png/iconos/icono 1.png";
-import icon2Url from "../../../diseños png/iconos/icono 2.png";
-import icon3Url from "../../../diseños png/iconos/icono 3.png";
-import icon4Url from "../../../diseños png/iconos/icono 4.png";
-import icon5Url from "../../../diseños png/iconos/icono 5.png";
-import icon6Url from "../../../diseños png/iconos/icono 6.png";
-import icon7Url from "../../../diseños png/iconos/icono 7.png";
-import icon8Url from "../../../diseños png/iconos/icono 8.png";
-import icon9Url from "../../../diseños png/iconos/icono 9.png";
+import icon1Url from "../../assets/ui/profile-icons/profile-1.png";
+import icon2Url from "../../assets/ui/profile-icons/profile-2.png";
+import icon3Url from "../../assets/ui/profile-icons/profile-3.png";
+import icon4Url from "../../assets/ui/profile-icons/profile-4.png";
+import icon5Url from "../../assets/ui/profile-icons/profile-5.png";
+import icon6Url from "../../assets/ui/profile-icons/profile-6.png";
+import icon7Url from "../../assets/ui/profile-icons/profile-7.png";
+import icon8Url from "../../assets/ui/profile-icons/profile-8.png";
+import icon9Url from "../../assets/ui/profile-icons/profile-9.png";
 import type { ProfileIconId } from "../../shared/types/game";
 
 export interface ProfileIconDefinition {

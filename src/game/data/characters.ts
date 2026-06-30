@@ -1,8 +1,10 @@
 import type { CharacterDefinition, CharacterId } from "../../shared/types/game";
 import amyPortraitUrl from "../../assets/characters/portraits/amy.webp";
 import dunelPortraitUrl from "../../assets/characters/portraits/dunel.webp";
+import faustPortraitUrl from "../../assets/characters/portraits/faust.webp";
 import ruderPortraitUrl from "../../assets/characters/portraits/ruder.webp";
 import sarixPortraitUrl from "../../assets/characters/portraits/sarix.webp";
+import { faustWeaponAttachmentFrames } from "./faustAnimation";
 
 export const characterDefinitions: Record<CharacterId, CharacterDefinition> = {
   ruder: {
@@ -36,6 +38,16 @@ export const characterDefinitions: Record<CharacterId, CharacterDefinition> = {
     animationPrefix: "character-sarix",
     portraitUrl: sarixPortraitUrl,
     description: "Espadachin agresivo",
+  },
+  faust: {
+    id: "faust",
+    name: "Faust",
+    textureKey: "character-faust",
+    animationPrefix: "character-faust",
+    portraitUrl: faustPortraitUrl,
+    description: "Aventurero versatil",
+    weaponId: "sword-1",
+    weaponAttachmentFrames: faustWeaponAttachmentFrames,
   },
 };
 
