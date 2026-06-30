@@ -25,6 +25,7 @@ import { HUD } from "./ui/components/HUD";
 import { AbilityControls } from "./ui/components/AbilityControls";
 import { MobileControls } from "./ui/components/MobileControls";
 import { OrientationNotice } from "./ui/components/OrientationNotice";
+import { PwaUpdatePrompt } from "./ui/components/PwaUpdatePrompt";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
@@ -64,6 +65,24 @@ type ProgressNotification = {
 };
 
 const PROGRESS_NOTIFICATION_DURATION_MS = 4600;
+const MOBILE_GAMEPLAY_CONTROLS_QUERY = "(pointer: coarse), (max-width: 720px), (max-height: 520px)";
+
+function useMobileGameplayControls() {
+  const [usesMobileControls, setUsesMobileControls] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia(MOBILE_GAMEPLAY_CONTROLS_QUERY).matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_GAMEPLAY_CONTROLS_QUERY);
+    const syncControls = () => setUsesMobileControls(mediaQuery.matches);
+
+    syncControls();
+    mediaQuery.addEventListener("change", syncControls);
+    return () => mediaQuery.removeEventListener("change", syncControls);
+  }, []);
+
+  return usesMobileControls;
+}
 
 export function App() {
   const [screen, setScreen] = useState<GameScreen>("main-menu");
@@ -79,6 +98,7 @@ export function App() {
   const [authError, setAuthError] = useState<string>();
   const [authNotice, setAuthNotice] = useState<string>();
   const [playerEmail, setPlayerEmail] = useState<string>();
+  const usesMobileGameplayControls = useMobileGameplayControls();
 
   useEffect(() => {
     const game = createGame("game-root");
@@ -476,7 +496,7 @@ export function App() {
           rewardFeedbackKey={activeAchievement?.id}
         />
       )}
-      {!needsAuth && screen === "playing" && (
+      {!needsAuth && screen === "playing" && !usesMobileGameplayControls && (
         <AbilityControls
           hud={hud}
           achievementReward={activeAchievement?.reward}
@@ -485,7 +505,7 @@ export function App() {
         />
       )}
       {!needsAuth && (screen === "playing" || screen === "paused") && <OrientationNotice />}
-      {!needsAuth && screen === "playing" && (
+      {!needsAuth && screen === "playing" && usesMobileGameplayControls && (
         <MobileControls
           hud={hud}
           achievementReward={activeAchievement?.reward}
@@ -537,6 +557,7 @@ export function App() {
           onSignUp={signUp}
         />
       )}
+      <PwaUpdatePrompt />
     </main>
   );
 }

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Adventure Play</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d5436"/>
+      <stop offset="1" stop-color="#07130e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe89a"/>
+      <stop offset="1" stop-color="#bd7a1d"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M256 54 424 120v126c0 101-67 174-168 214C155 420 88 347 88 246V120Z" fill="#10281c" stroke="url(#gold)" stroke-width="22"/>
+  <path d="m256 112 36 78 86 10-63 60 17 85-76-42-76 42 17-85-63-60 86-10Z" fill="url(#gold)"/>
+  <path d="M171 375h170" stroke="#f8dda0" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="210" cy="375" r="10" fill="#10281c"/>
+  <circle cx="302" cy="375" r="10" fill="#10281c"/>
+</svg>

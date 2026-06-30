@@ -964,25 +964,34 @@ export function MainMenuScreen({
               <MenuHeading eyebrow="Explorar" title="Continente de Arvand" onBack={() => setView("modes")} backLabel="Modos" />
 
               <div className="explore-layout">
-                <div className="continent-map" aria-label="Mapa de regiones">
-                  <span className="continent-map__compass" aria-hidden="true" />
-                  {regions.map((region, index) => (
-                    <button
-                      className={`region-piece region-piece--${index + 1}${
-                        region.id === activeRegion.id ? " region-piece--active" : ""
-                      }${region.id === "enchanted-forest" ? " region-piece--enchanted" : ""}`}
-                      type="button"
-                      key={region.id}
-                      disabled={region.levels.length === 0}
-                      onClick={() => runMenuAction(() => setActiveRegionId(region.id))}
-                    >
-                      <span>{region.name}</span>
-                      <strong>{region.status}</strong>
-                    </button>
-                  ))}
-                </div>
+                <section className="map-column" aria-label="Regiones del continente">
+                  <div className="map-column__header">
+                    <span>Mapa de regiones</span>
+                    <strong>{regions.length} regiones</strong>
+                  </div>
 
-                <div
+                  <div className="map-scroll" role="region" aria-label="Desplazar mapa de regiones" tabIndex={0}>
+                    <div className="continent-map">
+                      <span className="continent-map__compass" aria-hidden="true" />
+                      {regions.map((region, index) => (
+                        <button
+                          className={`region-piece region-piece--${index + 1}${
+                            region.id === activeRegion.id ? " region-piece--active" : ""
+                          }${region.id === "enchanted-forest" ? " region-piece--enchanted" : ""}`}
+                          type="button"
+                          key={region.id}
+                          disabled={region.levels.length === 0}
+                          onClick={() => runMenuAction(() => setActiveRegionId(region.id))}
+                        >
+                          <span>{region.name}</span>
+                          <strong>{region.status}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section
                   className={`level-column level-column--${activeRegion.id}`}
                   aria-label={`Niveles de ${activeRegion.name}`}
                 >
@@ -991,7 +1000,12 @@ export function MainMenuScreen({
                     <strong>{activeLevelSlots.length} {activeLevelSlots.length === 1 ? "nivel" : "niveles"}</strong>
                   </div>
 
-                  <div className="level-list">
+                  <div
+                    className="level-list"
+                    role="region"
+                    aria-label={`Desplazar niveles de ${activeRegion.name}`}
+                    tabIndex={0}
+                  >
                     {activeLevelSlots.map((slot) => {
                       const levelExists = Boolean(slot.levelId && levelDefinitions[slot.levelId]);
                       const isUnlocked = Boolean(slot.levelId && save.unlockedLevels.includes(slot.levelId));
@@ -1025,7 +1039,7 @@ export function MainMenuScreen({
                       );
                     })}
                   </div>
-                </div>
+                </section>
               </div>
             </div>
           )}

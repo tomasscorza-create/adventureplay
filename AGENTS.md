@@ -71,10 +71,13 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Supabase local esta configurado con Docker y puertos `554xx`; usar `npm run supabase:start`, `npm run supabase:reset` y `npm run supabase:stop`.
 - Las migraciones fuente para progreso remoto estan en `supabase/migrations/`: la primera crea `game_saves` y la segunda endurece su relacion con `auth.users`, permisos y funcion de timestamp.
 - El proyecto alojado actual es `adventureplay` (`hlfyhbvzenuepojifetb`). Las migraciones `20260626000000` y `20260630000000` estan aplicadas en remoto desde el 2026-06-30; todo cambio posterior debe agregarse como una migracion nueva.
+- El despliegue publico actual esta en `https://adventureplay.netlify.app/` y se construye desde `main` del repositorio `tomasscorza-create/adventureplay`. Netlify requiere `npm run build`, directorio publicado `dist`, `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` con alcance de build.
+- Supabase Auth debe conservar `https://adventureplay.netlify.app` como `Site URL` y como Redirect URL exacta para confirmaciones de email, recuperacion y retornos de autenticacion. No asumir que este ajuste del Dashboard se versiona en `supabase/config.toml`, porque ese archivo sigue describiendo el stack local.
 - El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 15`; incluye nombre visible, icono de perfil y estadisticas acumuladas del jugador, heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - Bosque encantado es la segunda region seleccionable y tiene LV1-LV10 implementados y encadenados desde `enchantedGrove1` hasta `enchantedGrove10`. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; reutiliza las IA/estadisticas de M0, M1, M2 y M3 con apariencias exclusivas del escenario. La variante tematica de M3 se identifica como E2M3 y domina la progresion avanzada.
+- La web es instalable como PWA movil bajo el nombre `Adventure Play`: usa manifiesto landscape/fullscreen, iconos Android/iOS y service worker generado en produccion. Las actualizaciones esperan confirmacion del jugador para no recargar una partida activa.
 - El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
 
 ## Estructura principal
@@ -83,6 +86,9 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/ui/screens/MainMenuScreen.tsx`: flujo React de menu principal, seleccion de personaje, modos, mapa de regiones y seleccion de niveles.
 - `src/main.tsx`: entrada React.
 - `src/styles.css`: layout global, HUD, overlays, controles tactiles, responsive y orientacion.
+- `vite.config.ts`: manifiesto PWA, estrategia de actualizacion y politica de cache; las solicitudes a Supabase deben seguir usando red y no cachearse en el service worker.
+- `public/favicon.svg`: fuente editable de los iconos PWA; ejecutar `npm run pwa:assets` despues de modificarla.
+- `src/ui/components/PwaUpdatePrompt.tsx`: aviso no intrusivo que permite aplicar o posponer una nueva version.
 - `src/game/main.ts`: crea la instancia Phaser.
 - `src/game/config/gameConfig.ts`: configuracion Phaser, escenas, escala y fisicas Arcade.
 - `src/game/events/EventBus.ts`: Event Bus tipado entre React y Phaser.
@@ -130,6 +136,7 @@ La demo actual permite:
 
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
+- En landscape movil, el titulo del menu principal queda centrado arriba y los cuatro accesos se distribuyen en una grilla de dos columnas por dos filas.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
 - Abrir desde la esquina superior izquierda una pagina completa de perfil con estetica derivada de la sala de Logros y paginas intercambiables `Editar perfil` y `Estadisticas`. Editar perfil permite cambiar un nombre persistente de 2 a 20 caracteres, consultar el correo y elegir uno de nueve iconos sin nombres visibles. Estadisticas combina progreso historico existente con tiempo activo, acciones, APM promedio, intentos, metas y derrotas acumulados al cerrar cada recorrido.
 - Desbloquear veinte logros: ocho faciles y doce medios, distribuidos en `Aventura`, `Combate` y `Descubrimiento`.
@@ -151,6 +158,7 @@ La demo actual permite:
 - Salir de la cuenta desde la seccion Cuenta dentro de Opciones; el acceso ya no vive junto a la tuerca del menu principal.
 - Reiniciar todo el progreso desde Opciones con confirmacion destructiva, conservando la cuenta de autenticacion pero restaurando el save inicial.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
+- En el explorador, el mapa de regiones izquierdo y la lista de niveles derecha tienen cabeceras fijas y scroll independiente; el contenedor general no debe capturar el desplazamiento de ambos paneles.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1 a 10 de Frontera Verde.
 - Seleccionar Bosque encantado como segunda region y jugar sus niveles 1 a 10; solo `Umbral encantado` comienza desbloqueado y los siguientes se abren en cadena.
@@ -272,6 +280,7 @@ Mobile:
 - Pausa: `||` arriba a la derecha.
 - En vertical aparece aviso de orientacion y se ocultan controles.
 - En horizontal movil aparece HUD compacto arriba izquierda y controles abajo.
+- Durante gameplay React monta un solo conjunto de controles: `MobileControls` para puntero tactil o viewport compacto, y `AbilityControls` para escritorio amplio con puntero fino. No volver a montar ambos y depender solo de CSS para ocultar uno.
 
 ## Sistema de input
 
@@ -297,6 +306,10 @@ El proyecto todavia no esta empaquetado con Capacitor. Esta preparado a nivel we
 
 Ya existe:
 
+- PWA instalable en Android y iOS con nombre, colores e iconos propios.
+- Modo `fullscreen`, orientacion `landscape`, `viewport-fit=cover` y metadatos para la pantalla de inicio.
+- Service worker de produccion que precarga el cliente del juego y limpia caches antiguos.
+- Actualizacion manual mediante aviso React; no cambiar a recarga automatica mientras pueda interrumpir una partida.
 - Canvas responsive con Phaser `Scale.FIT`.
 - Bloqueo de scroll/overscroll en CSS.
 - `touch-action: none` para evitar gestos molestos durante la partida.
@@ -304,6 +317,8 @@ Ya existe:
 - Aviso en vertical.
 - Layout landscape movil.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
+
+La PWA mejora instalacion, carga repetida y disponibilidad del cliente web, pero no convierte el guardado remoto en offline: autenticacion y progreso siguen necesitando Supabase. No agregar cache para sus endpoints ni restaurar progreso local como sustituto.
 
 Pendiente antes de Play Store:
 
@@ -547,6 +562,7 @@ Reglas obligatorias de esta curva:
 - Mantener safe areas con `env(safe-area-inset-*)`.
 - No usar hover como unica senal de interaccion.
 - No depender de `pointer: coarse` solamente; hay pruebas de navegador con pointer fino y viewport chico.
+- Las superficies de pantalla completa deben conservar fallback `vh`/`vw` y preferir `dvh`/`dvw` cuando esten disponibles para respetar las barras dinamicas del navegador movil.
 - Probar al menos: desktop 1280x720, portrait 390x844, landscape 844x390.
 
 ## Verificacion obligatoria antes de entregar cambios
@@ -611,6 +627,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 7. Probar manualmente Bosque encantado LV1-LV10 completos y ajustar saltos, lectura de piedra, densidad de arboles, M2, E2M3 y velocidad de presion.
 8. Agregar menu de configuracion y remapeo basico.
 9. Agregar Capacitor cuando la experiencia mobile web este comoda.
+10. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
 
 ## Advertencias actuales
 
@@ -678,3 +695,11 @@ Verificacion de logros y progresion RPG del 2026-06-29: existen 20 logros, con o
 Correccion de salto intermitente del 2026-06-29: `MovementSystem` conserva la pulsacion durante 120 ms para aceptar entradas inmediatamente anteriores al aterrizaje y mantiene 100 ms de gracia al abandonar una superficie. El audio se emite solo cuando el salto se ejecuta y el estado temporal se reinicia al crear cada nivel. `npm run build` y `git diff --check` pasan; la comprobacion tactil en dispositivo queda a cargo del usuario.
 
 Migracion a Supabase alojado del 2026-06-30: la migracion de endurecimiento vincula `game_saves.user_id` con `auth.users`, aplica borrado en cascada y limita los permisos de tabla al rol autenticado junto con RLS. El registro admite proyectos con o sin confirmacion de email, las credenciales de prueba ya no aparecen precargadas y `supabase/README.md` contiene el procedimiento de enlace, despliegue y verificacion. El repo quedo vinculado a `adventureplay` (`hlfyhbvzenuepojifetb`) y ambas migraciones se aplicaron en remoto. `supabase migration list`, `supabase db lint --linked`, la presencia remota de `public.game_saves` y el rechazo `401` para el rol anonimo confirman el despliegue; `supabase db reset`, `supabase db lint --local`, las tres auditorias, `npm run build` y `git diff --check` tambien pasan.
+
+Despliegue web verificado el 2026-06-30: `https://adventureplay.netlify.app/` responde HTTP 200 y entrega el bundle `assets/index-CJiAaQsA.js`. La inspeccion HTTP del artefacto confirma que contiene `hlfyhbvzenuepojifetb.supabase.co` y no contiene `127.0.0.1:55421`; por tanto, el build publico apunta a Supabase alojado y no al Docker local. Esta comprobacion no sustituye la prueba visual ni un alta/login real, que siguen a cargo del usuario salvo peticion explicita.
+
+Primera version PWA del 2026-06-30: `vite-plugin-pwa` genera manifiesto `Adventure Play`, service worker y 82 entradas precacheadas (aprox. 8.9 MiB). La instalacion solicita landscape/fullscreen, incluye iconos 64/192/512, maskable y Apple Touch, mantiene Supabase en `NetworkOnly` y ofrece actualizacion manual mediante `PwaUpdatePrompt`. Las tres auditorias y `npm run build` pasan; la instalacion, apertura standalone y actualizacion en movil real quedan a cargo del usuario.
+
+Correccion UI movil del 2026-06-30: el menu principal landscape coloca el titulo arriba y los cuatro accesos en grilla 2x2. `App.tsx` selecciona de forma excluyente controles tactiles o de escritorio mediante media query, eliminando el doble render de poderes que ocurria cuando el override desktop `min-width: 721px` reactivaba `AbilityControls` en un telefono landscape. Los contenedores fullscreen incorporan `dvh`/`dvw` con fallback y el monumento del menu descuenta safe areas. La prueba de navegador confirma que Auth cabe sin scroll ni recorte en 844x390 y 390x844, con 0 errores de consola; menu y gameplay quedaron detras de autenticacion y requieren comprobacion visual final del usuario.
+
+Scroll independiente del explorador del 2026-06-30: `MainMenuScreen` divide el mapa y los niveles en dos paneles con cabeceras fijas, regiones de scroll accesibles por teclado y tactil, overscroll contenido y scrollbar tematico. `menu-chamber--map` conserva el encabezado global fuera del desplazamiento y limita su alto con `dvh`/safe areas; el mapa mantiene un lienzo minimo desplazable y la lista derecha desplaza solo sus niveles. Las tres auditorias, `npm run build` y `git diff --check` deben pasar; la comprobacion visual final queda a cargo del usuario.
