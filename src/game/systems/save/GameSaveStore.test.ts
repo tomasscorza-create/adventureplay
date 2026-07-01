@@ -24,10 +24,10 @@ function createDeferred<T>(): Deferred<T> {
 class ControlledSaveAdapter implements AsyncSaveAdapter {
   remoteSave: SaveData;
   private nextLoad?: Deferred<SaveData>;
-  private nextSaveGate?: {
+  private readonly saveGates: Array<{
     started: Deferred<void>;
     release: Deferred<void>;
-  };
+  }> = [];
   private nextSaveError?: Error;
 
   constructor(save = createDefaultSave()) {
@@ -40,11 +40,12 @@ class ControlledSaveAdapter implements AsyncSaveAdapter {
   }
 
   blockNextSave(): { started: Deferred<void>; release: Deferred<void> } {
-    this.nextSaveGate = {
+    const gate = {
       started: createDeferred<void>(),
       release: createDeferred<void>(),
     };
-    return this.nextSaveGate;
+    this.saveGates.push(gate);
+    return gate;
   }
 
   failNextSave(error: Error): void {
@@ -70,9 +71,8 @@ class ControlledSaveAdapter implements AsyncSaveAdapter {
       throw error;
     }
 
-    if (this.nextSaveGate) {
-      const gate = this.nextSaveGate;
-      this.nextSaveGate = undefined;
+    const gate = this.saveGates.shift();
+    if (gate) {
       gate.started.resolve();
       await gate.release.promise;
     }
@@ -87,7 +87,7 @@ class ControlledSaveAdapter implements AsyncSaveAdapter {
 }
 
 describe("GameSaveStore persistence regressions", () => {
-  it.fails("preserves local progress when a session refresh reconnects during a pending save", async () => {
+  it("preserves local progress when a session refresh reconnects during a pending save", async () => {
     const remoteSave = createDefaultSave();
     remoteSave.player.coins = 10;
     const adapter = new ControlledSaveAdapter(remoteSave);
@@ -107,7 +107,7 @@ describe("GameSaveStore persistence regressions", () => {
     expect(store.load().player.coins).toBe(50);
   });
 
-  it.fails("keeps the store disconnected when an earlier remote load resolves after sign-out", async () => {
+  it("keeps the store disconnected when an earlier remote load resolves after sign-out", async () => {
     const adapter = new ControlledSaveAdapter();
     const delayedLoad = adapter.deferNextLoad();
     const store = new GameSaveStore();
@@ -122,7 +122,41 @@ describe("GameSaveStore persistence regressions", () => {
     expect(store.load()).toEqual(createDefaultSave());
   });
 
-  it.fails("rejects flush when the latest remote write failed", async () => {
+  it("shares one load between concurrent connections for the same user", async () => {
+    const adapter = new ControlledSaveAdapter();
+    const delayedLoad = adapter.deferNextLoad();
+    const store = new GameSaveStore();
+    const firstConnection = store.connect(adapter, "user-a");
+    const secondConnection = store.connect(adapter, "user-a");
+
+    const remoteSave = createDefaultSave();
+    remoteSave.player.coins = 40;
+    delayedLoad.resolve(remoteSave);
+
+    const [firstSave, secondSave] = await Promise.all([firstConnection, secondConnection]);
+    expect(firstSave.player.coins).toBe(40);
+    expect(secondSave.player.coins).toBe(40);
+  });
+
+  it("ignores a stale load after connecting a different user", async () => {
+    const firstAdapter = new ControlledSaveAdapter();
+    const delayedFirstLoad = firstAdapter.deferNextLoad();
+    const secondRemoteSave = createDefaultSave();
+    secondRemoteSave.player.coins = 60;
+    const secondAdapter = new ControlledSaveAdapter(secondRemoteSave);
+    const store = new GameSaveStore();
+    const firstConnection = store.connect(firstAdapter, "user-a");
+
+    await store.connect(secondAdapter, "user-b");
+    const staleSave = createDefaultSave();
+    staleSave.player.coins = 90;
+    delayedFirstLoad.resolve(staleSave);
+    await firstConnection;
+
+    expect(store.load().player.coins).toBe(60);
+  });
+
+  it("rejects flush when the latest remote write failed", async () => {
     const adapter = new ControlledSaveAdapter();
     const store = new GameSaveStore();
     await store.connect(adapter);
@@ -133,6 +167,43 @@ describe("GameSaveStore persistence regressions", () => {
     store.save(changedSave);
 
     await expect(store.flush()).rejects.toThrow("network unavailable");
+    expect(store.getSyncState()).toBe("error");
+    expect(store.hasPendingChanges()).toBe(true);
+
+    await store.retry();
+
+    expect(adapter.remoteSave.player.coins).toBe(25);
+    expect(store.getSyncState()).toBe("synced");
+    expect(store.hasPendingChanges()).toBe(false);
+  });
+
+  it("flush waits for writes queued while an earlier write is still running", async () => {
+    const adapter = new ControlledSaveAdapter();
+    const store = new GameSaveStore();
+    await store.connect(adapter);
+
+    const firstGate = adapter.blockNextSave();
+    const firstChange = store.load();
+    firstChange.player.coins = 20;
+    store.save(firstChange);
+    await firstGate.started.promise;
+
+    let flushFinished = false;
+    const flushing = store.flush().then(() => {
+      flushFinished = true;
+    });
+    const secondGate = adapter.blockNextSave();
+    const secondChange = store.load();
+    secondChange.player.coins = 30;
+    store.save(secondChange);
+
+    firstGate.release.resolve();
+    await secondGate.started.promise;
+    expect(flushFinished).toBe(false);
+
+    secondGate.release.resolve();
+    await flushing;
+    expect(adapter.remoteSave.player.coins).toBe(30);
   });
 });
 

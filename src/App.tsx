@@ -15,6 +15,7 @@ import { gameAudio } from "./shared/audio/GameAudio";
 import { EVENTS } from "./shared/constants/events";
 import { MOBILE_GAMEPLAY_QUERY } from "./shared/constants/game";
 import { isSupabaseConfigured, supabase } from "./shared/supabase/client";
+import { shouldLoadSessionSave } from "./shared/supabase/authEvents";
 import type {
   AchievementId,
   CharacterId,
@@ -214,28 +215,36 @@ export function App() {
 
     const activeSupabase = supabase;
     let isActive = true;
+    let activeUserId: string | undefined;
+    let sessionRequestId = 0;
 
-    const loadSessionSave = async (sessionUserId?: string, email?: string) => {
-      if (!sessionUserId) {
-        gameSaveStore.disconnect();
-        if (!isActive) {
-          return;
-        }
-
-        setPlayerEmail(undefined);
-        setSave(createDefaultSave());
-        setScreen("main-menu");
-        setAuthStatus("signed-out");
+    const clearSessionSave = () => {
+      sessionRequestId += 1;
+      activeUserId = undefined;
+      gameSaveStore.disconnect();
+      if (!isActive) {
         return;
       }
 
+      setPlayerEmail(undefined);
+      setSave(createDefaultSave());
+      setScreen("main-menu");
+      setAuthStatus("signed-out");
+    };
+
+    const loadSessionSave = async (sessionUserId: string, email?: string) => {
+      const requestId = ++sessionRequestId;
+      activeUserId = sessionUserId;
       setAuthStatus("loading-save");
       setAuthError(undefined);
       setAuthNotice(undefined);
 
       try {
-        const nextSave = await gameSaveStore.connect(new SupabaseSaveAdapter(activeSupabase, sessionUserId));
-        if (!isActive) {
+        const nextSave = await gameSaveStore.connect(
+          new SupabaseSaveAdapter(activeSupabase, sessionUserId),
+          sessionUserId,
+        );
+        if (!isActive || requestId !== sessionRequestId) {
           return;
         }
 
@@ -244,31 +253,37 @@ export function App() {
         setAuthStatus("signed-in");
       } catch (error) {
         console.error("Could not load remote game save", error);
-        if (!isActive) {
+        if (!isActive || requestId !== sessionRequestId) {
           return;
         }
 
+        activeUserId = undefined;
+        gameSaveStore.disconnect();
         setAuthError("No se pudo cargar el progreso remoto. Revisa la conexion con Supabase y reintenta.");
         setAuthStatus("signed-out");
       }
     };
 
-    activeSupabase.auth.getSession().then(({ data, error }) => {
-      if (error) {
-        setAuthError(error.message);
-        setAuthStatus("signed-out");
+    const { data } = activeSupabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        clearSessionSave();
         return;
       }
 
-      void loadSessionSave(data.session?.user.id, data.session?.user.email);
-    });
+      if (activeUserId === session.user.id) {
+        setPlayerEmail(session.user.email);
+        return;
+      }
 
-    const { data } = activeSupabase.auth.onAuthStateChange((_event, session) => {
-      void loadSessionSave(session?.user.id, session?.user.email);
+      if (shouldLoadSessionSave(event)) {
+        void loadSessionSave(session.user.id, session.user.email);
+      }
     });
 
     return () => {
       isActive = false;
+      sessionRequestId += 1;
+      gameSaveStore.disconnect();
       data.subscription.unsubscribe();
     };
   }, []);
@@ -315,14 +330,33 @@ export function App() {
 
   const signOut = async () => {
     gameAudio.playUiSelect();
-    await gameSaveStore.flush();
-    await supabase?.auth.signOut();
+    try {
+      await gameSaveStore.flush();
+    } catch (error) {
+      console.error("Could not flush game save before sign-out", error);
+      setAuthError("No se pudo guardar el progreso. Reintenta antes de cerrar la sesion.");
+      return;
+    }
+
+    const { error } = await supabase?.auth.signOut() ?? {};
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };
   const resetProgress = async () => {
     gameAudio.playUiSelect();
     const freshSave = gameSaveStore.reset();
-    await gameSaveStore.flush();
+    try {
+      await gameSaveStore.flush();
+    } catch (error) {
+      console.error("Could not reset remote game save", error);
+      setAuthError("No se pudo reiniciar el progreso porque fallo la sincronizacion.");
+      return;
+    }
+
     setSave(freshSave);
     setHud(initialHud);
     setScreen("main-menu");

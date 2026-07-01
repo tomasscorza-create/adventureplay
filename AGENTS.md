@@ -544,6 +544,9 @@ Reglas obligatorias de esta curva:
 - El grupo fisico interno `coins` debe mantener `allowGravity: false` e `immovable: true`; si se deja la configuracion por defecto del grupo, sobrescribe a `Coin` y las piezas de ORO caen fuera del mapa.
 - `GameSaveStore` es la capa sincronica que deben usar Phaser y React para leer/escribir `SaveData`.
 - `SupabaseSaveAdapter` es la capa remota actual y persiste en `public.game_saves`.
+- Cada conexion de `GameSaveStore` usa el ID de usuario como identidad y una generacion interna. Una carga antigua nunca puede restaurar datos despues de `disconnect()` ni sobrescribir una sesion posterior.
+- `TOKEN_REFRESHED` y los demas eventos de Auth que conservan el usuario no deben recargar el save remoto. Solo `INITIAL_SESSION` y `SIGNED_IN` abren la conexion; `SIGNED_OUT` la invalida.
+- Los errores de persistencia deben dejar el save marcado como pendiente, hacer que `flush()` rechace y conservar la opcion de `retry()`. Cerrar sesion o completar un reinicio nunca puede continuar si el flush requerido falla.
 - `SaveDefaults.ts` define `SAVE_SCHEMA_VERSION`, defaults y normalizacion de saves.
 - La seleccion de personaje vive en `SaveData.selectedCharacterId`.
 - Las cargas de poderes viven en `save.characterPowerCharges[save.selectedCharacterId]`; cada uso valido debe guardarse inmediatamente con `GameSaveStore`.
@@ -593,7 +596,7 @@ npm run test
 npm run build
 ```
 
-`audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. `npm run test` ejecuta la red de seguridad Vitest; durante la Fase 0 las regresiones confirmadas de sesion, persistencia y normalizacion usan `it.fails` para documentar el fallo actual sin ocultarlo ni cambiar todavia el codigo productivo. Cada una debe convertirse en una prueba normal al corregirse. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. `npm run test` ejecuta la red de seguridad Vitest. Las regresiones corregidas deben quedar como pruebas normales; solo los hallazgos confirmados que pertenecen a una fase posterior pueden conservar temporalmente `it.fails`, con su alcance documentado. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Las pruebas visuales y manuales en navegador quedan a cargo del usuario. Un agente solo debe ejecutarlas cuando el usuario lo pida expresamente; en los demas casos debe entregar las verificaciones automaticas y dejar esta comprobacion como pendiente del usuario.
 
