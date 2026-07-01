@@ -12,13 +12,31 @@ import {
   getExperienceToNextLevel,
   levelRewardDefinitions,
   MAX_PLAYER_LEVEL,
+  skillDefinitions,
 } from "../../data/progression";
 import { achievementIds } from "../../data/achievements";
+import { enemyDefinitions } from "../../data/enemies";
+import { itemDefinitions } from "../../data/items";
+import { levelDefinitions } from "../../data/levels";
 
 export const SAVE_SCHEMA_VERSION = 16;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix", "faust"];
 const profileIconIds: ProfileIconId[] = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5", "icon-6", "icon-7", "icon-8", "icon-9"];
+const characterIdSet = new Set<string>(characterIds);
+const profileIconIdSet = new Set<string>(profileIconIds);
+const levelIdSet = new Set(Object.keys(levelDefinitions));
+const inventoryItemIdSet = new Set(
+  Object.values(itemDefinitions)
+    .filter((item) => Boolean(item.inventoryCategory))
+    .map((item) => item.id),
+);
+const enemyIdSet = new Set(Object.keys(enemyDefinitions));
+const rewardBoxIdSet = new Set(Object.values(levelDefinitions).map((level) => level.rewardBox.id));
+const checkpointIdSet = new Set(Object.values(levelDefinitions).map((level) => level.checkpoint.id));
+const achievementIdSet = new Set<string>(achievementIds);
+const MAX_SAFE_COUNTER = Number.MAX_SAFE_INTEGER;
+const MAX_SAVE_COLLECTION_ENTRIES = 10_000;
 const levelSequences = [
   [
     "meadowOutpost",
@@ -105,46 +123,85 @@ export function createDefaultSave(): SaveData {
   return structuredClone(defaultSave);
 }
 
-export function normalizeSaveData(data: Partial<SaveData> | null | undefined): SaveData {
-  if (!data) {
+export function normalizeSaveData(data: unknown): SaveData {
+  const incomingSave = asRecord(data);
+  if (!incomingSave) {
     return createDefaultSave();
   }
 
   const defaults = createDefaultSave();
-  const selectedCharacterId = characterIds.includes(data.selectedCharacterId as CharacterId)
-    ? data.selectedCharacterId as CharacterId
+  const selectedCharacterId = isKnownString(incomingSave.selectedCharacterId, characterIdSet)
+    ? incomingSave.selectedCharacterId as CharacterId
     : defaults.selectedCharacterId;
-  const isLegacyCharacterSave = data.unlockedCharacterIds === undefined;
+  const incomingPlayer = asRecord(incomingSave.player);
+  const isLegacyCharacterSave = incomingPlayer !== undefined
+    && incomingSave.unlockedCharacterIds === undefined;
+  const incomingUnlockedCharacters = Array.isArray(incomingSave.unlockedCharacterIds)
+    ? incomingSave.unlockedCharacterIds
+    : [];
   const unlockedCharacterIds = isLegacyCharacterSave
     ? [...characterIds]
-    : characterIds.filter((characterId) => data.unlockedCharacterIds?.includes(characterId));
-  const primaryCharacterId = characterIds.includes(data.primaryCharacterId as CharacterId)
-    ? data.primaryCharacterId as CharacterId
+    : characterIds.filter((characterId) => incomingUnlockedCharacters.includes(characterId));
+  const primaryCharacterId = isKnownString(incomingSave.primaryCharacterId, characterIdSet)
+    ? incomingSave.primaryCharacterId as CharacterId
     : isLegacyCharacterSave
       ? selectedCharacterId
       : undefined;
   if (primaryCharacterId && !unlockedCharacterIds.includes(primaryCharacterId)) {
     unlockedCharacterIds.push(primaryCharacterId);
   }
-  const legacyPlayer = data.player as (Partial<PlayerStats> & Partial<PowerChargeState>) | undefined;
-  const player = {
-    ...defaults.player,
-    ...legacyPlayer,
-  } as PlayerStats & Partial<PowerChargeState>;
-  player.displayName = normalizePlayerDisplayName(legacyPlayer?.displayName);
-  player.profileIconId = profileIconIds.includes(legacyPlayer?.profileIconId as ProfileIconId)
-    ? legacyPlayer?.profileIconId as ProfileIconId
-    : defaults.player.profileIconId;
-  delete player.healingCharges;
-  delete player.powerCharges;
+  const level = normalizeInteger(incomingPlayer?.level, 1, 1, MAX_PLAYER_LEVEL);
+  const claimedLevelRewards = levelRewardDefinitions
+    .filter((reward) => reward.level <= level)
+    .map((reward) => reward.level);
+  const claimedRewardDefinitions = levelRewardDefinitions.filter((reward) =>
+    claimedLevelRewards.includes(reward.level)
+  );
+  const maxHealth = PLAYER_DEFAULTS.maxHealth + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.maxHealth ?? 0),
+    0,
+  );
+  const speed = PLAYER_DEFAULTS.speed + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.speed ?? 0),
+    0,
+  );
+  const meleeDamage = PLAYER_DEFAULTS.meleeDamage + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.meleeDamage ?? 0),
+    0,
+  );
+  const rangedDamage = PLAYER_DEFAULTS.rangedDamage + claimedRewardDefinitions.reduce(
+    (total, reward) => total + (reward.rangedDamage ?? 0),
+    0,
+  );
+  const experienceToNextLevel = getExperienceToNextLevel(level);
+  const player: PlayerStats = {
+    displayName: normalizePlayerDisplayName(incomingPlayer?.displayName),
+    profileIconId: isKnownString(incomingPlayer?.profileIconId, profileIconIdSet)
+      ? incomingPlayer.profileIconId as ProfileIconId
+      : defaults.player.profileIconId,
+    health: normalizeInteger(incomingPlayer?.health, defaults.player.health, 0, maxHealth),
+    maxHealth,
+    level,
+    experience: level >= MAX_PLAYER_LEVEL
+      ? 0
+      : normalizeInteger(incomingPlayer?.experience, 0, 0, experienceToNextLevel - 1),
+    experienceToNextLevel,
+    coins: normalizeInteger(incomingPlayer?.coins, 0, 0, MAX_SAFE_COUNTER),
+    speed,
+    jumpPower: PLAYER_DEFAULTS.jumpPower,
+    meleeDamage,
+    rangedDamage,
+    unlockedSkills: skillDefinitions
+      .filter((skill) => skill.requiredLevel <= level)
+      .map((skill) => skill.id),
+    inventory: normalizeInventory(incomingPlayer?.inventory),
+  };
 
-  const incomingCharges = data.characterPowerCharges as
-    | Partial<Record<CharacterId, Partial<PowerChargeState>>>
-    | undefined;
+  const incomingCharges = asRecord(incomingSave.characterPowerCharges);
   const characterPowerCharges = createDefaultCharacterPowerCharges();
 
   for (const characterId of characterIds) {
-    const incoming = incomingCharges?.[characterId];
+    const incoming = asRecord(incomingCharges?.[characterId]);
     if (!incoming) {
       continue;
     }
@@ -155,22 +212,22 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     };
   }
 
-  if (!incomingCharges?.[selectedCharacterId] && legacyPlayer) {
+  if (!asRecord(incomingCharges?.[selectedCharacterId]) && incomingPlayer) {
     characterPowerCharges[selectedCharacterId] = {
       healingCharges: normalizeCharge(
-        legacyPlayer.healingCharges,
+        incomingPlayer.healingCharges,
         defaultPowerCharges.healingCharges,
       ),
-      powerCharges: normalizeCharge(legacyPlayer.powerCharges, defaultPowerCharges.powerCharges),
+      powerCharges: normalizeCharge(incomingPlayer.powerCharges, defaultPowerCharges.powerCharges),
     };
   }
 
-  const completedLevels = Array.isArray(data.completedLevels)
-    ? [...data.completedLevels]
-    : [...defaults.completedLevels];
-  const unlockedLevels = new Set(
-    Array.isArray(data.unlockedLevels) ? data.unlockedLevels : defaults.unlockedLevels,
-  );
+  const completedLevels = normalizeKnownUniqueStrings(incomingSave.completedLevels, levelIdSet);
+  const unlockedLevels = new Set([
+    ...defaults.unlockedLevels,
+    ...normalizeKnownUniqueStrings(incomingSave.unlockedLevels, levelIdSet),
+    ...completedLevels,
+  ]);
   for (const levelSequence of levelSequences) {
     unlockedLevels.add(levelSequence[0]);
     for (let index = 0; index < levelSequence.length - 1; index += 1) {
@@ -180,69 +237,54 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
     }
   }
 
-  player.level = Math.min(
-    MAX_PLAYER_LEVEL,
-    Math.max(1, Math.floor(Number.isFinite(player.level) ? player.level : 1)),
+  const claimedRewardBoxes = normalizeKnownUniqueStrings(
+    incomingSave.claimedRewardBoxes,
+    rewardBoxIdSet,
   );
-  player.experienceToNextLevel = getExperienceToNextLevel(player.level);
-  player.experience = player.level >= MAX_PLAYER_LEVEL
-    ? 0
-    : Math.min(
-        Math.max(0, Math.floor(Number.isFinite(player.experience) ? player.experience : 0)),
-        player.experienceToNextLevel - 1,
-      );
-  const validRewardLevels = new Set(levelRewardDefinitions.map((reward) => reward.level));
-  const claimedLevelRewards = Array.isArray(data.claimedLevelRewards)
-    ? [...new Set(data.claimedLevelRewards.filter((level) => validRewardLevels.has(level)))]
-    : levelRewardDefinitions
-        .filter((reward) => reward.level <= player.level)
-        .map((reward) => reward.level);
-  const claimedRewardDefinitions = levelRewardDefinitions.filter((reward) =>
-    claimedLevelRewards.includes(reward.level),
+  const checkpointId = isKnownString(incomingSave.checkpointId, checkpointIdSet)
+    ? incomingSave.checkpointId
+    : undefined;
+  const incomingAchievements = asRecord(incomingSave.achievements);
+  const incomingAchievementIds = new Set(
+    normalizeKnownUniqueStrings(incomingAchievements?.unlockedIds, achievementIdSet),
   );
-  player.maxHealth = PLAYER_DEFAULTS.maxHealth + claimedRewardDefinitions.reduce(
-    (total, reward) => total + (reward.maxHealth ?? 0),
-    0,
-  );
-  player.speed = PLAYER_DEFAULTS.speed + claimedRewardDefinitions.reduce(
-    (total, reward) => total + (reward.speed ?? 0),
-    0,
-  );
-  player.meleeDamage = PLAYER_DEFAULTS.meleeDamage + claimedRewardDefinitions.reduce(
-    (total, reward) => total + (reward.meleeDamage ?? 0),
-    0,
-  );
-  player.rangedDamage = PLAYER_DEFAULTS.rangedDamage + claimedRewardDefinitions.reduce(
-    (total, reward) => total + (reward.rangedDamage ?? 0),
-    0,
-  );
-  player.health = Math.min(Math.max(0, player.health), player.maxHealth);
-  const claimedRewardBoxes = Array.isArray(data.claimedRewardBoxes)
-    ? [...new Set(data.claimedRewardBoxes)]
-    : [...defaults.claimedRewardBoxes];
-  const checkpointId = typeof data.checkpointId === "string" ? data.checkpointId : undefined;
-  const incomingAchievements = data.achievements;
   const unlockedAchievementIds = achievementIds.filter((achievementId) =>
-    incomingAchievements?.unlockedIds?.includes(achievementId),
+    incomingAchievementIds.has(achievementId),
   );
-  const monstersDefeated = Number.isFinite(incomingAchievements?.monstersDefeated)
-    ? Math.max(0, Math.floor(incomingAchievements?.monstersDefeated ?? 0))
-    : 0;
-  const flawlessLevelIds = normalizeStringArray(incomingAchievements?.flawlessLevelIds);
-  const defeatedEnemyIds = normalizeStringArray(incomingAchievements?.defeatedEnemyIds);
+  const monstersDefeated = normalizeInteger(
+    incomingAchievements?.monstersDefeated,
+    0,
+    0,
+    MAX_SAFE_COUNTER,
+  );
+  const flawlessLevelIds = normalizeKnownUniqueStrings(
+    incomingAchievements?.flawlessLevelIds,
+    levelIdSet,
+  );
+  const defeatedEnemyIds = normalizeKnownUniqueStrings(
+    incomingAchievements?.defeatedEnemyIds,
+    enemyIdSet,
+  );
   const mostEnemiesDefeatedInLevel = normalizeNonNegativeInteger(
     incomingAchievements?.mostEnemiesDefeatedInLevel,
   );
   const goldCollected = normalizeNonNegativeInteger(incomingAchievements?.goldCollected);
-  const activatedCheckpointIds = normalizeStringArray(incomingAchievements?.activatedCheckpointIds);
-  const levelAdvanceStreak = normalizeDailyStreak(incomingAchievements?.levelAdvanceStreak);
-  const treasureStreak = normalizeDailyStreak(incomingAchievements?.treasureStreak);
+  const activatedCheckpointIds = normalizeKnownUniqueStrings(
+    incomingAchievements?.activatedCheckpointIds,
+    checkpointIdSet,
+  );
+  const levelAdvanceStreak = normalizeDailyStreak(
+    asRecord(incomingAchievements?.levelAdvanceStreak),
+  );
+  const treasureStreak = normalizeDailyStreak(asRecord(incomingAchievements?.treasureStreak));
+  const incomingStatistics = asRecord(incomingSave.statistics);
+  const runsPlayed = normalizeNonNegativeInteger(incomingStatistics?.runsPlayed);
   const statistics = {
-    runsPlayed: normalizeNonNegativeInteger(data.statistics?.runsPlayed),
-    completedRuns: normalizeNonNegativeInteger(data.statistics?.completedRuns),
-    defeats: normalizeNonNegativeInteger(data.statistics?.defeats),
-    gameplaySeconds: normalizeNonNegativeInteger(data.statistics?.gameplaySeconds),
-    actions: normalizeNonNegativeInteger(data.statistics?.actions),
+    runsPlayed,
+    completedRuns: normalizeInteger(incomingStatistics?.completedRuns, 0, 0, runsPlayed),
+    defeats: normalizeInteger(incomingStatistics?.defeats, 0, 0, runsPlayed),
+    gameplaySeconds: normalizeNonNegativeInteger(incomingStatistics?.gameplaySeconds),
+    actions: normalizeNonNegativeInteger(incomingStatistics?.actions),
   };
   if (completedLevels.includes("meadowOutpost") && !unlockedAchievementIds.includes("first-level")) {
     unlockedAchievementIds.push("first-level");
@@ -292,8 +334,8 @@ export function normalizeSaveData(data: Partial<SaveData> | null | undefined): S
   };
 }
 
-function normalizeCharge(value: number | undefined, fallback: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.floor(value as number)) : fallback;
+function normalizeCharge(value: unknown, fallback: number): number {
+  return normalizeInteger(value, fallback, 0, MAX_SAFE_COUNTER);
 }
 
 export function normalizePlayerDisplayName(value: unknown): string {
@@ -305,22 +347,72 @@ export function normalizePlayerDisplayName(value: unknown): string {
   return normalized.length >= 2 ? normalized.slice(0, 20) : "";
 }
 
-function normalizeNonNegativeInteger(value: number | undefined): number {
-  return Number.isFinite(value) ? Math.max(0, Math.floor(value as number)) : 0;
+function normalizeNonNegativeInteger(value: unknown): number {
+  return normalizeInteger(value, 0, 0, MAX_SAFE_COUNTER);
 }
 
-function normalizeStringArray(value: string[] | undefined): string[] {
-  return Array.isArray(value)
-    ? [...new Set(value.filter((entry): entry is string => typeof entry === "string"))]
-    : [];
+function normalizeInteger(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(maximum, Math.max(minimum, Math.floor(value)));
 }
 
-function normalizeDailyStreak(value: DailyStreakProgress | undefined): DailyStreakProgress {
-  const lastDay = typeof value?.lastDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.lastDay)
+function normalizeKnownUniqueStrings(value: unknown, allowedValues: ReadonlySet<string>): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const normalized = new Set<string>();
+  for (const entry of value.slice(0, MAX_SAVE_COLLECTION_ENTRIES)) {
+    if (isKnownString(entry, allowedValues)) {
+      normalized.add(entry);
+    }
+  }
+  return [...normalized];
+}
+
+function normalizeInventory(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, MAX_SAVE_COLLECTION_ENTRIES)
+    .filter((entry): entry is string => isKnownString(entry, inventoryItemIdSet));
+}
+
+function normalizeDailyStreak(value: Record<string, unknown> | undefined): DailyStreakProgress {
+  const lastDay = isValidCalendarDay(value?.lastDay)
     ? value.lastDay
     : undefined;
   return {
     count: lastDay ? normalizeNonNegativeInteger(value?.count) : 0,
     lastDay,
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function isKnownString(value: unknown, allowedValues: ReadonlySet<string>): value is string {
+  return typeof value === "string" && allowedValues.has(value);
+}
+
+function isValidCalendarDay(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }

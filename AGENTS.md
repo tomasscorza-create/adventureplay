@@ -551,6 +551,10 @@ Reglas obligatorias de esta curva:
 - Los errores de persistencia deben dejar el save marcado como pendiente, hacer que `flush()` rechace y conservar la opcion de `retry()`. Cerrar sesion o completar un reinicio nunca puede continuar si el flush requerido falla.
 - React observa los cambios mediante `GameSaveStore.onSyncStateChange()` y los errores mediante `onError()`. Ambos registros devuelven una funcion de limpieza; no sondear el store por frame ni reutilizar `authError` para fallos de progreso.
 - `SaveDefaults.ts` define `SAVE_SCHEMA_VERSION`, defaults y normalizacion de saves.
+- `normalizeSaveData()` recibe datos remotos como `unknown`: nunca asumir que objetos, arrays, numeros o IDs respetan TypeScript en runtime.
+- Vida maxima, velocidad, salto, dano y habilidades se reconstruyen desde `PLAYER_DEFAULTS`, nivel y recompensas vigentes; no se aceptan valores arbitrarios del JSON remoto. Salud, experiencia, ORO, cargas y estadisticas se convierten en enteros finitos dentro de sus limites validos.
+- Personajes, niveles, items de inventario, enemigos, cajas, checkpoints, logros y fechas de racha se filtran contra las definiciones actuales. Las colecciones unicas eliminan duplicados; el inventario conserva duplicados como cantidades y limita su entrada remota a 10.000 elementos.
+- Todo nivel de recompensa igual o inferior al nivel RPG actual se considera reclamado al normalizar. Esto conserva la aplicacion exactamente una vez y evita que un array remoto incompleto vuelva a conceder ORO, cargas o mejoras permanentes.
 - La seleccion de personaje vive en `SaveData.selectedCharacterId`.
 - Las cargas de poderes viven en `save.characterPowerCharges[save.selectedCharacterId]`; cada uso valido debe guardarse inmediatamente con `GameSaveStore`.
 - Las compras descuentan `save.player.coins`, acreditan solo al `characterId` de la ficha abierta y persisten ambos cambios juntos mediante `GameSaveStore`.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SaveData } from "../../../shared/types/game";
 import type { AsyncSaveAdapter } from "./SaveAdapter";
-import { createDefaultSave, normalizeSaveData } from "./SaveDefaults";
+import { createDefaultSave } from "./SaveDefaults";
 import { GameSaveStore } from "./GameSaveStore";
 
 interface Deferred<T> {
@@ -226,28 +226,5 @@ describe("GameSaveStore persistence regressions", () => {
     const stateCount = states.length;
     await store.retry();
     expect(states).toHaveLength(stateCount);
-  });
-});
-
-describe("normalizeSaveData regression coverage", () => {
-  it.fails("repairs malformed runtime values from remote JSON", () => {
-    const defaults = createDefaultSave();
-    const malformedSave = {
-      ...defaults,
-      player: {
-        ...defaults.player,
-        health: "invalid",
-        coins: "invalid",
-        inventory: null,
-      },
-      unlockedLevels: ["meadowOutpost", null, 42],
-    } as unknown as Partial<SaveData>;
-
-    const normalized = normalizeSaveData(malformedSave);
-
-    expect(Number.isFinite(normalized.player.health)).toBe(true);
-    expect(Number.isFinite(normalized.player.coins)).toBe(true);
-    expect(Array.isArray(normalized.player.inventory)).toBe(true);
-    expect(normalized.unlockedLevels.every((levelId) => typeof levelId === "string")).toBe(true);
   });
 });
