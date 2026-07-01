@@ -589,10 +589,11 @@ Ejecutar:
 npm run audit:achievements
 npm run audit:levels
 npm run audit:progression
+npm run test
 npm run build
 ```
 
-`audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. `npm run test` ejecuta la red de seguridad Vitest; durante la Fase 0 las regresiones confirmadas de sesion, persistencia y normalizacion usan `it.fails` para documentar el fallo actual sin ocultarlo ni cambiar todavia el codigo productivo. Cada una debe convertirse en una prueba normal al corregirse. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Las pruebas visuales y manuales en navegador quedan a cargo del usuario. Un agente solo debe ejecutarlas cuando el usuario lo pida expresamente; en los demas casos debe entregar las verificaciones automaticas y dejar esta comprobacion como pendiente del usuario.
 
@@ -674,7 +675,7 @@ Al actualizarla:
 5. Mantener separados el estado confirmado, las reglas obligatorias, las advertencias y los proximos pasos.
 6. Si una comprobacion no se ejecuto en el turno actual, no presentarla como validacion reciente.
 
-Ultima revision documental: 2026-06-30. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
+Ultima revision documental: 2026-07-01. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
 
 Verificacion del checkpoint de niveles 7 a 10 y M3: `npm run build` pasa el 2026-06-27 y el smoke test en navegador confirma carga del nivel 7, sprite lateral, barra de vida y escala visual cercana al heroe. Sigue siendo recomendable recorrer manualmente los cuatro niveles completos para ajustar balance fino y saltos limite.
 
