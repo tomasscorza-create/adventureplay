@@ -104,6 +104,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/data/achievements.ts`: definiciones, textos, objetivos y lectura de progreso de los logros.
 - `src/game/systems/achievements/AchievementSystem.ts`: registra derrotas y finalizaciones validas, y desbloquea logros sin depender de React.
 - `src/ui/components/AchievementUnlockToast.tsx`: aviso React en cola para logros desbloqueados durante gameplay; recibe eventos tipados desde Phaser y no contiene logica de concesion.
+- `src/ui/components/SaveSyncStatus.tsx`: aviso React compacto del estado remoto; muestra carga, guardado y confirmacion breve fuera del gameplay, conserva los errores visibles en cualquier pantalla y ofrece el reintento explicito de `GameSaveStore`.
 - `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; las fuentes maestras pueden archivarse fuera del repositorio.
 - `src/assets/characters/faust.png`: hoja normalizada 96x80 de Faust con 45 cuadros para reposo, carrera, salto, caida, ataque, dano y muerte. Incluye intermedios deterministas para suavizar el movimiento sin cambiar su identidad y se regenera junto con `faust-animation.json` mediante `scripts/prepare-faust-assets.py`; si las fuentes ya estan fuera del repo, pasar su carpeta como primer argumento.
 - `src/assets/weapons/sword-1.png`: arma separada de Faust. `weapons.ts` define su aspecto y los anclajes por cuadro para que el cuerpo no dependa de una espada concreta.
@@ -223,6 +224,7 @@ La demo actual permite:
 - Antes de abrir Game Over, reproducir la animacion de derrota completa durante 620 ms con la fisica del jugador deshabilitada; `Player.markDefeated()` cubre tambien derrotas por tiempo o presion que no pasan por `takeDamage()`.
 - Pausar.
 - Guardar progreso basico en `public.game_saves` para el usuario autenticado.
+- Ver un estado compacto de sincronizacion remota. `Sincronizado` desaparece tras una confirmacion breve; los errores permanecen con `Reintentar` y nunca se mezclan con los errores del formulario de autenticacion.
 - Guardar el personaje seleccionado en `public.game_saves`.
 - Guardar piezas recogidas en el inventario persistente.
 - Ver los niveles 1 a 10 como completados, pendientes o bloqueados en la interfaz de exploracion.
@@ -547,6 +549,7 @@ Reglas obligatorias de esta curva:
 - Cada conexion de `GameSaveStore` usa el ID de usuario como identidad y una generacion interna. Una carga antigua nunca puede restaurar datos despues de `disconnect()` ni sobrescribir una sesion posterior.
 - `TOKEN_REFRESHED` y los demas eventos de Auth que conservan el usuario no deben recargar el save remoto. Solo `INITIAL_SESSION` y `SIGNED_IN` abren la conexion; `SIGNED_OUT` la invalida.
 - Los errores de persistencia deben dejar el save marcado como pendiente, hacer que `flush()` rechace y conservar la opcion de `retry()`. Cerrar sesion o completar un reinicio nunca puede continuar si el flush requerido falla.
+- React observa los cambios mediante `GameSaveStore.onSyncStateChange()` y los errores mediante `onError()`. Ambos registros devuelven una funcion de limpieza; no sondear el store por frame ni reutilizar `authError` para fallos de progreso.
 - `SaveDefaults.ts` define `SAVE_SCHEMA_VERSION`, defaults y normalizacion de saves.
 - La seleccion de personaje vive en `SaveData.selectedCharacterId`.
 - Las cargas de poderes viven en `save.characterPowerCharges[save.selectedCharacterId]`; cada uso valido debe guardarse inmediatamente con `GameSaveStore`.

@@ -4,6 +4,7 @@ import { createDefaultSave, normalizeSaveData } from "./SaveDefaults";
 
 type SaveErrorHandler = (error: unknown) => void;
 export type SaveSyncState = "disconnected" | "loading" | "pending" | "synced" | "error";
+type SaveSyncStateHandler = (state: SaveSyncState) => void;
 
 export class GameSaveStore implements SaveAdapter {
   private currentSave = createDefaultSave();
@@ -13,7 +14,8 @@ export class GameSaveStore implements SaveAdapter {
   private connectionPromise?: Promise<SaveData>;
   private saveRevision = 0;
   private persistQueue: Promise<void> = Promise.resolve();
-  private errorHandler?: SaveErrorHandler;
+  private readonly errorHandlers = new Set<SaveErrorHandler>();
+  private readonly syncStateHandlers = new Set<SaveSyncStateHandler>();
   private syncState: SaveSyncState = "disconnected";
   private dirty = false;
 
@@ -25,7 +27,7 @@ export class GameSaveStore implements SaveAdapter {
     const generation = this.invalidateConnection();
     this.remoteAdapter = remoteAdapter;
     this.connectionKey = connectionKey;
-    this.syncState = "loading";
+    this.setSyncState("loading");
 
     const connectionPromise = this.finishConnection(remoteAdapter, generation);
     this.connectionPromise = connectionPromise;
@@ -42,12 +44,18 @@ export class GameSaveStore implements SaveAdapter {
     this.invalidateConnection();
     this.currentSave = createDefaultSave();
     this.saveRevision += 1;
-    this.syncState = "disconnected";
+    this.setSyncState("disconnected");
     this.dirty = false;
   }
 
-  onError(handler: SaveErrorHandler): void {
-    this.errorHandler = handler;
+  onError(handler: SaveErrorHandler): () => void {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
+  }
+
+  onSyncStateChange(handler: SaveSyncStateHandler): () => void {
+    this.syncStateHandlers.add(handler);
+    return () => this.syncStateHandlers.delete(handler);
   }
 
   load(): SaveData {
@@ -129,7 +137,7 @@ export class GameSaveStore implements SaveAdapter {
       if (this.isCurrentConnection(remoteAdapter, generation)) {
         this.remoteAdapter = undefined;
         this.connectionKey = undefined;
-        this.syncState = "error";
+        this.setSyncState("error");
         this.dirty = false;
       }
       throw error;
@@ -144,7 +152,7 @@ export class GameSaveStore implements SaveAdapter {
     }
 
     this.dirty = true;
-    this.syncState = "pending";
+    this.setSyncState("pending");
     this.persistQueue = this.persistQueue
       .catch(() => undefined)
       .then(async () => {
@@ -161,9 +169,11 @@ export class GameSaveStore implements SaveAdapter {
             return;
           }
 
-          this.syncState = "error";
+          this.setSyncState("error");
           this.dirty = true;
-          this.errorHandler?.(error);
+          for (const handler of this.errorHandlers) {
+            handler(error);
+          }
           throw error;
         }
 
@@ -173,9 +183,20 @@ export class GameSaveStore implements SaveAdapter {
 
         if (this.saveRevision === revision) {
           this.dirty = false;
-          this.syncState = "synced";
+          this.setSyncState("synced");
         }
       });
+  }
+
+  private setSyncState(state: SaveSyncState): void {
+    if (this.syncState === state) {
+      return;
+    }
+
+    this.syncState = state;
+    for (const handler of this.syncStateHandlers) {
+      handler(state);
+    }
   }
 }
 

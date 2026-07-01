@@ -7,6 +7,7 @@ import {
 import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { createGame } from "./game/main";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
+import type { SaveSyncState } from "./game/systems/save/GameSaveStore";
 import { SupabaseSaveAdapter } from "./game/systems/save/SupabaseSaveAdapter";
 import { createDefaultSave, normalizePlayerDisplayName } from "./game/systems/save/SaveDefaults";
 import type { AchievementIconId, AchievementReward } from "./game/data/achievements";
@@ -33,6 +34,7 @@ import { MobileControls } from "./ui/components/MobileControls";
 import { OrientationNotice } from "./ui/components/OrientationNotice";
 import { PwaUpdatePrompt } from "./ui/components/PwaUpdatePrompt";
 import { PwaInstallPrompt } from "./ui/components/PwaInstallPrompt";
+import { SaveSyncStatus } from "./ui/components/SaveSyncStatus";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
@@ -102,6 +104,10 @@ export function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [authError, setAuthError] = useState<string>();
   const [authNotice, setAuthNotice] = useState<string>();
+  const [saveSyncState, setSaveSyncState] = useState<SaveSyncState>(() =>
+    gameSaveStore.getSyncState()
+  );
+  const [saveSyncError, setSaveSyncError] = useState<string>();
   const [playerEmail, setPlayerEmail] = useState<string>();
   const usesMobileGameplayControls = useMobileGameplayControls();
 
@@ -197,10 +203,23 @@ export function App() {
   }, [activeNotification]);
 
   useEffect(() => {
-    gameSaveStore.onError((error) => {
-      console.error("Could not persist game save", error);
-      setAuthError("No se pudo sincronizar el progreso con Supabase. Revisa la conexion e intenta otra vez.");
+    const offSyncState = gameSaveStore.onSyncStateChange((state) => {
+      setSaveSyncState(state);
+      if (state === "pending" || state === "synced" || state === "disconnected") {
+        setSaveSyncError(undefined);
+      }
     });
+    const offSaveError = gameSaveStore.onError((error) => {
+      console.error("Could not persist game save", error);
+      setSaveSyncError(
+        "No se pudo sincronizar el progreso. Revisa la conexion y vuelve a intentarlo.",
+      );
+    });
+
+    return () => {
+      offSyncState();
+      offSaveError();
+    };
   }, []);
 
   useEffect(() => {
@@ -334,7 +353,7 @@ export function App() {
       await gameSaveStore.flush();
     } catch (error) {
       console.error("Could not flush game save before sign-out", error);
-      setAuthError("No se pudo guardar el progreso. Reintenta antes de cerrar la sesion.");
+      setSaveSyncError("No se pudo guardar el progreso. Reintenta antes de cerrar la sesion.");
       return;
     }
 
@@ -353,7 +372,7 @@ export function App() {
       await gameSaveStore.flush();
     } catch (error) {
       console.error("Could not reset remote game save", error);
-      setAuthError("No se pudo reiniciar el progreso porque fallo la sincronizacion.");
+      setSaveSyncError("No se pudo reiniciar el progreso porque fallo la sincronizacion.");
       return;
     }
 
@@ -376,6 +395,15 @@ export function App() {
     setSave(currentSave);
     setActiveLevelId(levelId);
     gameEvents.emit(EVENTS.START_GAME, { levelId });
+  };
+  const retrySaveSync = async () => {
+    setSaveSyncError(undefined);
+    try {
+      await gameSaveStore.retry();
+    } catch (error) {
+      console.error("Could not retry game save synchronization", error);
+      setSaveSyncError("El progreso sigue pendiente. Comprueba la conexion y reintenta.");
+    }
   };
   const selectCharacter = (characterId: CharacterId) => {
     const currentSave = gameSaveStore.load();
@@ -600,6 +628,12 @@ export function App() {
           onSignUp={signUp}
         />
       )}
+      <SaveSyncStatus
+        state={saveSyncState}
+        error={saveSyncError}
+        quiet={screen === "playing" || screen === "paused"}
+        onRetry={retrySaveSync}
+      />
       <PwaInstallPrompt
         visible={needsAuth || screen === "main-menu" || screen === "game-over" || screen === "victory"}
       />

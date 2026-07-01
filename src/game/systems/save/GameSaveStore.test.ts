@@ -205,6 +205,28 @@ describe("GameSaveStore persistence regressions", () => {
     await flushing;
     expect(adapter.remoteSave.player.coins).toBe(30);
   });
+
+  it("publishes the synchronization lifecycle and supports unsubscribing", async () => {
+    const adapter = new ControlledSaveAdapter();
+    const store = new GameSaveStore();
+    const states: string[] = [];
+    const unsubscribe = store.onSyncStateChange((state) => states.push(state));
+
+    await store.connect(adapter);
+    expect(states).toEqual(["loading", "pending", "synced"]);
+
+    adapter.failNextSave(new Error("offline"));
+    const changedSave = store.load();
+    changedSave.player.coins = 12;
+    store.save(changedSave);
+    await expect(store.flush()).rejects.toThrow("offline");
+    expect(states.slice(-2)).toEqual(["pending", "error"]);
+
+    unsubscribe();
+    const stateCount = states.length;
+    await store.retry();
+    expect(states).toHaveLength(stateCount);
+  });
 });
 
 describe("normalizeSaveData regression coverage", () => {
