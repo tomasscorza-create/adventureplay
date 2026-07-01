@@ -46,7 +46,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Las acciones destructivas o de compra siempre requieren confirmacion explicita.
 - Mobile prioriza landscape, safe areas y controles que no tapen el centro del gameplay.
 - Las pruebas visuales en navegador las realiza el usuario. Los agentes no deben abrir, automatizar ni ejecutar pruebas de navegador salvo peticion explicita del usuario.
-- `npm run build` es el minimo obligatorio antes de entregar cambios de codigo.
+- `npm run check` es el minimo obligatorio antes de entregar cambios de codigo.
 
 ### Navegacion
 
@@ -62,7 +62,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Proyecto local: `C:\Users\usuario\Desktop\superjuego`.
 - Stack obligatorio ya aplicado: React + Vite + TypeScript + Phaser.
 - Tipo de proyecto actual: demo web jugable 2D, preparada para evolucionar a Android mediante Capacitor mas adelante.
-- Estado de build: `npm run build` pasa correctamente.
+- Estado de calidad: `npm run check` pasa correctamente.
 - Servidor usado durante desarrollo: Vite. Si `5173` esta ocupado, usar otro puerto como `5174`.
 - Phaser renderiza el juego real en canvas. React no renderiza el juego frame a frame.
 - React maneja UI externa: menu, seleccion de personaje, seleccion de modos/regiones/niveles, HUD, pausa, game over, victoria, controles tactiles y aviso de orientacion.
@@ -87,6 +87,8 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/main.tsx`: entrada React.
 - `src/styles.css`: layout global, HUD, overlays, controles tactiles, responsive y orientacion.
 - `vite.config.ts`: manifiesto PWA, estrategia de actualizacion y politica de cache; las solicitudes a Supabase deben seguir usando red y no cachearse en el service worker.
+- `eslint.config.js`: reglas compartidas para TypeScript, React, hooks y scripts Node.
+- `.github/workflows/ci.yml`: pipeline de GitHub para lint, tipos, tests, auditorias de contenido, build y dependencias.
 - `public/favicon.svg`: fuente editable de los iconos PWA; ejecutar `npm run pwa:assets` despues de modificarla.
 - `src/ui/components/PwaUpdatePrompt.tsx`: aviso no intrusivo que permite aplicar o posponer una nueva version.
 - `src/game/main.ts`: crea la instancia Phaser.
@@ -426,7 +428,7 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 9. Incorporar enemigos gradualmente. Primero reutilizar IA existente con una textura tematica opcional; crear una clase nueva solo si cambia el comportamiento.
 10. Revisar todo flujo que conserva nivel: inicio, pausa, derrota, victoria, transicion y reintento. Ninguno debe depender de un fallback fijo de otra region.
 11. Adaptar `audit:levels` para que las reglas especificas de una region se filtren por `theme`; no asumir que el numero de escenario es global.
-12. Ejecutar `git diff --check`, `npm run audit:levels` y `npm run build`. Dejar la prueba visual y el recorrido completo pendientes del usuario salvo peticion explicita.
+12. Ejecutar `git diff --check` y `npm run check`. Dejar la prueba visual y el recorrido completo pendientes del usuario salvo peticion explicita.
 
 ### Implementacion actual de Bosque encantado
 
@@ -490,7 +492,7 @@ Reglas obligatorias de esta curva:
 - [ ] Reintento desde pausa, derrota y victoria conserva el `levelId` exacto.
 - [ ] Transiciones no cruzan de region salvo que `nextLevelId` lo indique expresamente.
 - [ ] Auditoria diferencia regiones y no aplica reglas tematicas a niveles ajenos.
-- [ ] `git diff --check`, `npm run audit:levels` y `npm run build` pasan.
+- [ ] `git diff --check` y `npm run check` pasan.
 - [ ] Prueba visual y recorrido manual marcados como pendientes del usuario si no fueron solicitados.
 
 ## Reglas de arquitectura
@@ -596,14 +598,12 @@ Reglas obligatorias de esta curva:
 Ejecutar:
 
 ```powershell
-npm run audit:achievements
-npm run audit:levels
-npm run audit:progression
-npm run test
-npm run build
+npm run check
 ```
 
-`audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. `npm run test` ejecuta la red de seguridad Vitest. Las regresiones corregidas deben quedar como pruebas normales; solo los hallazgos confirmados que pertenecen a una fase posterior pueden conservar temporalmente `it.fails`, con su alcance documentado. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. Vitest cubre sesion, persistencia, normalizacion y estado de sincronizacion. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+
+Cuando cambien migraciones, ejecutar ademas `npm run supabase:start`, `npm run supabase:reset`, `supabase db lint --local --fail-on error` y `npm run supabase:stop`. Estos comandos validan exclusivamente Docker local; no sustituirlos por operaciones `--linked` salvo peticion explicita.
 
 Las pruebas visuales y manuales en navegador quedan a cargo del usuario. Un agente solo debe ejecutarlas cuando el usuario lo pida expresamente; en los demas casos debe entregar las verificaciones automaticas y dejar esta comprobacion como pendiente del usuario.
 
@@ -660,7 +660,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 
 - `WorldMapScene`, `BattleScene` y `UIScene` existen como estructura futura, no como features completas.
 - No hay un paquete completo de assets finales; M3 ya usa cinco cuadros laterales propios, pero gran parte del resto del gameplay sigue siendo placeholder.
-- No hay tests automatizados.
+- Los tests automatizados actuales cubren sesion, cola de guardado, normalizacion y aviso de sincronizacion; gameplay, balance y layout visual siguen requiriendo recorridos manuales.
 - No hay empaquetado Android todavia.
 - La arquitectura esta preparada, pero debe crecer gradualmente para no volver la demo dificil de entender.
 - La velocidad acumulada actual llega a 310 en LV15 y sigue dentro del rango previsto. Antes de agregar mejoras que lleven al jugador a 340 o mas, revisar manualmente saltos, atajos, persecuciones y ritmo de camara; 340 es el umbral de advertencia de balance, no un aumento aprobado automaticamente.

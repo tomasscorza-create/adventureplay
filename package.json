@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
+    "lint": "eslint src scripts vite.config.ts eslint.config.js --max-warnings 0",
+    "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
     "audit:achievements": "node --experimental-strip-types scripts/audit-achievements.mjs",
@@ -15,7 +17,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "supabase:start": "supabase start",
     "supabase:reset": "supabase db reset",
-    "supabase:stop": "supabase stop"
+    "supabase:stop": "supabase stop",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run audit:achievements && npm run audit:levels && npm run audit:progression && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
@@ -27,9 +30,15 @@
     "vite": "^6.3.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vite-pwa/assets-generator": "^1.0.2",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
+    "typescript-eslint": "^8.62.1",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.9"
   }
