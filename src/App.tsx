@@ -7,16 +7,12 @@ import {
 import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { createGame } from "./game/main";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
-import type { SaveSyncState } from "./game/systems/save/GameSaveStore";
-import { SupabaseSaveAdapter } from "./game/systems/save/SupabaseSaveAdapter";
-import { createDefaultSave, normalizePlayerDisplayName } from "./game/systems/save/SaveDefaults";
+import { normalizePlayerDisplayName } from "./game/systems/save/SaveDefaults";
 import type { AchievementIconId, AchievementReward } from "./game/data/achievements";
 import type { LevelRewardDefinition } from "./game/data/progression";
 import { gameAudio } from "./shared/audio/GameAudio";
 import { EVENTS } from "./shared/constants/events";
 import { MOBILE_GAMEPLAY_QUERY } from "./shared/constants/game";
-import { isSupabaseConfigured, supabase } from "./shared/supabase/client";
-import { shouldLoadSessionSave } from "./shared/supabase/authEvents";
 import type {
   AchievementId,
   CharacterId,
@@ -35,6 +31,7 @@ import { OrientationNotice } from "./ui/components/OrientationNotice";
 import { PwaUpdatePrompt } from "./ui/components/PwaUpdatePrompt";
 import { PwaInstallPrompt } from "./ui/components/PwaInstallPrompt";
 import { SaveSyncStatus } from "./ui/components/SaveSyncStatus";
+import { useGameSession } from "./ui/hooks/useGameSession";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
@@ -58,7 +55,6 @@ const initialHud: HudState = {
   progressPercent: 0,
 };
 
-type AuthStatus = "checking" | "signed-out" | "loading-save" | "signed-in";
 type ProgressNotification = {
   key: string;
   kind: "achievement";
@@ -100,15 +96,22 @@ export function App() {
   const [levelSummary, setLevelSummary] = useState<LevelCompletionSummary>();
   const [activePowerShop, setActivePowerShop] = useState<PurchasablePower>();
   const [activeLevelId, setActiveLevelId] = useState("meadowOutpost");
-  const [save, setSave] = useState<SaveData>(() => createDefaultSave());
-  const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
-  const [authError, setAuthError] = useState<string>();
-  const [authNotice, setAuthNotice] = useState<string>();
-  const [saveSyncState, setSaveSyncState] = useState<SaveSyncState>(() =>
-    gameSaveStore.getSyncState()
-  );
-  const [saveSyncError, setSaveSyncError] = useState<string>();
-  const [playerEmail, setPlayerEmail] = useState<string>();
+  const {
+    authError,
+    authNotice,
+    authStatus,
+    isSupabaseConfigured,
+    playerEmail,
+    resetProgress: resetSessionProgress,
+    retrySaveSync,
+    save,
+    saveSyncError,
+    saveSyncState,
+    setSave,
+    signIn,
+    signOut: signOutSession,
+    signUp,
+  } = useGameSession();
   const usesMobileGameplayControls = useMobileGameplayControls();
 
   useEffect(() => {
@@ -117,6 +120,12 @@ export function App() {
       game.destroy(true);
     };
   }, []);
+
+  useEffect(() => {
+    if (authStatus === "signed-out") {
+      setScreen("main-menu");
+    }
+  }, [authStatus]);
 
   useEffect(() => {
     const offHud = gameEvents.on(EVENTS.HUD_UPDATED, setHud);
@@ -183,7 +192,7 @@ export function App() {
       offScreen();
       offCompleted();
     };
-  }, []);
+  }, [setSave]);
 
   const activeNotification = progressQueue[0];
   const activeAchievement = activeNotification?.kind === "achievement"
@@ -202,164 +211,9 @@ export function App() {
     return () => window.clearTimeout(timeoutId);
   }, [activeNotification]);
 
-  useEffect(() => {
-    const offSyncState = gameSaveStore.onSyncStateChange((state) => {
-      setSaveSyncState(state);
-      if (state === "pending" || state === "synced" || state === "disconnected") {
-        setSaveSyncError(undefined);
-      }
-    });
-    const offSaveError = gameSaveStore.onError((error) => {
-      console.error("Could not persist game save", error);
-      setSaveSyncError(
-        "No se pudo sincronizar el progreso. Revisa la conexion y vuelve a intentarlo.",
-      );
-    });
-
-    return () => {
-      offSyncState();
-      offSaveError();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) {
-      gameSaveStore.disconnect();
-      setAuthStatus("signed-out");
-      setAuthError(
-        "Faltan VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY (o VITE_SUPABASE_ANON_KEY).",
-      );
-      return;
-    }
-
-    const activeSupabase = supabase;
-    let isActive = true;
-    let activeUserId: string | undefined;
-    let sessionRequestId = 0;
-
-    const clearSessionSave = () => {
-      sessionRequestId += 1;
-      activeUserId = undefined;
-      gameSaveStore.disconnect();
-      if (!isActive) {
-        return;
-      }
-
-      setPlayerEmail(undefined);
-      setSave(createDefaultSave());
-      setScreen("main-menu");
-      setAuthStatus("signed-out");
-    };
-
-    const loadSessionSave = async (sessionUserId: string, email?: string) => {
-      const requestId = ++sessionRequestId;
-      activeUserId = sessionUserId;
-      setAuthStatus("loading-save");
-      setAuthError(undefined);
-      setAuthNotice(undefined);
-
-      try {
-        const nextSave = await gameSaveStore.connect(
-          new SupabaseSaveAdapter(activeSupabase, sessionUserId),
-          sessionUserId,
-        );
-        if (!isActive || requestId !== sessionRequestId) {
-          return;
-        }
-
-        setPlayerEmail(email);
-        setSave(nextSave);
-        setAuthStatus("signed-in");
-      } catch (error) {
-        console.error("Could not load remote game save", error);
-        if (!isActive || requestId !== sessionRequestId) {
-          return;
-        }
-
-        activeUserId = undefined;
-        gameSaveStore.disconnect();
-        setAuthError("No se pudo cargar el progreso remoto. Revisa la conexion con Supabase y reintenta.");
-        setAuthStatus("signed-out");
-      }
-    };
-
-    const { data } = activeSupabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) {
-        clearSessionSave();
-        return;
-      }
-
-      if (activeUserId === session.user.id) {
-        setPlayerEmail(session.user.email);
-        return;
-      }
-
-      if (shouldLoadSessionSave(event)) {
-        void loadSessionSave(session.user.id, session.user.email);
-      }
-    });
-
-    return () => {
-      isActive = false;
-      sessionRequestId += 1;
-      gameSaveStore.disconnect();
-      data.subscription.unsubscribe();
-    };
-  }, []);
-
-  const signIn = async (email: string, password: string) => {
-    if (!supabase) {
-      return;
-    }
-
-    setAuthStatus("loading-save");
-    setAuthError(undefined);
-    setAuthNotice(undefined);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (!error) {
-      return;
-    }
-
-    setAuthError(error.message);
-    setAuthStatus("signed-out");
-  };
-
-  const signUp = async (email: string, password: string) => {
-    if (!supabase) {
-      return;
-    }
-
-    setAuthStatus("loading-save");
-    setAuthError(undefined);
-    setAuthNotice(undefined);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-
-    if (error) {
-      setAuthError(error.message);
-      setAuthStatus("signed-out");
-      return;
-    }
-
-    if (!data.session) {
-      setAuthNotice("Cuenta creada. Revisa tu email para confirmarla y luego inicia sesion.");
-      setAuthStatus("signed-out");
-    }
-  };
-
   const signOut = async () => {
     gameAudio.playUiSelect();
-    try {
-      await gameSaveStore.flush();
-    } catch (error) {
-      console.error("Could not flush game save before sign-out", error);
-      setSaveSyncError("No se pudo guardar el progreso. Reintenta antes de cerrar la sesion.");
-      return;
-    }
-
-    const { error } = await supabase?.auth.signOut() ?? {};
-    if (error) {
-      setAuthError(error.message);
+    if (!await signOutSession()) {
       return;
     }
 
@@ -367,16 +221,11 @@ export function App() {
   };
   const resetProgress = async () => {
     gameAudio.playUiSelect();
-    const freshSave = gameSaveStore.reset();
-    try {
-      await gameSaveStore.flush();
-    } catch (error) {
-      console.error("Could not reset remote game save", error);
-      setSaveSyncError("No se pudo reiniciar el progreso porque fallo la sincronizacion.");
+    const freshSave = await resetSessionProgress();
+    if (!freshSave) {
       return;
     }
 
-    setSave(freshSave);
     setHud(initialHud);
     setScreen("main-menu");
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
@@ -395,15 +244,6 @@ export function App() {
     setSave(currentSave);
     setActiveLevelId(levelId);
     gameEvents.emit(EVENTS.START_GAME, { levelId });
-  };
-  const retrySaveSync = async () => {
-    setSaveSyncError(undefined);
-    try {
-      await gameSaveStore.retry();
-    } catch (error) {
-      console.error("Could not retry game save synchronization", error);
-      setSaveSyncError("El progreso sigue pendiente. Comprueba la conexion y reintenta.");
-    }
   };
   const selectCharacter = (characterId: CharacterId) => {
     const currentSave = gameSaveStore.load();
