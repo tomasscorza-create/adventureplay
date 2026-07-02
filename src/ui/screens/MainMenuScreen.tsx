@@ -6,26 +6,22 @@ import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
 import menuGearUrl from "../../assets/menu/menu-gear.webp";
 import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
 import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
-import {
-  achievementCategories,
-  achievementDefinitions,
-  getAchievementRewardLabels,
-  type AchievementCategoryId,
-} from "../../game/data/achievements";
+import { achievementDefinitions } from "../../game/data/achievements";
 import {
   canChooseInitialCharacter,
   getNextCharacterUnlockRequirement,
   initialCharacterIds,
 } from "../../game/data/characterUnlocks";
 import { playableCharacters } from "../../game/data/characters";
-import { inventoryCategories, itemDefinitions } from "../../game/data/items";
 import { levelDefinitions } from "../../game/data/levels";
 import { getProfileIconDefinition, profileIconDefinitions } from "../../game/data/profileIcons";
 import { gameAudio } from "../../shared/audio/GameAudio";
-import type { CharacterId, InventoryCategoryId, ProfileIconId, SaveData } from "../../shared/types/game";
+import type { CharacterId, ProfileIconId, SaveData } from "../../shared/types/game";
 import { AchievementIcon } from "../components/AchievementIcon";
+import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
 import { ExploreView } from "./main-menu/ExploreView";
+import { InventoryView } from "./main-menu/InventoryView";
 import { MenuHeading, SettingToggle } from "./main-menu/MenuPrimitives";
 import {
   formatCompactAmount,
@@ -60,12 +56,6 @@ const mainActions = [
   { id: "achievements", label: "Logros", view: "achievements" as const, imageUrl: menuAchievementsButtonUrl },
 ];
 
-const categoryIconLabels: Record<InventoryCategoryId, string> = {
-  plansKeys: "K",
-  toolsWeapons: "A",
-  potions: "P",
-};
-
 export function MainMenuScreen({
   playerEmail,
   save,
@@ -80,10 +70,6 @@ export function MainMenuScreen({
 }: MainMenuScreenProps) {
   const [view, setView] = useState<MenuView>(() => save.primaryCharacterId ? "main" : "characters");
   const [inspectedCharacterId, setInspectedCharacterId] = useState<CharacterId>();
-  const [activeInventoryCategoryId, setActiveInventoryCategoryId] =
-    useState<InventoryCategoryId>("plansKeys");
-  const [activeAchievementCategoryId, setActiveAchievementCategoryId] =
-    useState<AchievementCategoryId>("adventure");
   const [activeProfileSectionId, setActiveProfileSectionId] = useState<ProfileSectionId>("edit");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
   const [previewRegionId, setPreviewRegionId] = useState<string>();
@@ -225,47 +211,12 @@ export function MainMenuScreen({
     setIsEditingPlayerName(false);
   };
 
-  const inventoryGroups = useMemo(() => {
-    const itemCountsByCategory = new Map<InventoryCategoryId, Map<string, number>>();
-
-    for (const itemId of save.player.inventory) {
-      const item = itemDefinitions[itemId];
-      if (!item?.inventoryCategory) {
-        continue;
-      }
-
-      const categoryCounts = itemCountsByCategory.get(item.inventoryCategory) ?? new Map<string, number>();
-      categoryCounts.set(itemId, (categoryCounts.get(itemId) ?? 0) + 1);
-      itemCountsByCategory.set(item.inventoryCategory, categoryCounts);
-    }
-
-    return inventoryCategories.map((category) => {
-      const categoryCounts = itemCountsByCategory.get(category.id);
-      const items = categoryCounts
-        ? Array.from(categoryCounts.entries()).map(([itemId, amount]) => ({
-            amount,
-            item: itemDefinitions[itemId],
-          }))
-        : [];
-
-      return { ...category, items };
-    });
-  }, [save.player.inventory]);
-
-  const unlockedAchievementCount = achievementDefinitions.filter((achievement) =>
-    save.achievements.unlockedIds.includes(achievement.id),
-  ).length;
-  const achievementGroups = achievementCategories.map((category) => {
-    const achievements = achievementDefinitions.filter((achievement) => achievement.category === category.id);
-    const completedCount = achievements.filter((achievement) =>
-      save.achievements.unlockedIds.includes(achievement.id),
-    ).length;
-
-    return { ...category, achievements, completedCount };
-  });
   const averageActionsPerMinute = save.statistics.gameplaySeconds > 0
     ? Math.round(save.statistics.actions / (save.statistics.gameplaySeconds / 60))
     : 0;
+  const unlockedAchievementCount = achievementDefinitions.filter((achievement) =>
+    save.achievements.unlockedIds.includes(achievement.id),
+  ).length;
   const exploredRegionCount = new Set(
     save.completedLevels.map((levelId) => levelDefinitions[levelId]?.theme).filter(Boolean),
   ).size;
@@ -657,196 +608,9 @@ export function MainMenuScreen({
             </div>
           )}
 
-          {view === "inventory" && (
-            <div className="menu-chamber menu-chamber--inventory">
-              <MenuHeading eyebrow="Inventario" title="Bolsa de viaje" onBack={() => setView("main")} />
+          {view === "inventory" && <InventoryView save={save} onBack={() => setView("main")} />}
 
-              <div className="inventory-screen" aria-label="Inventario del jugador">
-                <div className="inventory-screen__summary">
-                  <span>{save.player.inventory.length} piezas guardadas</span>
-                  <strong>Frontera Verde</strong>
-                </div>
-
-                <div className="inventory-tabs" role="tablist" aria-label="Categorias de inventario">
-                  {inventoryGroups.map((category) => {
-                    const isActive = category.id === activeInventoryCategoryId;
-                    return (
-                      <button
-                        className={`inventory-tab inventory-tab--${category.id}${
-                          isActive ? " inventory-tab--active" : ""
-                        }`}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        key={category.id}
-                        onClick={() => runMenuAction(() => setActiveInventoryCategoryId(category.id))}
-                      >
-                        <span className="inventory-tab__seal" aria-hidden="true">
-                          {categoryIconLabels[category.id]}
-                        </span>
-                        <span>{category.name}</span>
-                        <strong>{category.items.length}</strong>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {inventoryGroups.map((category) => (
-                  <section
-                    className={`inventory-page${
-                      category.id === activeInventoryCategoryId ? " inventory-page--active" : ""
-                    }`}
-                    key={category.id}
-                    hidden={category.id !== activeInventoryCategoryId}
-                  >
-                    <div className="inventory-page__header">
-                      <span>{category.name}</span>
-                      <strong>{category.items.length} / 12</strong>
-                    </div>
-
-                    <div className="inventory-slots">
-                      {category.items.map(({ item, amount }) => (
-                        <article
-                          className={`inventory-slot inventory-slot--filled inventory-slot--${item.type}`}
-                          key={item.id}
-                        >
-                          <span className="inventory-slot__icon">{item.name.slice(0, 1)}</span>
-                          <span className="inventory-slot__body">
-                            <strong>{item.name}</strong>
-                            <span>{item.description ?? "Pieza recogida durante la aventura."}</span>
-                          </span>
-                          {amount > 1 && <span className="inventory-slot__amount">x{amount}</span>}
-                        </article>
-                      ))}
-
-                      {Array.from({ length: Math.max(0, 6 - category.items.length) }, (_slot, index) => (
-                        <span className="inventory-slot inventory-slot--empty" key={`${category.id}-empty-${index}`}>
-                          Ranura vacia
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {view === "achievements" && (
-            <div className="menu-chamber menu-chamber--achievements">
-              <MenuHeading eyebrow="Progreso" title="Logros" onBack={() => setView("main")} />
-
-              <div className="achievement-screen" aria-label="Logros del jugador">
-                <div className="achievement-summary">
-                  <span className="achievement-summary__icon" aria-hidden="true">
-                    <AchievementIcon icon="trophy" />
-                  </span>
-                  <div className="achievement-summary__count">
-                    <strong>{unlockedAchievementCount}/{achievementDefinitions.length}</strong>
-                    <span>Completados</span>
-                  </div>
-                  <span className="achievement-summary__track" aria-hidden="true">
-                    <span style={{ width: `${Math.round((unlockedAchievementCount / achievementDefinitions.length) * 100)}%` }} />
-                  </span>
-                </div>
-
-                <div className="achievement-tabs" role="tablist" aria-label="Categorias de logros">
-                  {achievementGroups.map((category) => {
-                    const isActive = category.id === activeAchievementCategoryId;
-                    return (
-                      <button
-                        className={`achievement-tab${isActive ? " achievement-tab--active" : ""}`}
-                        id={`achievement-tab-${category.id}`}
-                        type="button"
-                        role="tab"
-                        aria-controls={`achievement-page-${category.id}`}
-                        aria-selected={isActive}
-                        key={category.id}
-                        onClick={() => runMenuAction(() => setActiveAchievementCategoryId(category.id))}
-                      >
-                        <span className="achievement-tab__seal" aria-hidden="true">
-                          <AchievementIcon icon={category.icon} />
-                        </span>
-                        <span>{category.name}</span>
-                        <strong>{category.completedCount}/{category.achievements.length}</strong>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="achievement-pages">
-                  {achievementGroups.map((category) => (
-                    <section
-                      className={`achievement-category achievement-page${
-                        category.id === activeAchievementCategoryId ? " achievement-page--active" : ""
-                      }`}
-                      id={`achievement-page-${category.id}`}
-                      role="tabpanel"
-                      aria-labelledby={`achievement-tab-${category.id}`}
-                      key={category.id}
-                      hidden={category.id !== activeAchievementCategoryId}
-                    >
-                      <header className="achievement-category__header">
-                        <span aria-hidden="true"><AchievementIcon icon={category.icon} /></span>
-                        <h2>{category.name}</h2>
-                        <strong>{category.completedCount}/{category.achievements.length}</strong>
-                      </header>
-                      <div className="achievement-grid">
-                        {category.achievements.map((achievement) => {
-                            const isUnlocked = save.achievements.unlockedIds.includes(achievement.id);
-                            const progress = achievement.getProgress(save);
-                            const progressPercent = Math.round((progress / achievement.target) * 100);
-                            return (
-                              <article
-                                className={`achievement-card${isUnlocked ? " achievement-card--completed" : ""}`}
-                                key={achievement.id}
-                              >
-                                <div className="achievement-card__emblem" aria-hidden="true">
-                                  <span className="achievement-card__seal">
-                                    <AchievementIcon icon={achievement.icon} />
-                                  </span>
-                                  <span className="achievement-card__difficulty">
-                                    {Array.from(
-                                      { length: achievement.difficulty === "medium" ? 2 : 1 },
-                                      (_bolt, index) => (
-                                        <span className="achievement-card__bolt" key={index}>
-                                          <svg viewBox="0 0 24 24" focusable="false">
-                                            <path d="M13.8 2 5.5 13h5.8L10.2 22l8.3-11h-5.8L13.8 2Z" />
-                                          </svg>
-                                        </span>
-                                      ),
-                                    )}
-                                  </span>
-                                </div>
-                                <span
-                                  className="achievement-card__status"
-                                  aria-label={isUnlocked ? "Completado" : "Bloqueado"}
-                                  title={isUnlocked ? "Completado" : "Bloqueado"}
-                                >
-                                  <AchievementIcon icon={isUnlocked ? "check" : "lock"} />
-                                </span>
-                                <div className="achievement-card__copy">
-                                  <h3>{achievement.title}</h3>
-                                  <p>{achievement.description}</p>
-                                  <span className="achievement-card__reward">
-                                    Recompensa: {getAchievementRewardLabels(achievement.reward).join(" + ")}
-                                  </span>
-                                </div>
-                                <div className="achievement-card__footer">
-                                  <span className="achievement-card__progress" aria-label={`${progress} de ${achievement.target}`}>
-                                    <span style={{ width: `${progressPercent}%` }} />
-                                  </span>
-                                  <small>{progress}/{achievement.target}</small>
-                                </div>
-                              </article>
-                            );
-                        })}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {view === "achievements" && <AchievementsView save={save} onBack={() => setView("main")} />}
 
           {view === "characters" && (
             <div className="menu-chamber menu-chamber--characters">
