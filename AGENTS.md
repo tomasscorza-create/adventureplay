@@ -83,9 +83,9 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 ## Estructura principal
 
 - `src/App.tsx`: monta Phaser, escucha eventos globales y decide que UI React mostrar.
-- `src/ui/screens/MainMenuScreen.tsx`: flujo React de menu principal, seleccion de personaje, modos, mapa de regiones y seleccion de niveles.
+- `src/ui/screens/MainMenuScreen.tsx`: orquesta el flujo React del menu; las vistas de exploracion, inventario, logros y detalle de personaje viven en `src/ui/screens/main-menu/`.
 - `src/main.tsx`: entrada React.
-- `src/styles.css`: layout global, HUD, overlays, controles tactiles, responsive y orientacion.
+- `src/styles.css`: punto de entrada que conserva el orden de cascada; las reglas estan separadas por area en `src/styles/`.
 - `vite.config.ts`: manifiesto PWA, estrategia de actualizacion y politica de cache; las solicitudes a Supabase deben seguir usando red y no cachearse en el service worker.
 - `eslint.config.js`: reglas compartidas para TypeScript, React, hooks y scripts Node.
 - `.github/workflows/ci.yml`: pipeline de GitHub para lint, tipos, tests, auditorias de contenido, build y dependencias.
@@ -101,6 +101,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/systems/save/SupabaseSaveAdapter.ts`: adapter async para `public.game_saves`.
 - `src/shared/supabase/client.ts`: cliente Supabase web configurado por `VITE_SUPABASE_URL` y preferentemente `VITE_SUPABASE_PUBLISHABLE_KEY`; conserva compatibilidad con `VITE_SUPABASE_ANON_KEY`.
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
+- `src/game/data/levels.ts`: contrato publico y agregador de niveles; cada region vive en `src/game/data/levels/` y comparte solo helpers de construccion.
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
 - `src/game/data/powerShop.ts`: paquetes, costos y textos compartidos por la tienda del menu y la compra durante gameplay.
 - `src/game/data/achievements.ts`: definiciones, textos, objetivos y lectura de progreso de los logros.
@@ -117,6 +118,8 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/assets/enemies/enchanted-m2/`: diez poses fuente del M2 de Bosque encantado, normalizadas a cuadros 320x320 durante `PreloadScene`; los originales pueden archivarse fuera del repositorio.
 - `src/assets/enemies/enchanted-m3/`: siete poses de E2M3 para reposo, carrera, ataque y derrota; los originales pueden archivarse fuera del repositorio.
 - `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3 con estados de alerta, persecucion, salto, ataque, recuperacion, dano y derrota; tiene dos puntos de vida, barra propia y navegacion preventiva de bordes/plataformas.
+- `src/game/scenes/preload/loadSceneAssets.ts`: registra las rutas y claves de assets; `PreloadScene` conserva la generacion de texturas y animaciones.
+- `src/game/scenes/level/LevelRunTracker.ts`: cuenta tiempo/acciones del intento y aplica estadisticas una sola vez; `LevelScene` conserva la orquestacion jugable.
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
@@ -356,7 +359,7 @@ No hardcodear nuevos enemigos, items o niveles dentro de `LevelScene` si pueden 
 - Enemigos: `src/game/data/enemies.ts`.
 - Personajes: `src/game/data/characters.ts`.
 - Items: `src/game/data/items.ts`.
-- Niveles: `src/game/data/levels.ts`.
+- Niveles: contrato en `src/game/data/levels.ts` y definiciones regionales en `src/game/data/levels/`.
 - Experiencia y habilidades: `src/game/data/progression.ts`.
 
 Para agregar un enemigo:
@@ -406,8 +409,8 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 
 - Una region no requiere una escena Phaser nueva. `LevelScene` sigue siendo el orquestador y `LevelDefinition.theme` selecciona la familia visual.
 - La identidad de la region vive en assets, parallax, terreno, decoracion y skins; tiempo, progreso, camara, presion roja, checkpoint, meta, guardado y colisiones se reutilizan.
-- Los niveles permanecen en `levels.ts`. No crear arrays de plataformas, enemigos o peligros dentro de `LevelScene`.
-- El mapa y sus listas de niveles viven en React, dentro de `MainMenuScreen.tsx`. Cada region declara sus propios `LevelSlot`.
+- Los niveles permanecen en los modulos regionales agregados por `levels.ts`. No crear arrays de plataformas, enemigos o peligros dentro de `LevelScene`.
+- El mapa y sus listas de niveles viven en React, dentro de `src/ui/screens/main-menu/ExploreView.tsx`. Cada region declara sus propios `LevelSlot`.
 - El mapa de Explorar usa `src/assets/menu/explore-map/complete.webp` como base y siete recortes regionales alineados. Los nombres no se escriben sobre la ilustracion: hover, foco o clic resaltan el recorte y el titulo correcto aparece en el panel derecho. Las fuentes maestras pueden archivarse fuera del repositorio.
 - El primer nivel de cada region se agrega a `levelSequences` en `SaveDefaults.ts`. La normalizacion debe desbloquearlo tanto en saves nuevos como existentes.
 - Los enemigos reutilizados aceptan una textura por tema. `BasicEnemy` y `M1Enemy` conservan IA, stats, dano y recompensas; solo cambia su `textureKey`.
@@ -420,9 +423,9 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 1. Revisar `git status --short` y no restaurar, mover ni borrar assets fuente que el usuario haya reorganizado.
 2. Definir un ID estable de tema y region. Para Bosque encantado se usa `theme: "enchanted-forest"` y el primer nivel es `enchantedGrove1`.
 3. Inspeccionar dimensiones, transparencia y funcion de los assets antes de copiarlos. Mantener las fuentes en un archivo maestro externo y copiar solo los archivos usados a `src/assets/scenery/<tema>/`.
-4. Cargar todos los assets de gameplay en `PreloadScene` con claves agrupadas por tema. No cargar rutas finales directamente desde `LevelScene`.
+4. Registrar todos los assets de gameplay en `scenes/preload/loadSceneAssets.ts` con claves agrupadas por tema; `PreloadScene` genera texturas y animaciones. No cargar rutas finales directamente desde `LevelScene`.
 5. Crear primero un nivel minimo recorrible en `levels.ts`: `worldWidth`, tiempo, auto-scroll, inicio, suelo, plataformas, pozos, ORO, caja, checkpoint y meta. Usar IDs unicos para caja, checkpoint y peligros.
-6. Agregar la region y sus slots en `MainMenuScreen.tsx`. Diferenciar el estado activo con clases CSS tematicas colocadas despues de las reglas generales que puedan sobrescribirlas.
+6. Agregar la region y sus slots en `main-menu/ExploreView.tsx`. Diferenciar el estado activo con clases CSS tematicas colocadas despues de las reglas generales que puedan sobrescribirlas.
 7. Agregar el primer nivel a `levelSequences` de `SaveDefaults.ts` para no dejarlo bloqueado en cuentas existentes.
 8. Implementar el render tematico en metodos separados de `LevelScene`: fondo, capas de parallax, terreno, decoracion y visual de pozos. Conservar las colisiones basadas en los mismos datos.
 9. Incorporar enemigos gradualmente. Primero reutilizar IA existente con una textura tematica opcional; crear una clase nueva solo si cambia el comportamiento.
