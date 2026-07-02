@@ -1,4 +1,4 @@
-# Superjuego - Guia interna para agentes de IA
+# Adventure Play - Guia interna para agentes de IA
 
 Este archivo es el registro interno del estado actual del proyecto y la guia de continuidad para futuros agentes. Debe leerse antes de tocar codigo.
 
@@ -56,10 +56,13 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Expansion de contenido: `Proceso replicable para crear una region`.
 - Plataforma y calidad: `Estado mobile y Android`, `Reglas mobile`, `Verificacion obligatoria antes de entregar`.
 - Continuidad: `Convenciones de codigo`, `Proximos pasos recomendados`, `Advertencias actuales`, `Mantenimiento de esta guia`.
+- Evidencia antigua: `docs/verification-history.md`; no usarla como estado vigente sin volver a verificar.
 
 ## Estado actual del proyecto
 
-- Proyecto local: `C:\Users\usuario\Desktop\superjuego`.
+- Proyecto local: `C:\Users\usuario\Desktop\adventureplay`.
+- Nombre publico, repositorio y paquete npm: `Adventure Play` / `adventureplay`.
+- `superjuego` permanece solo en `supabase/config.toml` como identificador del stack Docker local y en la migracion ya aplicada `20260626000000_create_game_saves.sql`. No renombrar ninguno sin una migracion deliberada de infraestructura o historial.
 - Stack obligatorio ya aplicado: React + Vite + TypeScript + Phaser.
 - Tipo de proyecto actual: demo web jugable 2D, preparada para evolucionar a Android mediante Capacitor mas adelante.
 - Estado de calidad: `npm run check` pasa correctamente.
@@ -82,7 +85,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 
 ## Estructura principal
 
-- `src/App.tsx`: monta Phaser, escucha eventos globales y decide que UI React mostrar.
+- `src/App.tsx`: orquesta la UI y los eventos globales; `usePhaserGame` monta Phaser de forma diferida despues de autenticar.
 - `src/ui/screens/MainMenuScreen.tsx`: orquesta el flujo React del menu; las vistas de exploracion, inventario, logros y detalle de personaje viven en `src/ui/screens/main-menu/`.
 - `src/main.tsx`: entrada React.
 - `src/styles.css`: punto de entrada que conserva el orden de cascada; las reglas estan separadas por area en `src/styles/`.
@@ -665,7 +668,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 
 - `WorldMapScene`, `BattleScene` y `UIScene` existen como estructura futura, no como features completas.
 - No hay un paquete completo de assets finales; M3 ya usa cinco cuadros laterales propios, pero gran parte del resto del gameplay sigue siendo placeholder.
-- Los tests automatizados actuales cubren sesion, cola de guardado, normalizacion y aviso de sincronizacion; gameplay, balance y layout visual siguen requiriendo recorridos manuales.
+- Los tests automatizados actuales cubren sesion, cola de guardado, normalizacion, aviso de sincronizacion y estadisticas del intento; gameplay, balance y layout visual siguen requiriendo recorridos manuales.
 - No hay empaquetado Android todavia.
 - La arquitectura esta preparada, pero debe crecer gradualmente para no volver la demo dificil de entender.
 - La velocidad acumulada actual llega a 310 en LV15 y sigue dentro del rango previsto. Antes de agregar mejoras que lleven al jugador a 340 o mas, revisar manualmente saltos, atajos, persecuciones y ritmo de camara; 340 es el umbral de advertencia de balance, no un aumento aprobado automaticamente.
@@ -690,54 +693,6 @@ Al actualizarla:
 5. Mantener separados el estado confirmado, las reglas obligatorias, las advertencias y los proximos pasos.
 6. Si una comprobacion no se ejecuto en el turno actual, no presentarla como validacion reciente.
 
-Ultima revision documental: 2026-07-01. Esta fecha indica revision del contenido, no una ejecucion automatica del build ni una prueba completa de gameplay.
+El historial de comprobaciones anteriores se conserva en `docs/verification-history.md`. Es solo evidencia historica: el estado vigente, las reglas obligatorias y los riesgos actuales permanecen en este archivo.
 
-Verificacion del checkpoint de niveles 7 a 10 y M3: `npm run build` pasa el 2026-06-27 y el smoke test en navegador confirma carga del nivel 7, sprite lateral, barra de vida y escala visual cercana al heroe. Sigue siendo recomendable recorrer manualmente los cuatro niveles completos para ajustar balance fino y saltos limite.
-
-Verificacion del checkpoint de logros, pozos e IA de M3 del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. El smoke test local confirma autenticacion, menu principal, sala de logros con progreso persistido, layout landscape 844x390 sin desbordamiento y 0 errores de consola. En esta revision no se recorrio manualmente el gameplay completo; mantener pendientes las comprobaciones jugables detalladas de esta guia.
-
-Verificacion de la expansion a ocho logros del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. No se ejecuto navegador conforme a la politica de pruebas visuales a cargo del usuario.
-
-Verificacion de avisos de logro en gameplay del 2026-06-28: `npm run audit:levels` pasa con 10 niveles y 0 advertencias, y `npm run build` termina correctamente. La integracion usa `ACHIEVEMENT_UNLOCKED` desde Phaser y una cola React de tarjetas de 4.6 segundos; no se ejecuto navegador conforme a la politica de pruebas visuales a cargo del usuario.
-
-Verificacion de Bosque encantado LV1-LV5 del 2026-06-28: `npm run audit:levels` pasa con 15 niveles entre ambas regiones y 0 advertencias, y `npm run build` termina correctamente. La serie aumenta de 5/2 a 13/9 enemigos/peligros, reduce tiempo de 72 a 60 segundos, acelera presion de 52 a 88 e introduce 3/5/7 plataformas moviles en LV3-LV5. M0/M1 seleccionan texturas procedurales y M2 selecciona animaciones por estado mediante el tema sin duplicar sus clases de IA. No se ejecuto navegador conforme a la politica de pruebas visuales a cargo del usuario.
-
-Verificacion de reintentos multirregion del 2026-06-28: `RESTART_GAME` exige un `levelId`, `ACTIVE_LEVEL_CHANGED` sincroniza el nivel real con React y derrota/victoria conservan `restartLevelId`. Los fallbacks silenciosos de inicio y resultado fueron eliminados para no abrir Frontera Verde cuando falta una referencia. `npm run audit:levels` pasa con 15 niveles y 0 advertencias, y `npm run build` termina correctamente. La prueba manual del boton `Reintentar` queda a cargo del usuario.
-
-Verificacion de E2M3 del 2026-06-28: los siete PNG suministrados alimentan animaciones por estado dentro de la IA compartida de `M3Enemy`; Bosque LV3-LV5 contiene 1/2/3 E2M3 con inteligencia 0.50/0.65/0.80. `npm run audit:levels` pasa con 15 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores. La comprobacion visual y el balance fino durante un recorrido completo quedan a cargo del usuario.
-
-Verificacion de Bosque encantado LV6-LV10 del 2026-06-28: la region queda completa con diez niveles encadenados y normalizados para saves existentes. La segunda mitad aumenta de 14/10 a 18/14 enemigos/peligros, de 4 a 8 E2M3, de 8 a 12 plataformas moviles y de inteligencia 0.84 a 1.00; conserva un corazon aislado, caja unica, checkpoint y presupuesto de ORO por nivel. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores. El recorrido visual y el balance fino quedan a cargo del usuario.
-
-Verificacion del resumen posterior al nivel del 2026-06-28: la transicion automatica de cuatro segundos fue reemplazada por `LevelSummaryScreen`, alimentada por `LevelCompletionSummary`. Cuenta monstruos y ORO del intento, muestra todos los logros desbloqueados durante el recorrido, aplica variantes visuales para Frontera Verde y Bosque encantado, y exige `CONTINUE_LEVEL` para avanzar o finalizar. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores. La comprobacion visual de animaciones y responsive queda a cargo del usuario.
-
-Verificacion de APM por intento del 2026-06-28: `LevelScene` cuenta cambios de direccion y pulsaciones discretas de acciones sobre tiempo activo, excluye teclas sostenidas y pausas, y publica `actionsPerMinute` dentro de `LevelCompletionSummary`. La tercera tarjeta de `LevelSummaryScreen` muestra este valor en lugar de `Tramo superado`. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores.
-
-Verificacion de tiempo de recorrido del 2026-06-28: `LevelCompletionSummary.gameplayDurationSeconds` usa el mismo tiempo activo del intento que el APM. La primera tarjeta del resumen se divide en dos mitades compactas para mostrar monstruos e intervalo `s`/`m:ss`, con iconos y sin alterar la grilla exterior. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores.
-
-Verificacion de poder letal bidireccional del 2026-06-28: `LevelScene` pasa `Player.facing` a `PowerProjectile`, desplaza su origen delante del heroe y el proyectil aplica velocidad `780 * direction` con reflejo visual hacia la izquierda. La salida de pantalla ya contempla ambos bordes. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores.
-
-Correccion del lanzamiento bidireccional del 2026-06-28: agregar `PowerProjectile` al grupo fisico podia reemplazar la velocidad asignada durante su constructor y dejarlo detenido. `LevelScene` llama ahora `launch()` despues de incorporarlo al grupo, y `preUpdate` recupera la velocidad firmada si algun ajuste fisico la deja en cero. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores.
-
-Verificacion de compra de poderes durante gameplay del 2026-06-28: los badges desktop se anclan al borde inferior derecho interior del canvas y cada uno tiene un `+` independiente. `PAUSE_FOR_POWER_SHOP` congela escena y reloj; `PowerShopScreen` usa los paquetes compartidos de `powerShop.ts`, confirma la compra persistente y ofrece reanudar con HUD recargado o volver al menu. Al abrir, React refresca el save para incluir el ORO recogido durante el intento. `npm run audit:levels` pasa con 20 niveles y 0 advertencias, `npm run build` termina correctamente y `git diff --check` no detecta errores.
-
-Correccion visual de badges de poder del 2026-06-28: las primeras reglas de anclaje habian quedado antes del bloque legacy de `.ability-controls` y eran sobrescritas. Los overrides finales usan el hijo directo de `.app-shell`, se aplican al final de los estilos relevantes y anclan el conjunto a 8 px del borde inferior interior del canvas en desktop. Para evitar recortes, cada `+` ocupa un boton compacto separado inmediatamente a la derecha de su badge, en vez de depender de superposicion.
-
-Verificacion de logros y progresion RPG del 2026-06-29: existen 20 logros, con ocho faciles de un rayo y doce medios de dos rayos, recompensas persistentes y rachas diarias. La progresion usa una curva LV1-LV80 de 2.366.225 XP, recompensas unicas LV1-LV15, vida maxima 7, velocidad 310, dano melee 3 y dano a distancia 2 al alcanzar LV15. `PLAYER_LEVELED_UP` y `ACHIEVEMENT_UNLOCKED` comparten una cola superior React que evita superposiciones. `npm run audit:achievements`, `npm run audit:levels`, `npm run audit:progression`, `npm run build` y `git diff --check` pasan; la verificacion visual queda a cargo del usuario.
-
-Correccion de salto intermitente del 2026-06-29: `MovementSystem` conserva la pulsacion durante 120 ms para aceptar entradas inmediatamente anteriores al aterrizaje y mantiene 100 ms de gracia al abandonar una superficie. El audio se emite solo cuando el salto se ejecuta y el estado temporal se reinicia al crear cada nivel. `npm run build` y `git diff --check` pasan; la comprobacion tactil en dispositivo queda a cargo del usuario.
-
-Migracion a Supabase alojado del 2026-06-30: la migracion de endurecimiento vincula `game_saves.user_id` con `auth.users`, aplica borrado en cascada y limita los permisos de tabla al rol autenticado junto con RLS. El registro admite proyectos con o sin confirmacion de email, las credenciales de prueba ya no aparecen precargadas y `supabase/README.md` contiene el procedimiento de enlace, despliegue y verificacion. El repo quedo vinculado a `adventureplay` (`hlfyhbvzenuepojifetb`) y ambas migraciones se aplicaron en remoto. `supabase migration list`, `supabase db lint --linked`, la presencia remota de `public.game_saves` y el rechazo `401` para el rol anonimo confirman el despliegue; `supabase db reset`, `supabase db lint --local`, las tres auditorias, `npm run build` y `git diff --check` tambien pasan.
-
-Despliegue web verificado el 2026-06-30: `https://adventureplay.netlify.app/` responde HTTP 200 y entrega el bundle `assets/index-CJiAaQsA.js`. La inspeccion HTTP del artefacto confirma que contiene `hlfyhbvzenuepojifetb.supabase.co` y no contiene `127.0.0.1:55421`; por tanto, el build publico apunta a Supabase alojado y no al Docker local. Esta comprobacion no sustituye la prueba visual ni un alta/login real, que siguen a cargo del usuario salvo peticion explicita.
-
-Primera version PWA del 2026-06-30: `vite-plugin-pwa` genera manifiesto `Adventure Play`, service worker y 82 entradas precacheadas (aprox. 8.9 MiB). La instalacion solicita landscape/fullscreen, incluye iconos 64/192/512, maskable y Apple Touch, mantiene Supabase en `NetworkOnly` y ofrece actualizacion manual mediante `PwaUpdatePrompt`. Las tres auditorias y `npm run build` pasan; la instalacion, apertura standalone y actualizacion en movil real quedan a cargo del usuario.
-
-Revision Android/PWA del 2026-06-30: el manifiesto declara fallbacks de presentacion modernos y `PwaInstallPrompt` ofrece instalacion rapida solo en telefonos no instalados, con dialogo nativo Chromium y ayuda manual cuando el navegador no expone esa API. `docs/android-pwa-readiness.md` separa la PWA web de un futuro APK/AAB y registra los requisitos externos vigentes de API objetivo, identidad, firma, privacidad y Data safety que no pueden certificarse desde el repositorio.
-
-Mapa ilustrado de Explorar del 2026-06-30: el grafico CSS fue sustituido por el mapa completo y siete recortes regionales WebP alineados, derivados sin modificar las fuentes maestras. Hover, foco y clic resaltan el recorte; el panel derecho muestra `Frontera Verde`, `Bosque Encantado`, `La Jungla Moderna`, `Mina del Tesoro`, `Montañas de Hielo`, `Pirámides Misteriosas` o `Volcán Activo`, y las cinco regiones futuras permanecen seleccionables como `Próximamente`. No colocar nombres sobre la ilustracion. Las tres auditorias, `npm run build` y `git diff --check` pasan; la comprobacion visual final queda a cargo del usuario.
-
-Desacople de fuentes de diseño del 2026-06-30: los nueve iconos de perfil usados en runtime viven en `src/assets/ui/profile-icons/`, no quedan imports desde `diseños png` y esa carpeta esta ignorada para poder archivarla fuera del repo. El build y el deploy usan exclusivamente assets bajo `src`/`public`; `prepare-faust-assets.py` conserva compatibilidad con una carpeta fuente externa recibida como primer argumento.
-
-Correccion UI movil del 2026-06-30: el menu principal landscape coloca el titulo arriba y los cuatro accesos en grilla 2x2. `App.tsx` selecciona de forma excluyente controles tactiles o de escritorio mediante media query, eliminando el doble render de poderes que ocurria cuando el override desktop `min-width: 721px` reactivaba `AbilityControls` en un telefono landscape. Los contenedores fullscreen incorporan `dvh`/`dvw` con fallback y el monumento del menu descuenta safe areas. La prueba de navegador confirma que Auth cabe sin scroll ni recorte en 844x390 y 390x844, con 0 errores de consola; menu y gameplay quedaron detras de autenticacion y requieren comprobacion visual final del usuario.
-
-Scroll independiente del explorador del 2026-06-30: `MainMenuScreen` divide el mapa y los niveles en dos paneles con cabeceras fijas, regiones de scroll accesibles por teclado y tactil, overscroll contenido y scrollbar tematico. `menu-chamber--map` conserva el encabezado global fuera del desplazamiento y limita su alto con `dvh`/safe areas; el mapa mantiene un lienzo minimo desplazable y la lista derecha desplaza solo sus niveles. Las tres auditorias, `npm run build` y `git diff --check` deben pasar; la comprobacion visual final queda a cargo del usuario.
+Ultima revision documental: 2026-07-02. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.

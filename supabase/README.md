@@ -2,6 +2,10 @@
 
 El juego usa Supabase Auth y guarda el progreso en `public.game_saves`. Phaser lee y escribe mediante `GameSaveStore`; `SupabaseSaveAdapter` sincroniza el save en segundo plano. El progreso no usa `localStorage`.
 
+## Identificador local compatible
+
+El producto y el repositorio se llaman `Adventure Play` / `adventureplay`. `supabase/config.toml` conserva `project_id = "superjuego"` para no renombrar los recursos Docker locales existentes. La misma palabra aparece en un comentario de la migracion `20260626000000_create_game_saves.sql`, que ya fue aplicada en remoto y no debe reescribirse. Ninguna de las dos apariciones es marca publica ni nombre del proyecto alojado.
+
 ## Validacion local con Docker
 
 ```powershell
