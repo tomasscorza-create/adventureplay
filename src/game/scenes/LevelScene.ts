@@ -34,6 +34,8 @@ import { MovementSystem } from "../systems/movement/MovementSystem";
 import { AchievementSystem } from "../systems/achievements/AchievementSystem";
 import { ProgressionSystem } from "../systems/progression/ProgressionSystem";
 import { gameSaveStore } from "../systems/save/GameSaveStore";
+import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
+import { getEnemyDefeatPalette } from "./level/enemyDefeatPalette";
 
 export class LevelScene extends Phaser.Scene {
   private level!: LevelDefinition;
@@ -76,10 +78,7 @@ export class LevelScene extends Phaser.Scene {
   private monstersDefeatedThisLevel = 0;
   private goldCollectedThisLevel = 0;
   private unlockedAchievementsThisLevel: AchievementId[] = [];
-  private gameplayElapsedMs = 0;
-  private playerActionCount = 0;
-  private previousMovementDirection: -1 | 0 | 1 = 0;
-  private runStatisticsRecorded = false;
+  private readonly runTracker = new LevelRunTracker();
 
   constructor() {
     super("LevelScene");
@@ -94,10 +93,7 @@ export class LevelScene extends Phaser.Scene {
     this.monstersDefeatedThisLevel = 0;
     this.goldCollectedThisLevel = 0;
     this.unlockedAchievementsThisLevel = [];
-    this.gameplayElapsedMs = 0;
-    this.playerActionCount = 0;
-    this.previousMovementDirection = 0;
-    this.runStatisticsRecorded = false;
+    this.runTracker.reset();
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.save = gameSaveStore.load();
     this.save.player.health = this.save.player.maxHealth;
@@ -140,14 +136,14 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
-    this.gameplayElapsedMs += delta;
+    this.runTracker.advance(delta);
     this.updateLevelTimer(delta);
     if (this.levelFinished) {
       return;
     }
 
     const input = this.inputSystem.readFrame();
-    this.trackPlayerActions(input);
+    this.runTracker.trackInput(input);
     const didJump = this.movement.update(this.player, input, delta);
     if (didJump) {
       gameAudio.playJump();
@@ -471,26 +467,6 @@ export class LevelScene extends Phaser.Scene {
     if (input.powerJustPressed) {
       this.useLethalPower();
     }
-  }
-
-  private trackPlayerActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
-    const movementDirection: -1 | 0 | 1 = input.left === input.right
-      ? 0
-      : input.left
-        ? -1
-        : 1;
-    if (movementDirection !== 0 && movementDirection !== this.previousMovementDirection) {
-      this.playerActionCount += 1;
-    }
-    this.previousMovementDirection = movementDirection;
-
-    this.playerActionCount += [
-      input.jumpJustPressed,
-      input.meleeJustPressed,
-      input.shootJustPressed,
-      input.healJustPressed,
-      input.powerJustPressed,
-    ].filter(Boolean).length;
   }
 
   private useHealingPower(): void {
@@ -1253,7 +1229,7 @@ export class LevelScene extends Phaser.Scene {
   private createEnemyDefeatEffect(enemy: BaseEnemy): void {
     const x = enemy.x;
     const y = enemy.y;
-    const palette = this.getEnemyDefeatPalette(enemy.definition.id);
+    const palette = getEnemyDefeatPalette(enemy.definition.id);
     const flash = this.add.circle(x, y, 18, palette.core, 0.72).setDepth(31);
     const ring = this.add.circle(x, y, 12, palette.ring, 0).setStrokeStyle(4, palette.ring, 0.88).setDepth(30);
 
@@ -1295,26 +1271,6 @@ export class LevelScene extends Phaser.Scene {
         onComplete: () => spark.destroy(),
       });
     }
-  }
-
-  private getEnemyDefeatPalette(enemyId: string): { core: number; ring: number; sparks: number[] } {
-    if (enemyId === "e2m3") {
-      return { core: 0x8dff78, ring: 0x2f9d62, sparks: [0xd4ff8c, 0x6dff91, 0x25684f] };
-    }
-
-    if (enemyId === "m3") {
-      return { core: 0xff6a32, ring: 0x9f1f2d, sparks: [0xffd06a, 0xe23a35, 0x5c1820] };
-    }
-
-    if (enemyId === "m2") {
-      return { core: 0xfff1a1, ring: 0x8cecff, sparks: [0xfff1a1, 0xffffff, 0x8cecff] };
-    }
-
-    if (enemyId === "m1") {
-      return { core: 0xff8f5f, ring: 0xffd56a, sparks: [0xff8f5f, 0xffd56a, 0x6be092] };
-    }
-
-    return { core: 0xff5f68, ring: 0xffd56a, sparks: [0xff5f68, 0xffd56a, 0xffffff] };
   }
 
   private damagePlayer(amount: number): void {
@@ -1553,11 +1509,9 @@ export class LevelScene extends Phaser.Scene {
       stageNumber: this.level.stageNumber,
       theme: this.level.theme,
       monstersDefeated: this.monstersDefeatedThisLevel,
-      gameplayDurationSeconds: Math.max(1, Math.round(this.gameplayElapsedMs / 1000)),
+      gameplayDurationSeconds: this.runTracker.durationSeconds,
       goldCollected: this.goldCollectedThisLevel,
-      actionsPerMinute: Math.round(
-        this.playerActionCount / Math.max(this.gameplayElapsedMs / 60_000, 1 / 60),
-      ),
+      actionsPerMinute: this.runTracker.actionsPerMinute,
       achievementIds: [...this.unlockedAchievementsThisLevel],
       nextLevelId: nextLevel?.id,
       nextLevelName: nextLevel?.name,
@@ -1574,21 +1528,8 @@ export class LevelScene extends Phaser.Scene {
     this.cameras.main.stopFollow();
   }
 
-  private recordRunStatistics(result: "completed" | "defeat" | "abandoned"): void {
-    if (this.runStatisticsRecorded) {
-      return;
-    }
-
-    this.runStatisticsRecorded = true;
-    this.save.statistics.runsPlayed += 1;
-    this.save.statistics.gameplaySeconds += Math.max(1, Math.round(this.gameplayElapsedMs / 1000));
-    this.save.statistics.actions += this.playerActionCount;
-
-    if (result === "completed") {
-      this.save.statistics.completedRuns += 1;
-    } else if (result === "defeat") {
-      this.save.statistics.defeats += 1;
-    }
+  private recordRunStatistics(result: RunResult): void {
+    this.runTracker.record(this.save.statistics, result);
   }
 
   private announceAchievements(achievementIds: AchievementId[]): void {
