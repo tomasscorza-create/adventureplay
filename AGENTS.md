@@ -78,7 +78,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - Bosque encantado es la segunda region seleccionable y tiene LV1-LV10 implementados y encadenados desde `enchantedGrove1` hasta `enchantedGrove10`. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; reutiliza las IA/estadisticas de M0, M1, M2 y M3 con apariencias exclusivas del escenario. La variante tematica de M3 se identifica como E2M3 y domina la progresion avanzada.
 - La web es instalable como PWA movil bajo el nombre `Adventure Play`: usa manifiesto landscape/fullscreen, iconos Android/iOS y service worker generado en produccion. Las actualizaciones esperan confirmacion del jugador para no recargar una partida activa.
-- El bundle de produccion emite una advertencia de chunk grande por Phaser. Es esperable por ahora; no optimizar prematuramente salvo que el usuario lo pida.
+- Phaser se carga de forma diferida despues de autenticar y queda en un chunk de gameplay independiente. Su advertencia de tamano es esperable; el chunk inicial tiene un presupuesto automatizado de 450 KiB.
 
 ## Estructura principal
 
@@ -89,6 +89,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `vite.config.ts`: manifiesto PWA, estrategia de actualizacion y politica de cache; las solicitudes a Supabase deben seguir usando red y no cachearse en el service worker.
 - `eslint.config.js`: reglas compartidas para TypeScript, React, hooks y scripts Node.
 - `.github/workflows/ci.yml`: pipeline de GitHub para lint, tipos, tests, auditorias de contenido, build y dependencias.
+- `public/_headers`: encabezados de seguridad y cache para el despliegue Netlify; conservar CSP compatible con Supabase y con los estilos React existentes.
 - `public/favicon.svg`: fuente editable de los iconos PWA; ejecutar `npm run pwa:assets` despues de modificarla.
 - `src/ui/components/PwaUpdatePrompt.tsx`: aviso no intrusivo que permite aplicar o posponer una nueva version.
 - `src/game/main.ts`: crea la instancia Phaser.
@@ -108,6 +109,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/systems/achievements/AchievementSystem.ts`: registra derrotas y finalizaciones validas, y desbloquea logros sin depender de React.
 - `src/ui/components/AchievementUnlockToast.tsx`: aviso React en cola para logros desbloqueados durante gameplay; recibe eventos tipados desde Phaser y no contiene logica de concesion.
 - `src/ui/components/SaveSyncStatus.tsx`: aviso React compacto del estado remoto; muestra carga, guardado y confirmacion breve fuera del gameplay, conserva los errores visibles en cualquier pantalla y ofrece el reintento explicito de `GameSaveStore`.
+- `src/ui/hooks/usePhaserGame.ts`: importa e inicia Phaser solo despues de autenticar; destruye la instancia al cerrar sesion y permite reintentar una carga fallida.
 - `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; las fuentes maestras pueden archivarse fuera del repositorio.
 - `src/assets/characters/faust.png`: hoja normalizada 96x80 de Faust con 45 cuadros para reposo, carrera, salto, caida, ataque, dano y muerte. Incluye intermedios deterministas para suavizar el movimiento sin cambiar su identidad y se regenera junto con `faust-animation.json` mediante `scripts/prepare-faust-assets.py`; si las fuentes ya estan fuera del repo, pasar su carpeta como primer argumento.
 - `src/assets/weapons/sword-1.png`: arma separada de Faust. `weapons.ts` define su aspecto y los anclajes por cuadro para que el cuerpo no dependa de una espada concreta.
@@ -604,7 +606,7 @@ Ejecutar:
 npm run check
 ```
 
-`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. Vitest cubre sesion, persistencia, normalizacion y estado de sincronizacion. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. El build ejecuta ademas `audit:production`, que limita el chunk inicial, impide precargar Phaser y comprueba los encabezados de seguridad. Vitest cubre sesion, persistencia, normalizacion, estado de sincronizacion y estadisticas de intentos. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Cuando cambien migraciones, ejecutar ademas `npm run supabase:start`, `npm run supabase:reset`, `supabase db lint --local --fail-on error` y `npm run supabase:stop`. Estos comandos validan exclusivamente Docker local; no sustituirlos por operaciones `--linked` salvo peticion explicita.
 

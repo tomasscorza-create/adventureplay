@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run audit:production",
     "lint": "eslint src scripts vite.config.ts eslint.config.js --max-warnings 0",
     "typecheck": "tsc -b",
     "test": "vitest run",
@@ -13,6 +13,7 @@
     "audit:achievements": "node --experimental-strip-types scripts/audit-achievements.mjs",
     "audit:levels": "node --experimental-strip-types scripts/audit-levels.mjs",
     "audit:progression": "node --experimental-strip-types scripts/audit-progression.mjs",
+    "audit:production": "node scripts/audit-production.mjs",
     "pwa:assets": "pwa-assets-generator --preset minimal-2023 public/favicon.svg",
     "preview": "vite preview --host 127.0.0.1",
     "supabase:start": "supabase start",

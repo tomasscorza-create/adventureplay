@@ -5,7 +5,6 @@ import {
   getNextCharacterUnlockRequirement,
 } from "./game/data/characterUnlocks";
 import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
-import { createGame } from "./game/main";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
 import { normalizePlayerDisplayName } from "./game/systems/save/SaveDefaults";
 import type { AchievementIconId, AchievementReward } from "./game/data/achievements";
@@ -32,8 +31,10 @@ import { PwaUpdatePrompt } from "./ui/components/PwaUpdatePrompt";
 import { PwaInstallPrompt } from "./ui/components/PwaInstallPrompt";
 import { SaveSyncStatus } from "./ui/components/SaveSyncStatus";
 import { useGameSession } from "./ui/hooks/useGameSession";
+import { usePhaserGame } from "./ui/hooks/usePhaserGame";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
+import { GameBootScreen } from "./ui/screens/GameBootScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
 import { LevelSummaryScreen } from "./ui/screens/LevelSummaryScreen";
 import { PauseScreen } from "./ui/screens/PauseScreen";
@@ -113,13 +114,12 @@ export function App() {
     signUp,
   } = useGameSession();
   const usesMobileGameplayControls = useMobileGameplayControls();
-
-  useEffect(() => {
-    const game = createGame("game-root");
-    return () => {
-      game.destroy(true);
-    };
-  }, []);
+  const needsAuth = authStatus !== "signed-in";
+  const {
+    status: phaserStatus,
+    retry: retryPhaserLoad,
+  } = usePhaserGame(!needsAuth, "game-root");
+  const gameReady = phaserStatus === "ready";
 
   useEffect(() => {
     if (authStatus === "signed-out") {
@@ -369,8 +369,6 @@ export function App() {
     gameEvents.emit(EVENTS.RESUME_GAME, undefined);
   };
 
-  const needsAuth = authStatus !== "signed-in";
-
   return (
     <main className="app-shell">
       <div id="game-root" className="game-root" />
@@ -381,7 +379,7 @@ export function App() {
           aria-hidden="true"
         />
       )}
-      {!needsAuth && activeNotification && (
+      {gameReady && activeNotification && (
         screen === "playing" || screen === "paused" || screen === "level-transition"
       ) && (
         activeNotification.kind === "achievement" ? (
@@ -399,7 +397,7 @@ export function App() {
           />
         )
       )}
-      {!needsAuth && (screen === "playing" || screen === "paused") && (
+      {gameReady && (screen === "playing" || screen === "paused") && (
         <HUD
           hud={hud}
           healthPickupFeedback={healthPickupFeedback}
@@ -407,7 +405,7 @@ export function App() {
           rewardFeedbackKey={activeAchievement?.id}
         />
       )}
-      {!needsAuth && screen === "playing" && !usesMobileGameplayControls && (
+      {gameReady && screen === "playing" && !usesMobileGameplayControls && (
         <AbilityControls
           hud={hud}
           achievementReward={activeAchievement?.reward}
@@ -415,15 +413,15 @@ export function App() {
           onOpenShop={openPowerShop}
         />
       )}
-      {!needsAuth && (screen === "playing" || screen === "paused") && <OrientationNotice />}
-      {!needsAuth && screen === "playing" && usesMobileGameplayControls && (
+      {gameReady && (screen === "playing" || screen === "paused") && <OrientationNotice />}
+      {gameReady && screen === "playing" && usesMobileGameplayControls && (
         <MobileControls
           hud={hud}
           achievementReward={activeAchievement?.reward}
           rewardFeedbackKey={activeAchievement?.id}
         />
       )}
-      {!needsAuth && screen === "main-menu" && (
+      {gameReady && screen === "main-menu" && (
         <MainMenuScreen
           playerEmail={playerEmail}
           save={save}
@@ -437,16 +435,16 @@ export function App() {
           onPurchaseCharacterPower={purchaseCharacterPower}
         />
       )}
-      {!needsAuth && screen === "paused" && (
+      {gameReady && screen === "paused" && (
         <PauseScreen onResume={resumeGame} onRestart={restartGame} onMenu={goToMenu} />
       )}
-      {!needsAuth && screen === "game-over" && (
+      {gameReady && screen === "game-over" && (
         <GameOverScreen onRestart={restartGame} onMenu={goToMenu} />
       )}
-      {!needsAuth && screen === "level-transition" && levelSummary && (
+      {gameReady && screen === "level-transition" && levelSummary && (
         <LevelSummaryScreen summary={levelSummary} onContinue={continueAfterSummary} />
       )}
-      {!needsAuth && screen === "power-shop" && activePowerShop && (
+      {gameReady && screen === "power-shop" && activePowerShop && (
         <PowerShopScreen
           power={activePowerShop}
           save={save}
@@ -455,7 +453,7 @@ export function App() {
           onMenu={goToMenu}
         />
       )}
-      {!needsAuth && screen === "victory" && (
+      {gameReady && screen === "victory" && (
         <VictoryScreen hud={hud} onRestart={restartGame} onMenu={goToMenu} />
       )}
       {needsAuth && (
@@ -467,6 +465,9 @@ export function App() {
           onSignIn={signIn}
           onSignUp={signUp}
         />
+      )}
+      {!needsAuth && !gameReady && (
+        <GameBootScreen failed={phaserStatus === "error"} onRetry={retryPhaserLoad} />
       )}
       <SaveSyncStatus
         state={saveSyncState}

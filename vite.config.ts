@@ -3,6 +3,16 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+          "supabase-vendor": ["@supabase/supabase-js"],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -54,6 +64,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,jpg,jpeg}"],
         globIgnores: [
+          "**/main-*.js",
           "favicon.*",
           "apple-touch-icon-180x180.png",
           "pwa-*.png",
@@ -62,6 +73,17 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: "index.html",
         runtimeCaching: [
+          {
+            urlPattern: /\/assets\/main-[^/]+\.js$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gameplay-engine",
+              expiration: {
+                maxEntries: 2,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/[^/]+\.supabase\.co\//,
             handler: "NetworkOnly",
