@@ -1,36 +1,30 @@
-import { gameAudio } from "../../../shared/audio/GameAudio";
+import type { CSSProperties } from "react";
 
 export function MenuHeading({
-  eyebrow,
   title,
   onBack,
   backLabel = "Volver",
   hideBack = false,
-  centered = false,
   animatedTitle = false,
+  variant,
 }: {
-  eyebrow?: string;
   title: string;
   onBack: () => void;
   backLabel?: string;
   hideBack?: boolean;
-  centered?: boolean;
   animatedTitle?: boolean;
+  variant: "profile" | "settings" | "audio" | "heroes" | "hero-detail" | "modes" | "inventory" | "explore" | "achievements";
 }) {
   return (
-    <div className={`menu-heading${centered ? " menu-heading--centered" : ""}${animatedTitle ? " menu-heading--shimmer" : ""}`}>
+    <div className={`menu-heading menu-heading--${variant}${animatedTitle ? " menu-heading--shimmer" : ""}`}>
       <div>
-        {eyebrow && <span className="panel__eyebrow">{eyebrow}</span>}
         <h2>{title}</h2>
       </div>
       {!hideBack && (
         <button
           className="button button--secondary button--small"
           type="button"
-          onClick={() => {
-            gameAudio.playUiSelect();
-            onBack();
-          }}
+          onClick={onBack}
         >
           {backLabel}
         </button>
@@ -66,5 +60,40 @@ export function SettingToggle({
       </span>
       <span className="settings-toggle__state">{enabled ? "ON" : "OFF"}</span>
     </button>
+  );
+}
+
+export function VolumeControl({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="volume-control">
+      <span className="volume-control__header">
+        <strong>Intensidad de {label.toLowerCase()}</strong>
+        <output>{value}%</output>
+      </span>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value={value}
+        aria-label={`Intensidad de ${label}`}
+        aria-valuetext={`${value} por ciento`}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        style={{ "--volume-progress": `${value}%` } as CSSProperties}
+      />
+      <span className="volume-control__scale" aria-hidden="true">
+        <span>0</span>
+        <span>50</span>
+        <span>100</span>
+      </span>
+    </label>
   );
 }

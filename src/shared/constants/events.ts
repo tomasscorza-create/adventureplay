@@ -6,6 +6,7 @@ export const EVENTS = {
   CONTINUE_LEVEL: "react:continue-level",
   GO_TO_MENU: "react:go-to-menu",
   ACTIVE_LEVEL_CHANGED: "game:active-level-changed",
+  SFX_REQUESTED: "game:sfx-requested",
   HUD_UPDATED: "game:hud-updated",
   HEALTH_PICKUP_COLLECTED: "game:health-pickup-collected",
   PLAYER_DAMAGED: "game:player-damaged",

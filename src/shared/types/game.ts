@@ -232,7 +232,7 @@ export interface LevelRewardBox {
   y: number;
 }
 
-export type LevelTheme = "verdant-frontier" | "enchanted-forest";
+export type LevelTheme = "verdant-frontier" | "enchanted-forest" | "active-volcano";
 
 export interface LevelDefinition {
   id: string;

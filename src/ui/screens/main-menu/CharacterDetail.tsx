@@ -6,7 +6,6 @@ import {
   type PowerPackage,
   type PurchasablePower,
 } from "../../../game/data/powerShop";
-import { gameAudio } from "../../../shared/audio/GameAudio";
 import type { CharacterId, SaveData } from "../../../shared/types/game";
 import { AbilityIcon } from "../../components/AbilityIcon";
 import { MenuHeading } from "./MenuPrimitives";
@@ -51,7 +50,6 @@ export function CharacterDetail({
   const canAffordUnlock = save.player.coins >= unlockRequirement.cost;
   const canUnlock = hasUnlockLevel && canAffordUnlock;
   const requestPackage = (power: PurchasablePower, pack: PowerPackage) => {
-    gameAudio.playUiSelect();
     setPurchaseMessage(undefined);
     setPendingPurchase({ power, pack });
   };
@@ -60,7 +58,6 @@ export function CharacterDetail({
       return;
     }
 
-    gameAudio.playUiSelect();
     const { power, pack } = pendingPurchase;
     const purchased = onPurchase(characterId, power, pack.amount, pack.cost);
     setPurchaseMessage(
@@ -73,7 +70,7 @@ export function CharacterDetail({
 
   return (
     <>
-      <MenuHeading eyebrow="Ficha de heroe" title={character.name} onBack={onBack} backLabel="Heroes" />
+      <MenuHeading title={character.name} variant="hero-detail" onBack={onBack} backLabel="Héroes" />
       <section className="character-detail" aria-label={`Poderes disponibles de ${character.name}`}>
         <div className="character-detail__portrait-frame">
           <img src={character.portraitUrl} alt={character.name} />
@@ -86,7 +83,6 @@ export function CharacterDetail({
               type="button"
               aria-expanded={isShopOpen}
               onClick={() => {
-                gameAudio.playUiSelect();
                 setPurchaseMessage(undefined);
                 setPendingPurchase(undefined);
                 setIsShopOpen((isOpen) => !isOpen);
@@ -103,7 +99,6 @@ export function CharacterDetail({
               type="button"
               disabled={!canUnlock}
               onClick={() => {
-                gameAudio.playUiSelect();
                 setShowUnlockConfirmation(true);
               }}
             >
@@ -148,7 +143,6 @@ export function CharacterDetail({
                       className="purchase-confirmation__cancel"
                       type="button"
                       onClick={() => {
-                        gameAudio.playUiSelect();
                         setPendingPurchase(undefined);
                       }}
                     >
@@ -201,7 +195,6 @@ export function CharacterDetail({
                   className="purchase-confirmation__cancel"
                   type="button"
                   onClick={() => {
-                    gameAudio.playUiSelect();
                     setShowUnlockConfirmation(false);
                   }}
                 >
@@ -211,7 +204,6 @@ export function CharacterDetail({
                   className="purchase-confirmation__confirm"
                   type="button"
                   onClick={() => {
-                    gameAudio.playUiSelect();
                     const unlocked = onUnlock(characterId);
                     setShowUnlockConfirmation(false);
                     setPurchaseMessage(

@@ -38,6 +38,11 @@ export function LevelSummaryScreen({ summary, onContinue }: LevelSummaryScreenPr
   const durationLabel = durationMinutes > 0
     ? `${durationMinutes}:${durationSeconds.toString().padStart(2, "0")}`
     : `${durationSeconds}s`;
+  const regionName = summary.theme === "enchanted-forest"
+    ? "Bosque encantado"
+    : summary.theme === "active-volcano"
+      ? "Volcán Activo"
+      : "Frontera Verde";
 
   return (
     <section className={`overlay level-summary level-summary--${summary.theme}`}>
@@ -57,9 +62,7 @@ export function LevelSummaryScreen({ summary, onContinue }: LevelSummaryScreenPr
             <span className="level-summary__stage">LV {summary.stageNumber}</span>
             <div>
               <h2 id="level-summary-title">{summary.levelName}</h2>
-              <span className="level-summary__region">
-                {summary.theme === "enchanted-forest" ? "Bosque encantado" : "Frontera Verde"}
-              </span>
+              <span className="level-summary__region">{regionName}</span>
             </div>
           </div>
         </header>

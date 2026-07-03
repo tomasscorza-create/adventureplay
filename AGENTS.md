@@ -80,8 +80,12 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - Bosque encantado es la segunda region seleccionable y tiene LV1-LV10 implementados y encadenados desde `enchantedGrove1` hasta `enchantedGrove10`. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; reutiliza las IA/estadisticas de M0, M1, M2 y M3 con apariencias exclusivas del escenario. La variante tematica de M3 se identifica como E2M3 y domina la progresion avanzada.
+- Volcan Activo es la tercera region jugable y tiene LV1-LV3 implementados y encadenados desde `activeVolcano1` hasta `activeVolcano3`. Usa fondo y plataformas flotantes fuente propios, terreno de roca/lava, pozos de magma, skins procedurales para M0/M1 y dos hojas normalizadas para M2. M3 no forma parte de estos tres niveles y no debe agregarse hasta una fase posterior pedida por el usuario.
 - La web es instalable como PWA movil bajo el nombre `Adventure Play`: usa manifiesto landscape/fullscreen, iconos Android/iOS y service worker generado en produccion. Las actualizaciones esperan confirmacion del jugador para no recargar una partida activa.
 - Phaser se carga de forma diferida despues de autenticar y queda en un chunk de gameplay independiente. Su advertencia de tamano es esperable; el chunk inicial tiene un presupuesto automatizado de 450 KiB.
+- La entrada inicial usa `public/media/adventure-play-intro.mp4`: React intenta reproducirla de inmediato con su audio original, mientras autenticacion y Phaser cargan por debajo, y aplica una transicion breve antes de revelar el menu o la pantalla de acceso. Como los navegadores pueden bloquear autoplay con sonido, `GameIntroScreen` ofrece `Tocar para comenzar` solo cuando hace falta. La copia web conserva el indice MP4 al comienzo para iniciar rapido.
+- La musica de fondo usa cuatro loops medievales CC0 en `public/music/`: menu, LV1-LV3, LV4-LV6 y LV7-LV10. `GameMusic` conserva encendido y volumen local, con 50% como intensidad inicial, y cruza las pistas durante 2,8 segundos para evitar cortes secos. El control de volumen solo escala las capas ya activas: no inicia pistas ni reinicia el crossfade.
+- Los efectos usan una seleccion CC0 medieval/fantastica en `public/sfx/`. `GameSfx` precarga y decodifica los archivos con Web Audio para reproducirlos con baja latencia, variaciones leves y solapamiento seguro; conserva encendido y volumen local, con 75% como intensidad inicial.
 
 ## Estructura principal
 
@@ -95,6 +99,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `public/_headers`: encabezados de seguridad y cache para el despliegue Netlify; conservar CSP compatible con Supabase y con los estilos React existentes.
 - `public/favicon.svg`: fuente editable de los iconos PWA; ejecutar `npm run pwa:assets` despues de modificarla.
 - `src/ui/components/PwaUpdatePrompt.tsx`: aviso no intrusivo que permite aplicar o posponer una nueva version.
+- `src/ui/screens/GameIntroScreen.tsx`: intro de video inicial, espera segura del destino y transicion de entrada hacia la aplicacion.
 - `src/game/main.ts`: crea la instancia Phaser.
 - `src/game/config/gameConfig.ts`: configuracion Phaser, escenas, escala y fisicas Arcade.
 - `src/game/events/EventBus.ts`: Event Bus tipado entre React y Phaser.
@@ -107,6 +112,8 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/data/`: datos editables de enemigos, items, niveles y progresion.
 - `src/game/data/levels.ts`: contrato publico y agregador de niveles; cada region vive en `src/game/data/levels/` y comparte solo helpers de construccion.
 - `src/game/data/characters.ts`: datos editables de personajes jugables.
+- `src/game/data/music.ts`: catalogo de pistas y regla de intensidad musical por numero de etapa.
+- `src/game/data/sfx.ts`: catalogo, volumen, variantes, pitch y cooldown de cada efecto.
 - `src/game/data/powerShop.ts`: paquetes, costos y textos compartidos por la tienda del menu y la compra durante gameplay.
 - `src/game/data/achievements.ts`: definiciones, textos, objetivos y lectura de progreso de los logros.
 - `src/game/systems/achievements/AchievementSystem.ts`: registra derrotas y finalizaciones validas, y desbloquea logros sin depender de React.
@@ -116,10 +123,12 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/assets/characters/portraits/`: retratos WebP optimizados usados por las cards y fichas de heroes; las fuentes maestras pueden archivarse fuera del repositorio.
 - `src/assets/characters/faust.png`: hoja normalizada 96x80 de Faust con 45 cuadros para reposo, carrera, salto, caida, ataque, dano y muerte. Incluye intermedios deterministas para suavizar el movimiento sin cambiar su identidad y se regenera junto con `faust-animation.json` mediante `scripts/prepare-faust-assets.py`; si las fuentes ya estan fuera del repo, pasar su carpeta como primer argumento.
 - `src/assets/weapons/sword-1.png`: arma separada de Faust. `weapons.ts` define su aspecto y los anclajes por cuadro para que el cuerpo no dependa de una espada concreta.
-- `src/assets/menu/`: fondo y controles WebP optimizados del menu principal; las fuentes maestras pueden archivarse fuera del repositorio.
+- `src/assets/menu/`: fondo, controles y arte WebP optimizados del menu principal; `mode-explore.webp` presenta visualmente el modo Explorar. Las fuentes maestras pueden archivarse fuera del repositorio.
 - `src/assets/ui/profile-icons/`: nueve iconos de perfil autocontenidos; `profileIcons.ts` no depende de la carpeta de diseños.
 - `src/assets/enemies/m3-run-1.png` a `m3-run-5.png`: cinco cuadros transparentes y alineados de carrera lateral de M3; las fuentes maestras pueden archivarse fuera del repositorio.
 - `src/assets/scenery/enchanted-forest/`: fondo y cuatro arboles por capas de Bosque encantado; las fuentes maestras pueden archivarse fuera del repositorio.
+- `src/assets/scenery/active-volcano/`: fondo y capa media usados por Volcan Activo; la hoja de capa media se recorta en runtime para distribuir cuatro islas de parallax.
+- `src/assets/enemies/active-volcano-m2/`: hojas fuente de vuelo y ataque del M2 volcanico; `PreloadScene` las separa, limpia sus indices y normaliza a cuadros 320x320.
 - `src/assets/enemies/enchanted-m2/`: diez poses fuente del M2 de Bosque encantado, normalizadas a cuadros 320x320 durante `PreloadScene`; los originales pueden archivarse fuera del repositorio.
 - `src/assets/enemies/enchanted-m3/`: siete poses de E2M3 para reposo, carrera, ataque y derrota; los originales pueden archivarse fuera del repositorio.
 - `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3 con estados de alerta, persecucion, salto, ataque, recuperacion, dano y derrota; tiene dos puntos de vida, barra propia y navegacion preventiva de bordes/plataformas.
@@ -128,6 +137,8 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
+- `src/shared/music/GameMusic.ts`: reproduccion, desbloqueo tras gesto, persistencia de encendido/volumen y crossfade de la musica de fondo.
+- `src/shared/sfx/GameSfx.ts`: precarga, cache decodificada, mezcla y persistencia de encendido/volumen de Sonido.
 - `src/ui/components/`: componentes React reutilizables.
 - `src/ui/screens/`: pantallas React.
 - `src/ui/screens/LevelSummaryScreen.tsx`: resumen animado posterior a cada meta; presenta estadisticas reales, logros del recorrido y avance manual con tema por region.
@@ -148,10 +159,12 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 
 La demo actual permite:
 
+- Ver primero una intro de video de 4,5 segundos que cubre la carga inicial y cierra con una transicion cinematografica hacia el menu; si el motor tarda mas, conserva la intro con un estado discreto hasta que el destino esta listo.
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
 - En landscape movil, el titulo del menu principal queda centrado arriba y los cuatro accesos se distribuyen en una grilla de dos columnas por dos filas.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
+- Las nueve cabeceras internas del menu usan `MenuHeading` con un unico titulo grande y centrado. Comparten la textura de madera `src/assets/menu/fondo100.jpg`, pero cada variante desplaza el fondo para mostrar un recorte diferente; no volver a agregar subtitulos/eyebrows dentro de estas cabeceras.
 - Abrir desde la esquina superior izquierda una pagina completa de perfil con estetica derivada de la sala de Logros y paginas intercambiables `Editar perfil` y `Estadisticas`. Editar perfil permite cambiar un nombre persistente de 2 a 20 caracteres, consultar el correo y elegir uno de nueve iconos sin nombres visibles. Estadisticas combina progreso historico existente con tiempo activo, acciones, APM promedio, intentos, metas y derrotas acumulados al cerrar cada recorrido.
 - Desbloquear veinte logros: ocho faciles y doce medios, distribuidos en `Aventura`, `Combate` y `Descubrimiento`.
 - Ver cada logro nuevo durante la partida mediante una tarjeta animada `Logro desbloqueado` con icono y nombre. Si se obtienen varios a la vez, React los presenta en cola sin superponerlos.
@@ -163,19 +176,21 @@ La demo actual permite:
 - El aviso de desbloqueo, la tarjeta de la sala y el resumen de nivel muestran la recompensa. Durante gameplay, el HUD anima `+ ORO` o `+ XP` junto al contador correspondiente y los controles de poder animan las cargas recibidas.
 - Crear cuenta o entrar con email/password antes de jugar.
 - Elegir personaje jugable desde el boton Personaje del menu principal.
-- En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Escoge tu personaje principal`; solo Dunel, Ruder y Sarix pueden elegirse inicialmente, Amy y Faust aparecen bloqueados, y solo el elegido queda desbloqueado.
+- En una cuenta nueva o reiniciada, completar primero la pantalla obligatoria `Elige tu heroe`; solo Dunel, Ruder y Sarix pueden elegirse inicialmente, Amy y Faust aparecen bloqueados, y solo el elegido queda desbloqueado.
 - Tras esa primera eleccion, entrar directamente a la seleccion de modos y destacar `Explorar` una sola vez. Las cuentas con heroe principal ya definido deben seguir iniciando en el menu principal.
 - Desbloquear heroes restantes desde su ficha `Ver`, con confirmacion previa y una progresion global: #1 requiere LV4/700 ORO, #2 LV8/7000, #3 LV12/70000 y desde #4 se conserva LV12 mientras el precio se duplica a 140000, 280000 y sucesivos.
 - Abrir inventario del jugador desde el boton Inventario del menu principal.
 - Abrir opciones desde la tuerca junto a Menu principal.
-- Encender o apagar sonido y musica por separado desde Opciones.
+- Ver en Opciones el acceso `Sonido y musica`; su pagina interna permite encender o apagar cada sistema y ajustar independientemente su intensidad de 0 a 100. Los valores iniciales son 75% para Sonido y 50% para Musica, y las cuatro preferencias persisten localmente incluso al cerrar sesion.
 - Salir de la cuenta desde la seccion Cuenta dentro de Opciones; el acceso ya no vive junto a la tuerca del menu principal.
 - Reiniciar todo el progreso desde Opciones con confirmacion destructiva, conservando la cuenta de autenticacion pero restaurando el save inicial.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
-- En el explorador, el mapa de regiones izquierdo y la lista de niveles derecha tienen cabeceras fijas y scroll independiente; el contenedor general no debe capturar el desplazamiento de ambos paneles.
+- Ver el modo Explorar presentado con arte propio de aventura en su tarjeta `Campana del continente`; Desafio y Arena conservan su presentacion bloqueada.
+- En el explorador, el mapa de regiones izquierdo se escala completo al espacio disponible y no tiene scroll; la lista de niveles derecha conserva cabecera fija y scroll independiente. El contenedor general no debe capturar el desplazamiento de niveles.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1 a 10 de Frontera Verde.
 - Seleccionar Bosque encantado como segunda region y jugar sus niveles 1 a 10; solo `Umbral encantado` comienza desbloqueado y los siguientes se abren en cadena.
+- Seleccionar Volcan Activo como tercera region y jugar `Umbral de ceniza`, `Rios de magma` y `Furia del crater`; solo LV1 comienza desbloqueado y LV3 cierra temporalmente la region.
 - Recorrer Bosque encantado sobre piedra verde azulada con musgo y raices, con el fondo y cuatro arboles propios distribuidos en capas de parallax.
 - Enfrentar en `Umbral encantado` dos M0 inmoviles con aspecto de guardianes de musgo y dos M1 perseguidores con aspecto de criaturas de corteza; su comportamiento sigue reutilizando `BasicEnemy` y `M1Enemy`.
 - Enfrentar un M2 de Bosque encantado que reutiliza la IA aerea existente y sincroniza poses propias de vuelo, frenado/preparacion, picada, recuperacion y explosion. El ave fuente mira a la izquierda; `M2Enemy` usa `flipX` cuando avanza a la derecha e inclina el sprite segun la trayectoria real de picada.
@@ -193,8 +208,9 @@ La demo actual permite:
 - Dañar a M3 con dos ataques normales o dos disparos; cada impacto vacia la mitad de su barra roja fina. El poder letal conserva su comportamiento de eliminacion inmediata.
 - Ver a M3 detectar el final de las plataformas: salta si existe una superficie alcanzable al otro lado y se detiene si el salto no es seguro.
 - Ver un pequeno efecto visual de explosion al derrotar monstruos.
-- Escuchar musica suave original generada por Web Audio tras la primera interaccion.
-- Escuchar sonidos sutiles de interfaz, salto, ataque, disparo, recoleccion, golpes a monstruos, derrota de monstruos y dano recibido.
+- Escuchar musica medieval tranquila en el menu, aventura orquestal en LV1-LV3, una marcha mas tensa en LV4-LV6 y una pieza intensa en LV7-LV10. Cada cambio usa una mezcla gradual, no un corte seco.
+- Escuchar efectos medievales/rudos sincronizados con botones, salto ejecutado, espada, disparo, poderes, impactos reales, derrotas, dano, ORO, pickups, checkpoints, progreso, meta y game over. Los controles de movimiento no deben emitir clics de UI adicionales.
+- El efecto musical de meta puede terminar naturalmente mientras se mira el resumen, pero `Proximo` o `Finalizar` deben cancelarlo inmediatamente antes de abandonar esa pantalla.
 - Disparar proyectiles.
 - Regenerar la vida hasta el maximo de 4 consumiendo una carga persistente; cada personaje comienza con 3 cargas propias.
 - La salud maxima comienza en 4, aumenta permanentemente a 5 en LV6, a 6 en LV10 y a 7 en LV15; no aumenta mediante objetos temporales del escenario.
@@ -296,7 +312,7 @@ Mobile:
 
 - Controles tactiles en `MobileControls`.
 - Movimiento: dos controles translucidos con chevrones SVG a la izquierda.
-- Acciones normales: salto, espada y disparo usan iconos SVG en una fila compacta a la derecha.
+- Acciones normales: espada y disparo usan iconos SVG en una fila compacta a la derecha. El salto no tiene boton visible: cualquier `pointerdown` sobre un area de pantalla que no sea un boton/control interactivo encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
 - Acciones especiales: regeneracion y poder letal conservan icono, tecla y contador en una segunda fila mas baja y separada de las acciones normales.
 - Pausa: icono SVG arriba a la derecha.
 - En vertical aparece aviso de orientacion y se ocultan controles.
@@ -312,11 +328,10 @@ El input esta unificado. No volver a leer teclado directamente desde `MovementSy
 - `src/game/systems/input/TouchInputStore.ts`: estado tactil global y cola de taps rapidos.
 - `src/game/systems/input/GameplayInputSystem.ts`: combina teclado + tactil en un frame de input.
 - `src/game/systems/movement/MovementSystem.ts`: consume `GameplayInputFrame`.
-- `MovementSystem` conserva cada pulsacion de salto durante 120 ms y permite 100 ms de gracia al abandonar una superficie. Mantener ambas tolerancias para que teclado y tactil no pierdan saltos cerca del aterrizaje o del borde; el sonido se dispara solo cuando el salto se ejecuta realmente.
-- El apoyo no debe exigir `velocity.y >= 0`: las plataformas flotantes ascendentes pueden transmitir una velocidad negativa moderada mientras el jugador sigue sobre ellas. `MovementSystem` solo considera ascenso propio cuando supera el 45% del impulso de salto, manteniendo el salto disponible sobre piezas estaticas y moviles de ambas regiones sin habilitar dobles saltos.
+- `MovementSystem` conserva cada pulsacion de salto durante 120 ms y permite 100 ms de gracia al abandonar una superficie. Mantener ambas tolerancias para que teclado y tactil no pierdan saltos cerca del aterrizaje o del borde.
+- El apoyo no debe exigir `velocity.y >= 0`: las plataformas flotantes ascendentes pueden transmitir una velocidad negativa moderada mientras el jugador sigue sobre ellas. `MovementSystem` solo considera ascenso propio cuando supera el 45% del impulso de salto, manteniendo el salto disponible sobre piezas estaticas y moviles de las tres regiones sin habilitar dobles saltos.
 - `src/game/scenes/LevelScene.ts`: lee input una vez por frame y lo pasa a movimiento/acciones.
-- `src/shared/audio/GameAudio.ts`: capa compartida de audio procedural para musica, UI y feedback de gameplay.
-- `GameAudio` guarda preferencias locales de `musicEnabled` y `soundEnabled` para controlar musica y sonidos por separado.
+- `GameSfx` es la unica capa de efectos. Phaser solicita cues semanticos por `SFX_REQUESTED` en el `EventBus` y React los reproduce por el mismo contexto Web Audio que usa la UI; escenas y sistemas no crean nodos ni cargan archivos directamente. El salto suena solo cuando `MovementSystem` confirma que se ejecuto, y los impactos suenan solo cuando hubo dano real.
 - `AbilityControls` muestra los poderes clicables en desktop; `MobileControls` integra sus equivalentes tactiles y ambos escriben en `TouchInputStore`.
 - Los poderes se representan con badges circulares compactos, iconos SVG, tecla y contador; mantener esta lectura visual tanto en desktop como en controles tactiles.
 - En desktop, el `+` de compra es un control hermano del boton de activacion: debe seguir disponible aunque la carga este agotada o regenerar este deshabilitado por vida completa.
@@ -340,7 +355,8 @@ Ya existe:
 - Controles tactiles.
 - Aviso en vertical.
 - Layout landscape movil.
-- Camara de gameplay con zoom `1.15` en el mismo perfil mobile/compacto que activa `MobileControls`; escritorio conserva `1.0`. Los calculos de seguimiento usan el ancho mundial visible despues del zoom para mantener los limites laterales correctos.
+- Camara de gameplay con zoom `1.15` en el mismo perfil mobile/compacto que activa `MobileControls`; escritorio conserva `1.0`. Mobile extiende visualmente el terreno 160 unidades hacia abajo y desplaza la camara sobre esa continuidad para elevar suelo, heroe y escenario por encima de los controles. Los calculos de seguimiento usan el ancho mundial visible despues del zoom para mantener los limites laterales correctos.
+- La linea roja se posiciona cada frame sobre el borde mundial realmente visible, compensando zoom y scroll. Su limite de dano usa el borde derecho de esa misma linea; no volver a calcular el contacto solo desde `camera.scrollX`.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
 
 La PWA mejora instalacion, carga repetida y disponibilidad del cliente web, pero no convierte el guardado remoto en offline: autenticacion y progreso siguen necesitando Supabase. No agregar cache para sus endpoints ni restaurar progreso local como sustituto.
@@ -392,7 +408,7 @@ Para agregar un item:
 Para agregar un nivel:
 
 1. Agregar definicion en `levels.ts`.
-2. Asignar `theme` para seleccionar la familia visual correcta; los valores actuales son `verdant-frontier` y `enchanted-forest`.
+2. Asignar `theme` para seleccionar la familia visual correcta; los valores actuales son `verdant-frontier`, `enchanted-forest` y `active-volcano`.
 3. Usar `nextLevelId` si completar ese nivel debe encadenar con otro.
 4. Mantener plataformas, enemigos, ORO, checkpoint y meta como datos.
 5. Definir una `rewardBox` con ID unico y posicion alcanzable.
@@ -451,6 +467,15 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 - Pipeline de E2M3: los siete PNG 272x240 se cargan sin recortar para conservar su alineacion y forman `enchanted-m3-idle`, `enchanted-m3-run`, `enchanted-m3-alert`, `enchanted-m3-attack-windup`, `enchanted-m3-attack`, `enchanted-m3-hurt` y `enchanted-m3-defeat`. `M3Enemy` selecciona esta variante visual sin duplicar la IA.
 - UI: segunda pieza seleccionable del mapa, estado `Nuevo`, columna de nivel tematica y LV1 jugable.
 - Auditoria: distingue los niveles por region, exige LV1-LV10 completos y encadenados, y protege el aumento estricto de presion, enemigos y peligros junto con la reduccion de tiempo.
+
+### Implementacion actual de Volcan Activo
+
+- Region/tema: `active-volcano`; niveles `activeVolcano1` a `activeVolcano3`, disponibles como tercera pieza del mapa y encadenados solo dentro de la region.
+- Base: 5600 px, seis rios/pozos de magma, superficies bajas y elevadas, ORO 25/28/30, caja unica, checkpoint y meta por nivel.
+- Curva inicial: LV1 68 s/60 presion/6 enemigos/3 peligros; LV2 64 s/70/8/5; LV3 60 s/82/10/7 y tres plataformas moviles.
+- Enemigos: reutiliza las IA de M0, M1 y M2. M0/M1 usan texturas `volcanic-enemy-*` generadas por Phaser; M2 usa animaciones `volcanic-m2-flight|windup|dive|recover|defeat` sincronizadas con su maquina de estados.
+- Arte: `volcanic-background` queda fijo; `volcanic-midground` aporta cuatro recortes alternados de parallax; el terreno y los pozos se dibujan con roca oscura, bordes incandescentes y grietas de lava.
+- Restriccion vigente: ningun spawn `m3`/`e2m3` en LV1-LV3. La auditoria exige exactamente tres niveles, cadena completa, progresion esperada y ausencia de M3.
 
 ### Curva de progresion de Bosque encantado LV1-LV10
 
@@ -573,7 +598,7 @@ Reglas obligatorias de esta curva:
 - La normalizacion de schema 3 a 4 asigna las cargas globales antiguas al personaje que estaba seleccionado y entrega los defaults 3/25 al resto.
 - La normalizacion de schema 4 a 5 conserva los heroes entonces existentes desbloqueados en cuentas antiguas; los saves actuales mantienen solo sus heroes ya desbloqueados y reciben cargas por defecto para Faust sin desbloquearlo automaticamente.
 - Regenerar con la vida completa o intentar usar un poder sin cargas no debe consumir inventario.
-- No escribir directamente en `localStorage` para progreso desde escenas, entidades o componentes. `GameAudio` si usa `localStorage` solo para preferencias locales de sonido/musica.
+- No escribir directamente en `localStorage` para progreso desde escenas, entidades o componentes.
 - No llamar Supabase directamente desde escenas o entidades; usar `GameSaveStore` para conservar el flujo sincronico de Phaser.
 - Para migrar a Supabase real: seguir `supabase/README.md`, revisar primero `supabase db push --dry-run`, aplicar con `supabase db push` y usar `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` en el frontend. Nunca exponer claves secretas o `service_role` en variables `VITE_*`.
 - La confirmacion de email puede estar habilitada o deshabilitada: `App.tsx` debe conservar ambos flujos. Con confirmacion, el registro muestra un aviso y espera el inicio de sesion; sin confirmacion, la sesion se carga inmediatamente.
@@ -592,6 +617,8 @@ Reglas obligatorias de esta curva:
 - El juego debe priorizar landscape en Android.
 - En vertical debe mantenerse el aviso de orientacion salvo que el usuario pida jugabilidad vertical real.
 - Los controles tactiles deben ocupar bordes inferiores y no tapar el centro del gameplay.
+- El suelo movil debe conservar su extension inferior continua para que los controles descansen visualmente sobre terreno y no sobre el heroe o las amenazas.
+- El salto mobile pertenece al area libre de pantalla; botones, enlaces y controles interactivos nunca deben dispararlo por propagacion.
 - Separar visualmente movimiento, acciones normales y poderes; usar superficies translucidas e iconos en lugar de bloques opacos con letras como contenido principal.
 - Pausa debe quedar arriba derecha y lejos del HUD.
 - HUD movil debe ser compacto y legible.
@@ -609,7 +636,7 @@ Ejecutar:
 npm run check
 ```
 
-`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 20 niveles actuales entre ambas regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. El build ejecuta ademas `audit:production`, que limita el chunk inicial, impide precargar Phaser y comprueba los encabezados de seguridad. Vitest cubre sesion, persistencia, normalizacion, estado de sincronizacion y estadisticas de intentos. Para Bosque encantado tambien se exigen diez niveles, cadena LV1-LV10, progresion estricta y mayor presion/densidad que Frontera Verde; sus advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 23 niveles actuales entre tres regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. El build ejecuta ademas `audit:production`, que limita el chunk inicial, impide precargar Phaser y comprueba los encabezados de seguridad. Vitest cubre sesion, persistencia, normalizacion, estado de sincronizacion y estadisticas de intentos. Bosque encantado exige diez niveles y su curva completa; Volcan Activo exige exactamente LV1-LV3, progresion creciente y ausencia de M3. Las advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Cuando cambien migraciones, ejecutar ademas `npm run supabase:start`, `npm run supabase:reset`, `supabase db lint --local --fail-on error` y `npm run supabase:stop`. Estos comandos validan exclusivamente Docker local; no sustituirlos por operaciones `--linked` salvo peticion explicita.
 
@@ -620,12 +647,13 @@ Si el usuario solicita verificar UI/mobile, comprobar:
 - Desktop: controles tactiles ocultos, aviso oculto.
 - Portrait movil: aviso visible, controles ocultos.
 - Landscape movil: aviso oculto, controles visibles, HUD no se cruza con controles ni pausa.
+- Landscape movil: suelo y heroe quedan elevados, la extension inferior conserva la apariencia del terreno, los botones son comodos y la linea roja permanece pegada al margen izquierdo aun con zoom.
 
 Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 
 - Iniciar partida.
 - Moverse.
-- Saltar.
+- Saltar tocando un area libre de la pantalla, tambien mientras se mantiene una direccion; confirmar que tocar cualquier boton no agrega un salto.
 - Atacar.
 - Disparar.
 - Pausar.
@@ -637,7 +665,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - Recoger ORO.
 - Abrir Personaje, entrar con `Ver`, elegir un paquete, cancelar sin cambios y confirmar otra compra comprobando ORO y cargas.
 - Validar con un save nuevo que solo Dunel, Ruder y Sarix puedan elegirse inicialmente; luego comprobar bloqueo de los otros cuatro heroes, requisitos LV4/700, LV8/7000, LV12/70000, duplicacion posterior, cancelacion y desbloqueo persistente.
-- Abrir Opciones y comprobar que `Salir de la cuenta` y `Reiniciar juego` estan dentro de Cuenta; cancelar el reinicio sin alterar datos.
+- Abrir Opciones y comprobar que `Sonido y musica` abre su pagina interna; ajustar ambos volumenes, recargar y cerrar/abrir sesion para confirmar la persistencia. Comprobar tambien que `Salir de la cuenta` y `Reiniciar juego` estan dentro de Cuenta; cancelar el reinicio sin alterar datos.
 - Completar nivel.
 
 ## Convenciones de codigo

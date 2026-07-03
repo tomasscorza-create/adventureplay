@@ -19,7 +19,11 @@ describe("normalizeSaveData", () => {
     expect(normalized.player.health).toBe(PLAYER_DEFAULTS.maxHealth);
     expect(normalized.player.coins).toBe(0);
     expect(normalized.player.inventory).toEqual([]);
-    expect(normalized.unlockedLevels).toEqual(["meadowOutpost", "enchantedGrove1"]);
+    expect(normalized.unlockedLevels).toEqual([
+      "meadowOutpost",
+      "enchantedGrove1",
+      "activeVolcano1",
+    ]);
   });
 
   it("clamps extreme counters and reconstructs progression-owned attributes", () => {
@@ -135,6 +139,7 @@ describe("normalizeSaveData", () => {
     expect(normalized.unlockedLevels).toEqual([
       "meadowOutpost",
       "enchantedGrove1",
+      "activeVolcano1",
       "meadowOutpost2",
     ]);
     expect(normalized.completedLevels).toEqual(["meadowOutpost"]);

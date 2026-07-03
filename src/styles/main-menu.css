@@ -414,6 +414,18 @@
     linear-gradient(118deg, rgba(3, 17, 17, 0.95), rgba(8, 41, 32, 0.84) 48%, rgba(4, 15, 26, 0.96));
 }
 
+.level-summary--active-volcano {
+  --summary-accent: #ff9b3d;
+  --summary-accent-rgb: 255, 155, 61;
+  --summary-secondary: #ef4f2f;
+  --summary-secondary-rgb: 239, 79, 47;
+  --summary-deep: #2b0e0c;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(255, 102, 35, 0.2), transparent 28%),
+    radial-gradient(circle at 82% 72%, rgba(213, 45, 31, 0.18), transparent 30%),
+    linear-gradient(118deg, rgba(18, 5, 7, 0.97), rgba(55, 15, 12, 0.88) 48%, rgba(15, 5, 8, 0.97));
+}
+
 .level-summary::before,
 .level-summary::after {
   position: absolute;
@@ -494,6 +506,12 @@
   background:
     radial-gradient(circle at 84% 0, rgba(108, 250, 185, 0.13), transparent 32%),
     linear-gradient(155deg, rgba(24, 58, 43, 0.98), rgba(9, 39, 34, 0.98) 55%, rgba(5, 20, 27, 0.99));
+}
+
+.level-summary--active-volcano .level-summary__panel {
+  background:
+    radial-gradient(circle at 84% 0, rgba(255, 113, 48, 0.15), transparent 34%),
+    linear-gradient(155deg, rgba(68, 28, 22, 0.98), rgba(39, 14, 14, 0.98) 55%, rgba(18, 7, 9, 0.99));
 }
 
 .level-summary__panel::before {
@@ -957,7 +975,7 @@
   }
 }
 
-/* Explorador: mapa y niveles conservan scroll independiente. */
+/* Explorador: mapa completo sin scroll y niveles con scroll independiente. */
 .menu-chamber--map {
   display: grid;
   width: min(1080px, calc(100vw - 44px - env(safe-area-inset-left) - env(safe-area-inset-right)));
@@ -1041,17 +1059,31 @@
 }
 
 .map-scroll {
+  container-type: size;
+  display: grid;
+  place-items: center;
   padding: 10px;
+  overflow: hidden;
   background: rgba(16, 20, 18, 0.34);
+  scrollbar-gutter: auto;
+  touch-action: manipulation;
 }
 
 .map-scroll .continent-map {
   width: 100%;
-  min-width: 520px;
-  min-height: 500px;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
   border: 0;
   border-radius: 12px;
   box-shadow: none;
+}
+
+@supports (width: 100cqh) {
+  .map-scroll .continent-map {
+    width: min(100%, 100cqh);
+  }
 }
 
 .map-scroll .explore-map {
@@ -1153,6 +1185,17 @@
   clip-path: polygon(59% 49%, 77% 45%, 92% 50%, 100% 64%, 98% 87%, 88% 98%, 71% 100%, 56% 95%, 48% 81%, 49% 65%);
 }
 
+.menu-chamber--map .level-column--active-volcano {
+  border-color: rgba(255, 121, 57, 0.58);
+  background:
+    radial-gradient(circle at 50% 0, rgba(255, 102, 35, 0.2), transparent 40%),
+    linear-gradient(180deg, #59271f, #3b1918 62%, #241014);
+}
+
+.menu-chamber--map .level-column--active-volcano .level-column__header {
+  background: rgba(115, 31, 20, 0.42);
+}
+
 .level-list__empty {
   display: grid;
   min-height: 100%;
@@ -1174,7 +1217,6 @@
   line-height: 1.45;
 }
 
-.map-scroll:focus-visible,
 .menu-chamber--map .level-list:focus-visible {
   outline: 2px solid #f4d783;
   outline-offset: -4px;
@@ -1217,9 +1259,6 @@
   }
 
   .menu-chamber--map .menu-heading {
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
     margin-bottom: 10px;
   }
 
@@ -1274,8 +1313,8 @@
   }
 
   .app-shell > .mobile-controls .touch-button {
-    width: 54px;
-    height: 54px;
+    width: 58px;
+    height: 58px;
     border: 1px solid rgba(238, 246, 234, 0.34);
     border-radius: 50%;
     color: rgba(255, 248, 218, 0.94);
@@ -1285,23 +1324,23 @@
   }
 
   .app-shell > .mobile-controls .touch-button--movement {
-    width: 60px;
-    height: 58px;
+    width: 64px;
+    height: 62px;
     border-color: rgba(203, 238, 218, 0.38);
     border-radius: 18px;
     background: rgba(11, 31, 25, 0.27);
   }
 
   .app-shell > .mobile-controls .touch-button--combat {
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
     border-color: rgba(255, 225, 158, 0.36);
     background: rgba(37, 28, 20, 0.3);
   }
 
   .app-shell > .mobile-controls .touch-button--ability {
-    width: 47px;
-    height: 47px;
+    width: 51px;
+    height: 51px;
     border-color: rgba(108, 232, 255, 0.52);
     background:
       radial-gradient(circle at 38% 30%, rgba(139, 240, 255, 0.22), transparent 38%),
@@ -1317,8 +1356,8 @@
 
   .app-shell > .mobile-controls .touch-button--pause,
   .app-shell > .mobile-controls .touch-button--compact {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 14px;
     background: rgba(7, 18, 18, 0.38);
   }

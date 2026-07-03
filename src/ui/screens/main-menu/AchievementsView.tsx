@@ -5,7 +5,6 @@ import {
   getAchievementRewardLabels,
   type AchievementCategoryId,
 } from "../../../game/data/achievements";
-import { gameAudio } from "../../../shared/audio/GameAudio";
 import type { SaveData } from "../../../shared/types/game";
 import { AchievementIcon } from "../../components/AchievementIcon";
 import { MenuHeading } from "./MenuPrimitives";
@@ -28,13 +27,12 @@ export function AchievementsView({ save, onBack }: AchievementsViewProps) {
     return { ...category, achievements, completedCount };
   });
   const runMenuAction = (action: () => void) => {
-    gameAudio.playUiSelect();
     action();
   };
 
   return (
 <div className="menu-chamber menu-chamber--achievements">
-  <MenuHeading eyebrow="Progreso" title="Logros" onBack={onBack} />
+  <MenuHeading title="Logros" variant="achievements" onBack={onBack} />
 
   <div className="achievement-screen" aria-label="Logros del jugador">
     <div className="achievement-summary">

@@ -6,6 +6,7 @@ import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
 import menuGearUrl from "../../assets/menu/menu-gear.webp";
 import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
 import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
+import modeExploreUrl from "../../assets/menu/mode-explore.webp";
 import { achievementDefinitions } from "../../game/data/achievements";
 import {
   canChooseInitialCharacter,
@@ -15,21 +16,22 @@ import {
 import { playableCharacters } from "../../game/data/characters";
 import { levelDefinitions } from "../../game/data/levels";
 import { getProfileIconDefinition, profileIconDefinitions } from "../../game/data/profileIcons";
-import { gameAudio } from "../../shared/audio/GameAudio";
+import { gameMusic } from "../../shared/music/GameMusic";
+import { gameSfx } from "../../shared/sfx/GameSfx";
 import type { CharacterId, ProfileIconId, SaveData } from "../../shared/types/game";
 import { AchievementIcon } from "../components/AchievementIcon";
 import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
 import { ExploreView } from "./main-menu/ExploreView";
 import { InventoryView } from "./main-menu/InventoryView";
-import { MenuHeading, SettingToggle } from "./main-menu/MenuPrimitives";
+import { MenuHeading, SettingToggle, VolumeControl } from "./main-menu/MenuPrimitives";
 import {
   formatCompactAmount,
   formatGameplayTime,
   getCarouselOffset,
 } from "./main-menu/menuUtils";
 
-type MenuView = "main" | "profile" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options";
+type MenuView = "main" | "profile" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options" | "audio";
 type ProfileSectionId = "edit" | "statistics";
 
 interface MainMenuScreenProps {
@@ -73,7 +75,12 @@ export function MainMenuScreen({
   const [activeProfileSectionId, setActiveProfileSectionId] = useState<ProfileSectionId>("edit");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
   const [previewRegionId, setPreviewRegionId] = useState<string>();
-  const [audioSettings, setAudioSettings] = useState(() => gameAudio.getSettings());
+  const [audioSettings, setAudioSettings] = useState({
+    soundEnabled: gameSfx.isEnabled(),
+    musicEnabled: gameMusic.isEnabled(),
+    soundVolume: gameSfx.getVolume(),
+    musicVolume: gameMusic.getVolume(),
+  });
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [isResettingProgress, setIsResettingProgress] = useState(false);
   const [showExploreEntryHint, setShowExploreEntryHint] = useState(false);
@@ -116,11 +123,9 @@ export function MainMenuScreen({
   const [playerNameError, setPlayerNameError] = useState<string>();
   const selectedProfileIcon = getProfileIconDefinition(save.player.profileIconId);
   const runMenuAction = (action: () => void) => {
-    gameAudio.playUiSelect();
     action();
   };
   const moveCharacterCarousel = (direction: -1 | 1) => {
-    gameAudio.playUiSelect();
     const nextIndex = (
       activeCharacterIndex + direction + carouselCharacters.length
     ) % carouselCharacters.length;
@@ -130,7 +135,6 @@ export function MainMenuScreen({
     if (index === activeCharacterIndex) {
       return;
     }
-    gameAudio.playUiSelect();
     setActiveCharacterId(carouselCharacters[index].id);
   };
   const handleCharacterCarouselWheel = (event: WheelEvent<HTMLDivElement>) => {
@@ -174,12 +178,26 @@ export function MainMenuScreen({
     }
   };
   const toggleSound = () => {
-    gameAudio.playUiSelect();
-    setAudioSettings(gameAudio.setSoundEnabled(!audioSettings.soundEnabled));
+    const soundEnabled = gameSfx.setEnabled(!gameSfx.isEnabled());
+    setAudioSettings((current) => ({
+      ...current,
+      soundEnabled,
+    }));
   };
   const toggleMusic = () => {
-    gameAudio.playUiSelect();
-    setAudioSettings(gameAudio.setMusicEnabled(!audioSettings.musicEnabled));
+    const musicEnabled = gameMusic.setEnabled(!gameMusic.isEnabled());
+    setAudioSettings((current) => ({
+      ...current,
+      musicEnabled,
+    }));
+  };
+  const setSoundVolume = (volume: number) => {
+    const soundVolume = gameSfx.setVolume(volume);
+    setAudioSettings((current) => ({ ...current, soundVolume }));
+  };
+  const setMusicVolume = (volume: number) => {
+    const musicVolume = gameMusic.setVolume(volume);
+    setAudioSettings((current) => ({ ...current, musicVolume }));
   };
   const openProfilePage = () => {
     runMenuAction(() => {
@@ -205,7 +223,6 @@ export function MainMenuScreen({
       return;
     }
 
-    gameAudio.playUiSelect();
     setPlayerNameDraft(normalizedName);
     setPlayerNameError(undefined);
     setIsEditingPlayerName(false);
@@ -307,7 +324,7 @@ export function MainMenuScreen({
 
           {view === "profile" && (
             <div className="menu-chamber menu-chamber--profile">
-              <MenuHeading eyebrow="Perfil del jugador" title="Mi perfil" onBack={() => setView("main")} />
+              <MenuHeading title="Mi perfil" variant="profile" onBack={() => setView("main")} />
 
               <div className="profile-screen" aria-label="Perfil del jugador">
                 <div className="profile-tabs" role="tablist" aria-label="Secciones del perfil">
@@ -420,7 +437,6 @@ export function MainMenuScreen({
                                 aria-label={`Elegir icono ${index + 1}`}
                                 aria-pressed={icon.id === save.player.profileIconId}
                                 onClick={() => {
-                                  gameAudio.playUiSelect();
                                   onUpdatePlayerIcon(icon.id);
                                 }}
                               >
@@ -523,22 +539,20 @@ export function MainMenuScreen({
 
           {view === "options" && (
             <div className="menu-chamber menu-chamber--options">
-              <MenuHeading eyebrow="Opciones" title="Ajustes" onBack={() => setView("main")} />
+              <MenuHeading title="Ajustes" variant="settings" onBack={() => setView("main")} />
 
-              <div className="settings-panel" aria-label="Opciones de audio">
-                <SettingToggle
-                  label="Sonido"
-                  description="Efectos de interfaz, golpes, saltos y acciones."
-                  enabled={audioSettings.soundEnabled}
-                  onToggle={toggleSound}
-                />
-                <SettingToggle
-                  label="Musica"
-                  description="Melodia suave de fondo durante menus y partida."
-                  enabled={audioSettings.musicEnabled}
-                  onToggle={toggleMusic}
-                />
-              </div>
+              <button
+                className="settings-entry"
+                type="button"
+                onClick={() => setView("audio")}
+              >
+                <span className="settings-entry__icon" aria-hidden="true">♪</span>
+                <span className="settings-entry__copy">
+                  <strong>Sonido y musica</strong>
+                  <small>Volumen, musica y efectos del juego.</small>
+                </span>
+                <span className="settings-entry__arrow" aria-hidden="true">›</span>
+              </button>
 
               <section className="account-settings" aria-label="Cuenta y progreso">
                 <div className="account-settings__header">
@@ -558,7 +572,6 @@ export function MainMenuScreen({
                     className="account-action account-action--reset"
                     type="button"
                     onClick={() => {
-                      gameAudio.playUiSelect();
                       setShowResetConfirmation(true);
                     }}
                   >
@@ -582,7 +595,6 @@ export function MainMenuScreen({
                       type="button"
                       disabled={isResettingProgress}
                       onClick={() => {
-                        gameAudio.playUiSelect();
                         setShowResetConfirmation(false);
                       }}
                     >
@@ -608,6 +620,46 @@ export function MainMenuScreen({
             </div>
           )}
 
+          {view === "audio" && (
+            <div className="menu-chamber menu-chamber--options menu-chamber--audio">
+              <MenuHeading
+                title="Sonido y música"
+                variant="audio"
+                onBack={() => setView("options")}
+              />
+
+              <div className="settings-panel settings-panel--audio" aria-label="Configuracion de sonido y musica">
+                <section className="audio-setting-card" aria-label="Configuracion de sonido">
+                  <SettingToggle
+                    label="Sonido"
+                    description="Efectos medievales de interfaz, combate y progreso."
+                    enabled={audioSettings.soundEnabled}
+                    onToggle={toggleSound}
+                  />
+                  <VolumeControl
+                    label="Sonido"
+                    value={audioSettings.soundVolume}
+                    onChange={setSoundVolume}
+                  />
+                </section>
+
+                <section className="audio-setting-card" aria-label="Configuracion de musica">
+                  <SettingToggle
+                    label="Musica"
+                    description="Musica medieval adaptada a menus y dificultad."
+                    enabled={audioSettings.musicEnabled}
+                    onToggle={toggleMusic}
+                  />
+                  <VolumeControl
+                    label="Musica"
+                    value={audioSettings.musicVolume}
+                    onChange={setMusicVolume}
+                  />
+                </section>
+              </div>
+            </div>
+          )}
+
           {view === "inventory" && <InventoryView save={save} onBack={() => setView("main")} />}
 
           {view === "achievements" && <AchievementsView save={save} onBack={() => setView("main")} />}
@@ -625,10 +677,10 @@ export function MainMenuScreen({
               ) : (
                 <>
                   <MenuHeading
-                    title={save.primaryCharacterId ? "Elegir heroe" : "Escoge tu personaje principal"}
+                    title={save.primaryCharacterId ? "Héroes" : "Elige tu héroe"}
+                    variant="heroes"
                     onBack={() => setView("main")}
                     hideBack={!save.primaryCharacterId}
-                    centered={!save.primaryCharacterId}
                     animatedTitle={!save.primaryCharacterId}
                   />
 
@@ -782,7 +834,7 @@ export function MainMenuScreen({
 
           {view === "modes" && (
             <div className="menu-chamber menu-chamber--modes">
-              <MenuHeading eyebrow="Modos de juego" title="Seleccion" onBack={() => setView("main")} />
+              <MenuHeading title="Modos de juego" variant="modes" onBack={() => setView("main")} />
 
               <div className="mode-grid">
                 <button
@@ -795,7 +847,7 @@ export function MainMenuScreen({
                   }}
                   onClick={() => runMenuAction(() => setView("explore"))}
                 >
-                  <span className="mode-tile__sigil" aria-hidden="true" />
+                  <img className="mode-tile__art" src={modeExploreUrl} alt="" aria-hidden="true" />
                   <span>Explorar</span>
                   <strong>Campana del continente</strong>
                 </button>

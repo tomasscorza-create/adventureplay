@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { gameAudio } from "../../../shared/audio/GameAudio";
+import { gameEvents } from "../../events/EventBus";
+import { EVENTS } from "../../../shared/constants/events";
 import type { BaseEnemy } from "../../entities/enemies/BaseEnemy";
 import type { Player } from "../../entities/player/Player";
 import { Projectile } from "../../entities/projectiles/Projectile";
@@ -68,7 +69,7 @@ export class CombatSystem {
       if (defeated) {
         onEnemyDefeated(enemy);
       } else {
-        gameAudio.playEnemyHit();
+        gameEvents.emit(EVENTS.SFX_REQUESTED, { cue: "enemy-hit" });
       }
     }
   }

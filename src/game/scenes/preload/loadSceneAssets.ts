@@ -8,6 +8,8 @@ import m3Run2Url from "../../../assets/enemies/m3-run-2.png";
 import m3Run3Url from "../../../assets/enemies/m3-run-3.png";
 import m3Run4Url from "../../../assets/enemies/m3-run-4.png";
 import m3Run5Url from "../../../assets/enemies/m3-run-5.png";
+import volcanicM2AttackUrl from "../../../assets/enemies/active-volcano-m2/attack.png";
+import volcanicM2FlightUrl from "../../../assets/enemies/active-volcano-m2/flight.png";
 import enchantedM2Brake1Url from "../../../assets/enemies/enchanted-m2/brake-1.png";
 import enchantedM2Brake2Url from "../../../assets/enemies/enchanted-m2/brake-2.png";
 import enchantedM2Defeat1Url from "../../../assets/enemies/enchanted-m2/defeat-1.png";
@@ -34,6 +36,8 @@ import enchantedTree1Url from "../../../assets/scenery/enchanted-forest/tree-1.p
 import enchantedTree2Url from "../../../assets/scenery/enchanted-forest/tree-2.png";
 import enchantedTree3Url from "../../../assets/scenery/enchanted-forest/tree-3.png";
 import enchantedTree4Url from "../../../assets/scenery/enchanted-forest/tree-4.png";
+import volcanicBackgroundUrl from "../../../assets/scenery/active-volcano/background.png";
+import volcanicMidgroundUrl from "../../../assets/scenery/active-volcano/midground.png";
 import floorStripUrl from "../../../assets/scenery/forest-floor-strip.png";
 import lanternPostUrl from "../../../assets/scenery/lantern-post.png";
 import moonUrl from "../../../assets/scenery/moon-new-game.png";
@@ -92,6 +96,8 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
     enchantedM2Sources.forEach((url, index) => {
       scene.load.image(`enchanted-m2-source-${index + 1}`, url);
     });
+    scene.load.image("volcanic-m2-flight-source", volcanicM2FlightUrl);
+    scene.load.image("volcanic-m2-attack-source", volcanicM2AttackUrl);
     scene.load.image("enchanted-m3-idle", enchantedM3IdleUrl);
     scene.load.image("enchanted-m3-run-1", enchantedM3Run1Url);
     scene.load.image("enchanted-m3-run-2", enchantedM3Run2Url);
@@ -107,6 +113,8 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
     scene.load.image("enchanted-tree-2", enchantedTree2Url);
     scene.load.image("enchanted-tree-3", enchantedTree3Url);
     scene.load.image("enchanted-tree-4", enchantedTree4Url);
+    scene.load.image("volcanic-background", volcanicBackgroundUrl);
+    scene.load.image("volcanic-midground", volcanicMidgroundUrl);
     scene.load.image("scenery-floor-strip", floorStripUrl);
     scene.load.image("scenery-lantern-post", lanternPostUrl);
     scene.load.image("scenery-moon", moonUrl);

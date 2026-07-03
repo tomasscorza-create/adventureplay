@@ -62,6 +62,7 @@ const levelSequences = [
     "enchantedGrove9",
     "enchantedGrove10",
   ],
+  ["activeVolcano1", "activeVolcano2", "activeVolcano3"],
 ];
 const defaultPowerCharges: PowerChargeState = {
   healingCharges: 3,
@@ -102,7 +103,7 @@ export const defaultSave: SaveData = {
   primaryCharacterId: undefined,
   unlockedCharacterIds: [],
   characterPowerCharges: createDefaultCharacterPowerCharges(),
-  unlockedLevels: ["meadowOutpost", "enchantedGrove1"],
+  unlockedLevels: ["meadowOutpost", "enchantedGrove1", "activeVolcano1"],
   completedLevels: [],
   claimedLevelRewards: [1],
   claimedRewardBoxes: [],

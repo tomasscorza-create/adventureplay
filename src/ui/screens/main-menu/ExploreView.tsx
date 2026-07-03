@@ -8,7 +8,6 @@ import mysteriousPyramidsMapUrl from "../../../assets/menu/explore-map/mysteriou
 import treasureMineMapUrl from "../../../assets/menu/explore-map/treasure-mine.webp";
 import verdantFrontierMapUrl from "../../../assets/menu/explore-map/verdant-frontier.webp";
 import { levelDefinitions } from "../../../game/data/levels";
-import { gameAudio } from "../../../shared/audio/GameAudio";
 import type { SaveData } from "../../../shared/types/game";
 import { MenuHeading } from "./MenuPrimitives";
 import { getLevelStatus } from "./menuUtils";
@@ -68,7 +67,17 @@ const regions: RegionDefinition[] = [
   { id: "treasure-mine", name: "Mina del Tesoro", status: "Próximamente", mapImageUrl: treasureMineMapUrl, levels: [] },
   { id: "ice-mountains", name: "Montañas de Hielo", status: "Próximamente", mapImageUrl: iceMountainsMapUrl, levels: [] },
   { id: "mysterious-pyramids", name: "Pirámides Misteriosas", status: "Próximamente", mapImageUrl: mysteriousPyramidsMapUrl, levels: [] },
-  { id: "active-volcano", name: "Volcán Activo", status: "Próximamente", mapImageUrl: activeVolcanoMapUrl, levels: [] },
+  {
+    id: "active-volcano",
+    name: "Volcán Activo",
+    status: "3 niveles",
+    mapImageUrl: activeVolcanoMapUrl,
+    levels: [
+      { number: 1, levelId: "activeVolcano1", name: "Umbral de ceniza" },
+      { number: 2, levelId: "activeVolcano2", name: "Ríos de magma" },
+      { number: 3, levelId: "activeVolcano3", name: "Furia del cráter" },
+    ],
+  },
 ];
 
 interface ExploreViewProps {
@@ -102,11 +111,11 @@ export function ExploreView({
 
   return (
     <div className="menu-chamber menu-chamber--map">
-      <MenuHeading eyebrow="Explorar" title="Continente de Arvand" onBack={onBack} backLabel="Modos" />
+      <MenuHeading title="Explorar" variant="explore" onBack={onBack} backLabel="Modos" />
       <div className="explore-layout">
         <section className="map-column" aria-label="Regiones del continente">
           <div className="map-column__header"><span>Mapa de regiones</span><strong>{regions.length} regiones</strong></div>
-          <div className="map-scroll" role="region" aria-label="Desplazar mapa de regiones" tabIndex={0}>
+          <div className="map-scroll" role="region" aria-label="Mapa completo de regiones">
             <div className="continent-map explore-map" onPointerLeave={() => onPreviewRegionChange()}>
               <img className="explore-map__base" src={exploreMapUrl} alt="" aria-hidden="true" />
               {regions.map((region) => (
@@ -114,7 +123,7 @@ export function ExploreView({
                   className={`explore-map__region explore-map__region--${region.id}${region.id === activeRegion.id ? " explore-map__region--active" : ""}`}
                   type="button"
                   key={region.id}
-                  onClick={() => { gameAudio.playUiSelect(); onActiveRegionChange(region.id); }}
+                  onClick={() => onActiveRegionChange(region.id)}
                   onPointerEnter={() => onPreviewRegionChange(region.id)}
                   onPointerLeave={() => onPreviewRegionChange()}
                   onFocus={() => onPreviewRegionChange(region.id)}
@@ -147,7 +156,7 @@ export function ExploreView({
                   type="button"
                   key={slot.number}
                   disabled={!canPlay}
-                  onClick={() => { gameAudio.playUiSelect(); if (slot.levelId) onStartLevel(slot.levelId); }}
+                  onClick={() => { if (slot.levelId) onStartLevel(slot.levelId); }}
                 >
                   <span className="level-card__number">LV {slot.number}</span>
                   <span className="level-card__name">{slot.name}</span>

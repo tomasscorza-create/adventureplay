@@ -14,6 +14,7 @@ export class PreloadScene extends Phaser.Scene {
   create(): void {
     this.createCharacterAnimations();
     this.createEnchantedM2Frames();
+    this.createVolcanicM2Frames();
     this.createM2Animations();
     this.createM3Animations();
     this.createEnchantedM3Animations();
@@ -21,6 +22,8 @@ export class PreloadScene extends Phaser.Scene {
     this.createM1Texture();
     this.createEnchantedM0Texture();
     this.createEnchantedM1Texture();
+    this.createVolcanicM0Texture();
+    this.createVolcanicM1Texture();
     this.createProjectileTexture();
     this.createPowerProjectileTexture();
     this.createCoinTexture();
@@ -296,6 +299,38 @@ export class PreloadScene extends Phaser.Scene {
       frameRate: 6,
       repeat: 0,
     });
+    this.anims.create({
+      key: "volcanic-m2-flight",
+      frames: Array.from({ length: 11 }, (_, index) => ({
+        key: `volcanic-m2-flight-${index + 1}`,
+      })),
+      frameRate: 11,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m2-windup",
+      frames: [1, 2].map((frame) => ({ key: `volcanic-m2-attack-${frame}` })),
+      frameRate: 8,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "volcanic-m2-dive",
+      frames: [3, 4].map((frame) => ({ key: `volcanic-m2-attack-${frame}` })),
+      frameRate: 12,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m2-recover",
+      frames: [8, 7].map((frame) => ({ key: `volcanic-m2-attack-${frame}` })),
+      frameRate: 7,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "volcanic-m2-defeat",
+      frames: [5, 6].map((frame) => ({ key: `volcanic-m2-attack-${frame}` })),
+      frameRate: 6,
+      repeat: 0,
+    });
   }
 
   private createEnchantedM2Frames(): void {
@@ -319,6 +354,128 @@ export class PreloadScene extends Phaser.Scene {
         crop,
       );
     });
+  }
+
+  private createVolcanicM2Frames(): void {
+    const flightCrops = [
+      { x: 95, y: 175, width: 270, height: 220 },
+      { x: 365, y: 175, width: 300, height: 220 },
+      { x: 650, y: 175, width: 360, height: 220 },
+      { x: 0, y: 325, width: 250, height: 260 },
+      { x: 245, y: 325, width: 255, height: 260 },
+      { x: 495, y: 325, width: 255, height: 260 },
+      { x: 745, y: 325, width: 279, height: 260 },
+      { x: 0, y: 595, width: 250, height: 210 },
+      { x: 245, y: 595, width: 255, height: 210 },
+      { x: 495, y: 595, width: 255, height: 210 },
+      { x: 745, y: 595, width: 279, height: 210 },
+    ];
+    flightCrops.forEach((crop, index) => {
+      this.createNormalizedVolcanicM2Frame(
+        `volcanic-m2-flight-${index + 1}`,
+        "volcanic-m2-flight-source",
+        crop,
+      );
+    });
+
+    const attackCrops = [
+      { x: 0, y: 220, width: 256, height: 310, clear: { x: 4, y: 22, width: 38, height: 38 } },
+      { x: 256, y: 220, width: 244, height: 310, clear: { x: 20, y: 22, width: 38, height: 38 } },
+      { x: 500, y: 220, width: 244, height: 310, clear: { x: 0, y: 22, width: 38, height: 38 } },
+      { x: 744, y: 220, width: 280, height: 310, clear: { x: 0, y: 22, width: 38, height: 38 } },
+      { x: 0, y: 520, width: 256, height: 290, clear: { x: 4, y: 18, width: 38, height: 38 } },
+      { x: 256, y: 520, width: 244, height: 290, clear: { x: 20, y: 18, width: 38, height: 38 } },
+      { x: 500, y: 520, width: 244, height: 290, clear: { x: 0, y: 18, width: 38, height: 38 } },
+      { x: 744, y: 520, width: 280, height: 290, clear: { x: 0, y: 18, width: 38, height: 38 } },
+    ];
+    attackCrops.forEach(({ clear, ...crop }, index) => {
+      this.createNormalizedVolcanicM2Frame(
+        `volcanic-m2-attack-${index + 1}`,
+        "volcanic-m2-attack-source",
+        crop,
+        clear,
+      );
+    });
+  }
+
+  private createNormalizedVolcanicM2Frame(
+    textureKey: string,
+    sourceKey: string,
+    crop: { x: number; y: number; width: number; height: number },
+    clear?: { x: number; y: number; width: number; height: number },
+  ): void {
+    const sourceImage = this.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
+    const scratchCanvas = document.createElement("canvas");
+    scratchCanvas.width = crop.width;
+    scratchCanvas.height = crop.height;
+    const scratchContext = scratchCanvas.getContext("2d", { willReadFrequently: true });
+    const frameCanvas = document.createElement("canvas");
+    frameCanvas.width = 320;
+    frameCanvas.height = 320;
+    const frameContext = frameCanvas.getContext("2d");
+    if (!scratchContext || !frameContext) {
+      return;
+    }
+
+    scratchContext.drawImage(
+      sourceImage,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      crop.width,
+      crop.height,
+    );
+    if (clear) {
+      scratchContext.clearRect(clear.x, clear.y, clear.width, clear.height);
+    }
+    const bounds = this.findCanvasVisibleBounds(scratchContext, crop.width, crop.height);
+    const padding = 16;
+    const scale = Math.min(
+      (320 - padding * 2) / bounds.width,
+      (320 - padding * 2) / bounds.height,
+    );
+    const drawWidth = bounds.width * scale;
+    const drawHeight = bounds.height * scale;
+    frameContext.drawImage(
+      scratchCanvas,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      (320 - drawWidth) / 2,
+      (320 - drawHeight) / 2,
+      drawWidth,
+      drawHeight,
+    );
+    this.textures.addCanvas(textureKey, frameCanvas);
+  }
+
+  private findCanvasVisibleBounds(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+  ): { x: number; y: number; width: number; height: number } {
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (pixels[(y * width + x) * 4 + 3] > 8) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+    }
+    return minX <= maxX && minY <= maxY
+      ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }
+      : { x: 0, y: 0, width, height };
   }
 
   private createNormalizedM2Frame(
@@ -576,6 +733,68 @@ export class PreloadScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x162d22, 1);
     graphics.strokeRoundedRect(6, 12, 34, 31, 9);
     graphics.generateTexture("enchanted-enemy-m1", 46, 52);
+    graphics.destroy();
+  }
+
+  private createVolcanicM0Texture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x120806, 0.44);
+    graphics.fillEllipse(24, 46, 40, 9);
+    graphics.fillStyle(0x241515, 1);
+    graphics.fillRoundedRect(6, 13, 36, 31, 10);
+    graphics.fillStyle(0x3a2020, 1);
+    graphics.fillCircle(14, 14, 10);
+    graphics.fillCircle(25, 10, 12);
+    graphics.fillCircle(36, 15, 9);
+    graphics.fillStyle(0xff5a1f, 0.96);
+    graphics.fillCircle(17, 25, 2.8);
+    graphics.fillCircle(33, 25, 2.8);
+    graphics.lineStyle(3, 0xff6b23, 0.92);
+    graphics.lineBetween(11, 35, 20, 29);
+    graphics.lineBetween(20, 29, 26, 40);
+    graphics.lineBetween(27, 18, 37, 35);
+    graphics.lineStyle(1, 0xffc04d, 0.9);
+    graphics.lineBetween(12, 34, 20, 29);
+    graphics.lineBetween(28, 18, 36, 34);
+    graphics.fillStyle(0x130a09, 1);
+    graphics.fillCircle(17, 25, 1.1);
+    graphics.fillCircle(33, 25, 1.1);
+    graphics.lineStyle(2, 0x090506, 1);
+    graphics.strokeRoundedRect(6, 13, 36, 31, 10);
+    graphics.generateTexture("volcanic-enemy-m0", 48, 52);
+    graphics.destroy();
+  }
+
+  private createVolcanicM1Texture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x120706, 0.42);
+    graphics.fillEllipse(24, 46, 40, 9);
+    graphics.fillStyle(0x160c0d, 1);
+    graphics.fillTriangle(8, 19, 1, 8, 14, 13);
+    graphics.fillTriangle(40, 19, 47, 8, 34, 13);
+    graphics.fillStyle(0x302020, 1);
+    graphics.fillRoundedRect(6, 12, 36, 32, 9);
+    graphics.fillStyle(0x4a2620, 1);
+    graphics.fillRoundedRect(10, 10, 28, 27, 8);
+    graphics.fillStyle(0xff9b32, 1);
+    graphics.fillTriangle(14, 21, 20, 18, 20, 24);
+    graphics.fillTriangle(34, 21, 28, 18, 28, 24);
+    graphics.lineStyle(3, 0xff4f1c, 0.92);
+    graphics.beginPath();
+    graphics.moveTo(13, 34);
+    graphics.lineTo(23, 27);
+    graphics.lineTo(29, 36);
+    graphics.lineTo(38, 29);
+    graphics.strokePath();
+    graphics.lineStyle(1, 0xffc34d, 0.9);
+    graphics.lineBetween(14, 33, 23, 27);
+    graphics.lineBetween(29, 35, 37, 29);
+    graphics.fillStyle(0x170909, 1);
+    graphics.fillCircle(19, 21, 1.2);
+    graphics.fillCircle(29, 21, 1.2);
+    graphics.lineStyle(2, 0x090506, 1);
+    graphics.strokeRoundedRect(6, 12, 36, 32, 9);
+    graphics.generateTexture("volcanic-enemy-m1", 48, 52);
     graphics.destroy();
   }
 

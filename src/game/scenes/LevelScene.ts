@@ -1,7 +1,10 @@
 import Phaser from "phaser";
-import { gameAudio } from "../../shared/audio/GameAudio";
 import { EVENTS } from "../../shared/constants/events";
-import { GAME_HEIGHT, GAME_WIDTH } from "../../shared/constants/game";
+import {
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  MOBILE_GAMEPLAY_FLOOR_EXTENSION,
+} from "../../shared/constants/game";
 import type {
   AchievementId,
   LevelDefinition,
@@ -9,6 +12,7 @@ import type {
   PowerChargeState,
   SaveData,
 } from "../../shared/types/game";
+import type { SfxCue } from "../data/sfx";
 import { BasicEnemy } from "../entities/enemies/BasicEnemy";
 import type { BaseEnemy } from "../entities/enemies/BaseEnemy";
 import { M1Enemy } from "../entities/enemies/M1Enemy";
@@ -118,7 +122,7 @@ export class LevelScene extends Phaser.Scene {
     this.inputSystem = new GameplayInputSystem(this);
     this.createWorld();
     this.createPlayer();
-    this.unbindCameraZoom = this.cameraSystem.bindResponsiveZoom(this);
+    this.unbindCameraZoom = this.cameraSystem.bindResponsiveZoom(this, this.level.worldWidth);
     if (this.activeCheckpoint) {
       this.resetPressureForSafePoint(this.activeCheckpoint.x);
     }
@@ -146,7 +150,7 @@ export class LevelScene extends Phaser.Scene {
     this.runTracker.trackInput(input);
     const didJump = this.movement.update(this.player, input, delta);
     if (didJump) {
-      gameAudio.playJump();
+      this.playSfx("jump");
     }
     this.handleActions(input);
     this.updateCameraPressure(delta);
@@ -167,10 +171,15 @@ export class LevelScene extends Phaser.Scene {
 
   private createWorld(): void {
     const isEnchantedForest = this.level.theme === "enchanted-forest";
-    this.cameras.main.setBackgroundColor(isEnchantedForest ? "#153f3b" : "#071323");
+    const isActiveVolcano = this.level.theme === "active-volcano";
+    this.cameras.main.setBackgroundColor(
+      isActiveVolcano ? "#190b0d" : isEnchantedForest ? "#153f3b" : "#071323",
+    );
     this.physics.world.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
     this.physics.world.setBoundsCollision(true, true, true, false);
-    if (isEnchantedForest) {
+    if (isActiveVolcano) {
+      this.createActiveVolcanoBackdrop();
+    } else if (isEnchantedForest) {
       this.createEnchantedForestBackdrop();
     } else {
       this.createForestBackdrop();
@@ -178,8 +187,14 @@ export class LevelScene extends Phaser.Scene {
     this.createGroundLayer();
     this.createScenarioDressings();
     this.pressureLine = this.add
-      .rectangle(3, GAME_HEIGHT / 2, 6, GAME_HEIGHT, 0xff2638, 0.96)
-      .setScrollFactor(0)
+      .rectangle(
+        3,
+        (GAME_HEIGHT + MOBILE_GAMEPLAY_FLOOR_EXTENSION) / 2,
+        6,
+        GAME_HEIGHT + MOBILE_GAMEPLAY_FLOOR_EXTENSION,
+        0xff2638,
+        0.96,
+      )
       .setDepth(30);
 
     this.platforms = this.physics.add.staticGroup();
@@ -262,6 +277,7 @@ export class LevelScene extends Phaser.Scene {
 
   private createEnemy(enemy: LevelDefinition["enemies"][number]): BaseEnemy {
     const isEnchantedForest = this.level.theme === "enchanted-forest";
+    const isActiveVolcano = this.level.theme === "active-volcano";
     if (enemy.enemyId === "m1") {
       return new M1Enemy(
         this,
@@ -272,7 +288,11 @@ export class LevelScene extends Phaser.Scene {
           ...this.platforms.getChildren(),
           ...this.movingPlatforms.getChildren(),
         ] as Phaser.GameObjects.Rectangle[],
-        isEnchantedForest ? "enchanted-enemy-m1" : "enemy-m1",
+        isActiveVolcano
+          ? "volcanic-enemy-m1"
+          : isEnchantedForest
+            ? "enchanted-enemy-m1"
+            : "enemy-m1",
       );
     }
 
@@ -283,7 +303,7 @@ export class LevelScene extends Phaser.Scene {
         enemy.y,
         enemy.patrolDistance,
         enemy.aggression,
-        isEnchantedForest ? "enchanted" : "default",
+        isActiveVolcano ? "volcanic" : isEnchantedForest ? "enchanted" : "default",
       );
     }
 
@@ -307,9 +327,11 @@ export class LevelScene extends Phaser.Scene {
       enemy.y,
       enemy.enemyId,
       enemy.patrolDistance,
-      isEnchantedForest && enemy.enemyId === "m0"
-        ? "enchanted-enemy-m0"
-        : "enemy-emberling",
+      isActiveVolcano && enemy.enemyId === "m0"
+        ? "volcanic-enemy-m0"
+        : isEnchantedForest && enemy.enemyId === "m0"
+          ? "enchanted-enemy-m0"
+          : "enemy-emberling",
     );
   }
 
@@ -437,14 +459,14 @@ export class LevelScene extends Phaser.Scene {
 
   private handleActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
     if (input.pauseJustPressed) {
-      gameAudio.playUiSelect();
+      this.playSfx("ui-click");
       this.pauseGame();
       return;
     }
 
     if (input.meleeJustPressed) {
       if (this.player.canMelee(this.time.now)) {
-        gameAudio.playAttack();
+        this.playSfx("sword-swing");
       }
 
       this.combat.meleeAttack(this, this.player, this.enemies, (enemy) => {
@@ -454,7 +476,7 @@ export class LevelScene extends Phaser.Scene {
 
     if (input.shootJustPressed) {
       if (this.player.canShoot(this.time.now)) {
-        gameAudio.playShoot();
+        this.playSfx("projectile");
       }
 
       this.combat.shoot(this, this.player, this.projectiles);
@@ -480,7 +502,7 @@ export class LevelScene extends Phaser.Scene {
 
     powerCharges.healingCharges -= 1;
     this.save.player.health = this.save.player.maxHealth;
-    gameAudio.playHealingPower();
+    this.playSfx("heal");
     this.createHealingEffect();
     gameSaveStore.save(this.save);
     this.emitHud();
@@ -503,7 +525,7 @@ export class LevelScene extends Phaser.Scene {
     );
     this.powerProjectiles.add(projectile);
     projectile.launch();
-    gameAudio.playLethalPower();
+    this.playSfx("lethal-power");
     gameSaveStore.save(this.save);
     this.emitHud();
   }
@@ -658,6 +680,46 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private createActiveVolcanoBackdrop(): void {
+    this.add
+      .image(0, 0, "volcanic-background")
+      .setOrigin(0)
+      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
+      .setScrollFactor(0)
+      .setDepth(-40);
+
+    this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x3d0908, 0.12)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(-39);
+
+    const islandCrops = [
+      { x: 60, y: 175, width: 410, height: 340 },
+      { x: 505, y: 175, width: 455, height: 345 },
+      { x: 55, y: 500, width: 420, height: 320 },
+      { x: 500, y: 510, width: 465, height: 305 },
+    ];
+    for (let x = 220, index = 0; x < this.level.worldWidth + 500; x += 720, index += 1) {
+      const crop = islandCrops[index % islandCrops.length];
+      this.add
+        .image(x, 645 - (index % 3) * 46, "volcanic-midground")
+        .setCrop(crop.x, crop.y, crop.width, crop.height)
+        .setOrigin(0.5, 1)
+        .setDisplaySize(crop.width * 0.68, crop.height * 0.68)
+        .setAlpha(index % 2 === 0 ? 0.54 : 0.42)
+        .setTint(index % 2 === 0 ? 0xd77a55 : 0x9b5a52)
+        .setScrollFactor(0.26 + (index % 3) * 0.08)
+        .setDepth(-22 + (index % 3));
+    }
+
+    for (let x = 120; x < this.level.worldWidth; x += 210) {
+      const y = 180 + ((x / 210) % 5) * 74;
+      this.add.circle(x, y, 2.4, 0xff7b27, 0.7).setScrollFactor(0.5).setDepth(-8);
+      this.add.circle(x + 78, y + 54, 1.5, 0xffd05b, 0.58).setScrollFactor(0.62).setDepth(-7);
+    }
+  }
+
   private createEnchantedForestBackdrop(): void {
     this.add
       .image(0, 0, "enchanted-background")
@@ -721,6 +783,14 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createGroundLayer(): void {
+    if (this.level.theme === "active-volcano") {
+      for (let x = -160; x < this.level.worldWidth + 180; x += 340) {
+        this.add.ellipse(x, 694, 500, 132, 0x16090a, 0.9).setDepth(-1);
+        this.add.ellipse(x + 130, 642, 310, 76, 0x8f2416, 0.18).setDepth(-1);
+      }
+      return;
+    }
+
     if (this.level.theme === "enchanted-forest") {
       for (let x = -180; x < this.level.worldWidth + 180; x += 360) {
         this.add.ellipse(x, 692, 520, 128, 0x102d29, 0.72).setDepth(-1);
@@ -740,6 +810,11 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createScenarioDressings(): void {
+    if (this.level.theme === "active-volcano") {
+      this.createActiveVolcanoDressings();
+      return;
+    }
+
     if (this.level.theme === "enchanted-forest") {
       this.createEnchantedForestDressings();
       return;
@@ -808,6 +883,35 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private createActiveVolcanoDressings(): void {
+    const groundPlatforms = this.level.platforms.filter((platform) => platform.y >= 640);
+    for (const [index, platform] of groundPlatforms.entries()) {
+      const surfaceY = platform.y + 2;
+      if (platform.width > 380) {
+        this.add
+          .triangle(
+            platform.x + 120 + (index % 3) * 70,
+            surfaceY - 18,
+            0,
+            36,
+            24,
+            0,
+            48,
+            36,
+            0x241315,
+            0.92,
+          )
+          .setOrigin(0.5, 1)
+          .setStrokeStyle(2, 0x6f2a20, 0.75)
+          .setDepth(7);
+      }
+      if (index % 2 === 0) {
+        this.add.circle(platform.x + platform.width - 88, surfaceY - 5, 4, 0xff6a20, 0.72).setDepth(8);
+        this.add.circle(platform.x + platform.width - 72, surfaceY - 10, 2.4, 0xffc04b, 0.62).setDepth(8);
+      }
+    }
+  }
+
   private createMushrooms(x: number, y: number): void {
     this.add.image(x, y, "scenery-mushrooms").setOrigin(0.5, 1).setScale(0.46).setDepth(8);
   }
@@ -839,7 +943,9 @@ export class LevelScene extends Phaser.Scene {
         .setDepth(1);
     }
 
-    if (this.level.theme === "enchanted-forest") {
+    if (this.level.theme === "active-volcano") {
+      this.createVolcanicTerrainRun(platform);
+    } else if (this.level.theme === "enchanted-forest") {
       this.createEnchantedTerrainRun(platform);
     } else {
       this.createTerrainRun(platform);
@@ -856,7 +962,9 @@ export class LevelScene extends Phaser.Scene {
   private createEnchantedTerrainRun(platform: LevelDefinition["platforms"][number]): void {
     const isGround = platform.y >= 640;
     const topY = platform.y - 8;
-    const visualHeight = isGround ? GAME_HEIGHT - topY + 18 : 58;
+    const visualHeight = isGround
+      ? GAME_HEIGHT + MOBILE_GAMEPLAY_FLOOR_EXTENSION - topY + 18
+      : 58;
     const depth = isGround ? 4 : 5;
     const graphics = this.add.graphics().setDepth(depth);
 
@@ -888,10 +996,44 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private createVolcanicTerrainRun(platform: LevelDefinition["platforms"][number]): void {
+    const isGround = platform.y >= 640;
+    const topY = platform.y - 8;
+    const visualHeight = isGround
+      ? GAME_HEIGHT + MOBILE_GAMEPLAY_FLOOR_EXTENSION - topY + 18
+      : 68;
+    const graphics = this.add.graphics().setDepth(isGround ? 4 : 5);
+
+    graphics.fillStyle(0x12090a, 0.48);
+    graphics.fillRoundedRect(platform.x + 7, topY + 10, platform.width, visualHeight, 10);
+    graphics.fillStyle(isGround ? 0x2b1718 : 0x382022, 1);
+    graphics.fillRoundedRect(platform.x, topY, platform.width, visualHeight, isGround ? 7 : 12);
+    graphics.fillStyle(0x1b1012, 0.94);
+    graphics.fillRect(platform.x, topY + 25, platform.width, Math.max(24, visualHeight - 25));
+    graphics.fillStyle(0xff5a1f, 0.9);
+    graphics.fillRoundedRect(platform.x - 2, topY - 2, platform.width + 4, 9, 5);
+    graphics.fillStyle(0xffb23f, 0.64);
+    graphics.fillRect(platform.x + 8, topY, Math.max(18, platform.width - 18), 3);
+
+    const crackWidth = isGround ? 94 : 72;
+    for (let x = platform.x + crackWidth; x < platform.x + platform.width; x += crackWidth) {
+      const offset = Math.floor((x - platform.x) / crackWidth) % 2 === 0 ? 8 : 16;
+      graphics.lineStyle(3, 0xa72c19, 0.8);
+      graphics.lineBetween(x, topY + 8, x - 11, topY + 28 + offset);
+      graphics.lineBetween(x - 11, topY + 28 + offset, x + 4, topY + 48 + offset);
+      graphics.lineStyle(1, 0xff8b2c, 0.88);
+      graphics.lineBetween(x - 1, topY + 9, x - 10, topY + 28 + offset);
+    }
+    for (let y = topY + 48; y < topY + visualHeight; y += 38) {
+      graphics.lineStyle(2, 0x4a2020, 0.72);
+      graphics.lineBetween(platform.x + 8, y, platform.x + platform.width - 8, y + 5);
+    }
+  }
+
   private createTerrainRun(platform: LevelDefinition["platforms"][number]): void {
     const isGround = platform.y >= 640;
     const pieceWidth = isGround ? 128 : 96;
-    const pieceHeight = isGround ? 112 : 78;
+    const pieceHeight = isGround ? 112 + MOBILE_GAMEPLAY_FLOOR_EXTENSION : 78;
     const edgeWidth = Math.min(pieceWidth, Math.max(42, platform.width * 0.22));
     const visualY = platform.y - (isGround ? 30 : 26);
     const depth = isGround ? 4 : 5;
@@ -954,6 +1096,22 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createPitVisual(hazard: LevelHazardDefinition): void {
+    if (this.level.theme === "active-volcano") {
+      this.add
+        .rectangle(hazard.x, hazard.y - 22, hazard.width, hazard.height + 44, 0x5c120b, 0.98)
+        .setOrigin(0, 0)
+        .setDepth(5);
+      this.add
+        .rectangle(hazard.x, hazard.y - 8, hazard.width, 16, 0xff4f16, 0.72)
+        .setOrigin(0, 0)
+        .setDepth(6);
+      for (let x = hazard.x + 20; x < hazard.x + hazard.width; x += 42) {
+        this.add.circle(x, hazard.y - 4, 4, 0xffc04b, 0.7).setDepth(7);
+        this.add.circle(x + 12, hazard.y + 8, 2.2, 0xff6a20, 0.84).setDepth(7);
+      }
+      return;
+    }
+
     if (this.level.theme === "enchanted-forest") {
       this.add
         .rectangle(hazard.x, hazard.y - 22, hazard.width, hazard.height + 44, 0x061b1b, 0.96)
@@ -981,6 +1139,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createSpikeVisual(hazard: LevelHazardDefinition): void {
+    const isActiveVolcano = this.level.theme === "active-volcano";
     const baseY = hazard.y + hazard.height;
     this.add
       .rectangle(hazard.x, baseY - 8, hazard.width, 8, 0x1b1612, 1)
@@ -989,11 +1148,11 @@ export class LevelScene extends Phaser.Scene {
 
     for (let x = hazard.x + 8; x < hazard.x + hazard.width; x += 17) {
       this.add
-        .triangle(x, baseY - 25, 0, 24, 16, 24, 8, 0, 0xd8d3bb, 1)
+        .triangle(x, baseY - 25, 0, 24, 16, 24, 8, 0, isActiveVolcano ? 0x4a2320 : 0xd8d3bb, 1)
         .setDepth(11)
-        .setStrokeStyle(1, 0x596167, 1);
+        .setStrokeStyle(1, isActiveVolcano ? 0xff5a1f : 0x596167, 1);
       this.add
-        .triangle(x + 4, baseY - 28, 0, 13, 8, 13, 4, 0, 0xffffff, 0.48)
+        .triangle(x + 4, baseY - 28, 0, 13, 8, 13, 4, 0, isActiveVolcano ? 0xffa33a : 0xffffff, 0.48)
         .setDepth(12);
     }
   }
@@ -1009,7 +1168,7 @@ export class LevelScene extends Phaser.Scene {
       );
       this.createCoinGainEffect(coin.x, coin.y, coin.value);
     }
-    gameAudio.playCollect();
+    this.playSfx("coin");
     coin.disableBody(true, true);
     gameSaveStore.save(this.save);
     this.emitHud();
@@ -1021,7 +1180,7 @@ export class LevelScene extends Phaser.Scene {
       this.save.player.maxHealth,
       this.save.player.health + 1,
     );
-    gameAudio.playCollect();
+    this.playSfx("pickup");
     pickup.disableBody(true, true);
     gameSaveStore.save(this.save);
     this.emitHud();
@@ -1047,7 +1206,7 @@ export class LevelScene extends Phaser.Scene {
     this.announceAchievements(
       this.achievements.recordRewardBoxOpened(this.save),
     );
-    gameAudio.playCollect();
+    this.playSfx("pickup");
     this.createRewardBoxEffect(rewardBox.x, rewardBox.y, rewardItem.name);
     rewardBox.disableBody(true, true);
     gameSaveStore.save(this.save);
@@ -1092,7 +1251,7 @@ export class LevelScene extends Phaser.Scene {
     if (defeated) {
       this.handleEnemyDefeated(enemy);
     } else {
-      gameAudio.playEnemyHit();
+      this.playSfx("enemy-hit");
     }
   }
 
@@ -1167,7 +1326,7 @@ export class LevelScene extends Phaser.Scene {
     if (defeated) {
       this.handleEnemyDefeated(enemy);
     } else {
-      gameAudio.playEnemyHit();
+      this.playSfx("enemy-hit");
     }
 
     return true;
@@ -1175,7 +1334,7 @@ export class LevelScene extends Phaser.Scene {
 
   private handleEnemyDefeated(enemy: BaseEnemy): void {
     this.monstersDefeatedThisLevel += 1;
-    gameAudio.playEnemyDefeat();
+    this.playSfx("enemy-defeat");
     if (!(enemy instanceof M2Enemy && enemy.hasCustomDefeatAnimation())) {
       this.createEnemyDefeatEffect(enemy);
     }
@@ -1281,7 +1440,7 @@ export class LevelScene extends Phaser.Scene {
     const previousHealth = this.player.stats.health;
     const defeated = this.player.takeDamage(amount);
     if (this.player.stats.health < previousHealth) {
-      gameAudio.playPlayerHit();
+      this.playSfx("player-hit");
       this.showDamageFeedback(previousHealth - this.player.stats.health);
     }
 
@@ -1304,10 +1463,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateCameraPressure(delta: number): void {
-    const camera = this.cameras.main;
     const visibleWorldWidth = this.cameraSystem.getVisibleWorldWidth(this);
+    const visibleWorldLeft = this.cameraSystem.getVisibleWorldLeft(this);
     const maxScrollX = Math.max(0, this.level.worldWidth - visibleWorldWidth);
-    this.pressureScrollX = Math.max(this.pressureScrollX, camera.scrollX);
+    this.pressureScrollX = Math.max(this.pressureScrollX, visibleWorldLeft);
     this.pressureScrollX = Math.min(
       maxScrollX,
       this.pressureScrollX + this.level.autoScrollSpeed * (delta / 1000),
@@ -1319,16 +1478,19 @@ export class LevelScene extends Phaser.Scene {
       maxScrollX,
     );
     const targetScrollX = Math.max(this.pressureScrollX, playerTargetX);
-    camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, 0.09);
+    const nextVisibleWorldLeft = Phaser.Math.Linear(visibleWorldLeft, targetScrollX, 0.09);
 
-    if (camera.scrollX < this.pressureScrollX) {
-      camera.scrollX = this.pressureScrollX;
-    }
+    this.cameraSystem.setVisibleWorldLeft(
+      this,
+      Math.max(nextVisibleWorldLeft, this.pressureScrollX),
+    );
+
+    this.pressureLine.x = this.cameraSystem.getVisibleWorldLeft(this) + this.pressureLine.width / 2;
   }
 
   private handlePressureLineDamage(delta: number): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const pressureLineX = this.cameras.main.scrollX + this.pressureLine.width + 6;
+    const pressureLineX = this.pressureLine.x + this.pressureLine.width / 2;
     const isTouchingPressure = body.left <= pressureLineX;
 
     if (!isTouchingPressure) {
@@ -1352,6 +1514,7 @@ export class LevelScene extends Phaser.Scene {
 
     this.activeCheckpoint = { ...this.level.checkpoint };
     this.save.checkpointId = this.level.checkpoint.id;
+    this.playSfx("checkpoint");
     this.announceAchievements(
       this.achievements.recordCheckpointActivated(this.save, this.level.checkpoint.id),
     );
@@ -1372,7 +1535,7 @@ export class LevelScene extends Phaser.Scene {
     this.recoveringFromPit = true;
     const previousHealth = this.save.player.health;
     this.save.player.health = Math.max(0, this.save.player.health - 1);
-    gameAudio.playPlayerHit();
+    this.playSfx("player-hit");
     this.showDamageFeedback(previousHealth - this.save.player.health);
     gameSaveStore.save(this.save);
     this.emitHud();
@@ -1392,9 +1555,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private findPitRespawnPoint(): { x: number; y: number } {
-    const viewStart = this.cameras.main.scrollX;
+    const viewStart = this.cameraSystem.getVisibleWorldLeft(this);
+    const visibleWorldWidth = this.cameraSystem.getVisibleWorldWidth(this);
     const desiredX = viewStart + 92;
-    const searchEnd = Math.min(this.level.worldWidth - 48, viewStart + GAME_WIDTH * 0.45);
+    const searchEnd = Math.min(this.level.worldWidth - 48, viewStart + visibleWorldWidth * 0.45);
     const groundPlatforms = this.level.platforms
       .filter((platform) => platform.y >= 640)
       .sort((a, b) => a.x - b.x);
@@ -1436,10 +1600,11 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private resetPressureForSafePoint(safePointX: number): void {
-    const maxScrollX = Math.max(0, this.level.worldWidth - GAME_WIDTH);
-    const safeScrollX = Phaser.Math.Clamp(safePointX - GAME_WIDTH * 0.32, 0, maxScrollX);
+    const visibleWorldWidth = this.cameraSystem.getVisibleWorldWidth(this);
+    const maxScrollX = Math.max(0, this.level.worldWidth - visibleWorldWidth);
+    const safeScrollX = Phaser.Math.Clamp(safePointX - visibleWorldWidth * 0.32, 0, maxScrollX);
     this.pressureScrollX = safeScrollX;
-    this.cameras.main.scrollX = safeScrollX;
+    this.cameraSystem.setVisibleWorldLeft(this, safeScrollX);
     this.pressureDamageCooldownMs = 1500;
   }
 
@@ -1459,6 +1624,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.levelFinished = true;
+    this.playSfx("game-over");
     this.activeCheckpoint = undefined;
     this.save.checkpointId = undefined;
     this.recordRunStatistics("defeat");
@@ -1477,6 +1643,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.levelFinished = true;
+    this.playSfx("level-complete");
     this.activeCheckpoint = undefined;
     this.save.checkpointId = undefined;
     const isNewCompletion = !this.save.completedLevels.includes(this.level.id);
@@ -1517,7 +1684,6 @@ export class LevelScene extends Phaser.Scene {
       nextLevelName: nextLevel?.name,
       nextStageNumber: nextLevel?.stageNumber,
     });
-    gameAudio.playLevelComplete();
     this.emitHud();
     this.showLevelSummary();
   }
@@ -1563,7 +1729,6 @@ export class LevelScene extends Phaser.Scene {
     if (this.remainingTimeMs <= 0) {
       const previousHealth = this.save.player.health;
       this.save.player.health = 0;
-      gameAudio.playPlayerHit();
       this.showDamageFeedback(previousHealth);
       this.emitHud();
       this.finishWithDefeat();
@@ -1586,6 +1751,10 @@ export class LevelScene extends Phaser.Scene {
       timeLimit: this.level.timeLimitSeconds,
       progressPercent: this.getProgressPercent(),
     });
+  }
+
+  private playSfx(cue: SfxCue): void {
+    gameEvents.emit(EVENTS.SFX_REQUESTED, { cue });
   }
 
   private getActivePowerCharges(): PowerChargeState {

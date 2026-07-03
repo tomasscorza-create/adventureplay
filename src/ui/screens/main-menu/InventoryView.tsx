@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { inventoryCategories, itemDefinitions } from "../../../game/data/items";
-import { gameAudio } from "../../../shared/audio/GameAudio";
 import type { InventoryCategoryId, SaveData } from "../../../shared/types/game";
 import { MenuHeading } from "./MenuPrimitives";
 
@@ -35,13 +34,12 @@ export function InventoryView({ save, onBack }: InventoryViewProps) {
     });
   }, [save.player.inventory]);
   const runMenuAction = (action: () => void) => {
-    gameAudio.playUiSelect();
     action();
   };
 
   return (
 <div className="menu-chamber menu-chamber--inventory">
-  <MenuHeading eyebrow="Inventario" title="Bolsa de viaje" onBack={onBack} />
+  <MenuHeading title="Inventario" variant="inventory" onBack={onBack} />
 
   <div className="inventory-screen" aria-label="Inventario del jugador">
     <div className="inventory-screen__summary">

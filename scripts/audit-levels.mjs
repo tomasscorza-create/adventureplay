@@ -9,6 +9,7 @@ const levelIds = new Set(levels.map((level) => level.id));
 const rewardBoxIds = new Set();
 const groundEnemyIds = new Set(["m0", "m1", "m3", "e2m3"]);
 const enchantedLevels = levels.filter((level) => level.theme === "enchanted-forest");
+const activeVolcanoLevels = levels.filter((level) => level.theme === "active-volcano");
 const enchantedProgression = [
   { time: 72, pressure: 52, enemies: 5, m2: 1, e2m3: 0, hazards: 2, movingPlatforms: 0 },
   { time: 69, pressure: 60, enemies: 7, m2: 2, e2m3: 0, hazards: 4, movingPlatforms: 0 },
@@ -20,6 +21,11 @@ const enchantedProgression = [
   { time: 54, pressure: 116, enemies: 16, m2: 5, e2m3: 6, hazards: 12, movingPlatforms: 10 },
   { time: 52, pressure: 124, enemies: 17, m2: 5, e2m3: 7, hazards: 13, movingPlatforms: 11 },
   { time: 50, pressure: 132, enemies: 18, m2: 5, e2m3: 8, hazards: 14, movingPlatforms: 12 },
+];
+const activeVolcanoProgression = [
+  { time: 68, pressure: 60, enemies: 6, m2: 1, hazards: 3, movingPlatforms: 0 },
+  { time: 64, pressure: 70, enemies: 8, m2: 2, hazards: 5, movingPlatforms: 0 },
+  { time: 60, pressure: 82, enemies: 10, m2: 3, hazards: 7, movingPlatforms: 3 },
 ];
 let previousM3Intelligence = 0;
 let previousE2M3Intelligence = 0;
@@ -159,7 +165,11 @@ for (const level of levels) {
   }
 
   const offensiveHazards = level.hazards.filter((hazard) => hazard.type !== "pit").length;
-  const regionLabel = level.theme === "enchanted-forest" ? "Bosque encantado" : "Frontera Verde";
+  const regionLabel = level.theme === "enchanted-forest"
+    ? "Bosque encantado"
+    : level.theme === "active-volcano"
+      ? "Volcan activo"
+      : "Frontera Verde";
   console.log(
     `${regionLabel} LV${level.stageNumber}: ${level.enemies.length} enemigos, ${offensiveHazards} peligros, ${pathGold} ORO, ${level.healthPickups.length} corazones${level.m3Intelligence ? `, ${e2m3Count > 0 ? "E2M3" : "M3"} IA ${level.m3Intelligence}` : ""}`,
   );
@@ -167,6 +177,55 @@ for (const level of levels) {
 
 if (enchantedLevels.length !== 10) {
   errors.push(`Bosque encantado: tiene ${enchantedLevels.length} niveles, esperado 10`);
+}
+
+if (activeVolcanoLevels.length !== 3) {
+  errors.push(`Volcan activo: tiene ${activeVolcanoLevels.length} niveles, esperado 3`);
+}
+
+for (const [index, level] of activeVolcanoLevels.entries()) {
+  const expectedStage = index + 1;
+  const expectedProgression = activeVolcanoProgression[index];
+  if (level.stageNumber !== expectedStage) {
+    errors.push(`Volcan activo: falta LV${expectedStage} o la secuencia esta desordenada`);
+  }
+  const expectedNextLevelId = index < activeVolcanoLevels.length - 1
+    ? activeVolcanoLevels[index + 1].id
+    : undefined;
+  if (level.nextLevelId !== expectedNextLevelId) {
+    errors.push(
+      `${level.id}: nextLevelId ${level.nextLevelId ?? "ausente"}, esperado ${expectedNextLevelId ?? "ninguno"}`,
+    );
+  }
+  if (level.enemies.some((enemy) => enemy.enemyId === "m3" || enemy.enemyId === "e2m3")) {
+    errors.push(`${level.id}: M3 no debe aparecer en los tres primeros niveles volcanicos`);
+  }
+  if (expectedProgression) {
+    const actualProgression = {
+      time: level.timeLimitSeconds,
+      pressure: level.autoScrollSpeed,
+      enemies: level.enemies.length,
+      m2: level.enemies.filter((enemy) => enemy.enemyId === "m2").length,
+      hazards: level.hazards.filter((hazard) => hazard.type !== "pit").length,
+      movingPlatforms: level.platforms.filter((platform) => platform.movement).length,
+    };
+    for (const key of Object.keys(expectedProgression)) {
+      if (actualProgression[key] !== expectedProgression[key]) {
+        errors.push(
+          `${level.id}: ${key}=${actualProgression[key]}, esperado ${expectedProgression[key]}`,
+        );
+      }
+    }
+  }
+  if (index > 0) {
+    const previousLevel = activeVolcanoLevels[index - 1];
+    if (level.autoScrollSpeed <= previousLevel.autoScrollSpeed) {
+      errors.push(`${level.id}: la presion roja no aumenta respecto a ${previousLevel.id}`);
+    }
+    if (level.timeLimitSeconds >= previousLevel.timeLimitSeconds) {
+      errors.push(`${level.id}: el tiempo limite no disminuye respecto a ${previousLevel.id}`);
+    }
+  }
 }
 
 for (const [index, level] of enchantedLevels.entries()) {

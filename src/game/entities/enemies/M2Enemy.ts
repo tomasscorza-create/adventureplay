@@ -4,7 +4,7 @@ import type { Player } from "../player/Player";
 import { BaseEnemy } from "./BaseEnemy";
 
 type M2FlightMode = "patrol" | "track" | "windup" | "dive" | "recover";
-type M2VisualTheme = "default" | "enchanted";
+type M2VisualTheme = "default" | "enchanted" | "volcanic";
 
 export class M2Enemy extends BaseEnemy {
   private readonly verticalAwareness = 430;
@@ -43,7 +43,11 @@ export class M2Enemy extends BaseEnemy {
       scene,
       x,
       y,
-      visualTheme === "enchanted" ? "enchanted-m2-frame-1" : "enemy-m2",
+      visualTheme === "enchanted"
+        ? "enchanted-m2-frame-1"
+        : visualTheme === "volcanic"
+          ? "volcanic-m2-flight-1"
+          : "enemy-m2",
       definition,
       patrolDistance,
     );
@@ -54,12 +58,12 @@ export class M2Enemy extends BaseEnemy {
     this.nextDiveAt = scene.time.now + Phaser.Math.Between(450, 950);
     this.direction = -1;
     this.setDepth(13);
-    this.setScale(this.isEnchantedVisual() ? 0.28 : 0.24);
-    this.play(this.isEnchantedVisual() ? "enchanted-m2-flight" : "enemy-m2-fly");
+    this.setScale(this.hasCustomVisual() ? 0.28 : 0.24);
+    this.play(this.hasCustomVisual() ? this.getCustomAnimation("flight") : "enemy-m2-fly");
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
-    if (this.isEnchantedVisual()) {
+    if (this.hasCustomVisual()) {
       body.setSize(170, 115);
       body.setOffset(75, 112);
     } else {
@@ -151,8 +155,8 @@ export class M2Enemy extends BaseEnemy {
     this.flightMode = "windup";
     this.windupUntil = this.scene.time.now + 340;
     this.setRotation(0);
-    if (this.isEnchantedVisual()) {
-      this.play("enchanted-m2-windup", true);
+    if (this.hasCustomVisual()) {
+      this.play(this.getCustomAnimation("windup"), true);
     } else {
       this.setTint(0xffd45c);
     }
@@ -173,8 +177,8 @@ export class M2Enemy extends BaseEnemy {
   private startDive(target: Player): void {
     this.flightMode = "dive";
     this.diveStartedAt = this.scene.time.now;
-    if (this.isEnchantedVisual()) {
-      this.play("enchanted-m2-dive", true);
+    if (this.hasCustomVisual()) {
+      this.play(this.getCustomAnimation("dive"), true);
     } else {
       this.setTint(0xff7b54);
     }
@@ -232,7 +236,7 @@ export class M2Enemy extends BaseEnemy {
     const angle = Phaser.Math.Angle.Between(this.x, this.y, this.diveTarget.x, this.diveTarget.y);
     const diveSpeed = this.definition.speed * (1.42 + this.aggression * 0.5);
     this.setVelocity(Math.cos(angle) * diveSpeed, Math.sin(angle) * diveSpeed);
-    if (this.isEnchantedVisual()) {
+    if (this.hasCustomVisual()) {
       const baseAngle = this.direction > 0 ? 0 : Math.PI;
       this.setRotation(Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(angle - baseAngle), -0.72, 0.72));
     }
@@ -244,15 +248,15 @@ export class M2Enemy extends BaseEnemy {
     this.recoverUntil = now + Phaser.Math.Linear(520, 330, (this.aggression - 0.75) / 0.9);
     this.nextDiveAt = now + Phaser.Math.Linear(1650, 620, (this.aggression - 0.75) / 0.9);
     this.setRotation(0);
-    if (this.isEnchantedVisual()) {
-      this.play("enchanted-m2-recover", true);
+    if (this.hasCustomVisual()) {
+      this.play(this.getCustomAnimation("recover"), true);
     } else {
       this.setTint(0x9be7dc);
     }
   }
 
   override takeDamage(amount: number): boolean {
-    if (!this.isEnchantedVisual()) {
+    if (!this.hasCustomVisual()) {
       return super.takeDamage(amount);
     }
     if (this.isDefeating) {
@@ -276,7 +280,7 @@ export class M2Enemy extends BaseEnemy {
     this.clearTint();
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.enable = false;
-    this.play("enchanted-m2-defeat", true);
+    this.play(this.getCustomAnimation("defeat"), true);
     this.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       this.disableBody(true, true);
     });
@@ -284,18 +288,22 @@ export class M2Enemy extends BaseEnemy {
   }
 
   hasCustomDefeatAnimation(): boolean {
-    return this.isEnchantedVisual();
+    return this.hasCustomVisual();
   }
 
   private playFlightVisual(): void {
     this.setRotation(0);
-    if (this.isEnchantedVisual()) {
-      this.play("enchanted-m2-flight", true);
+    if (this.hasCustomVisual()) {
+      this.play(this.getCustomAnimation("flight"), true);
     }
   }
 
-  private isEnchantedVisual(): boolean {
-    return this.visualTheme === "enchanted";
+  private hasCustomVisual(): boolean {
+    return this.visualTheme !== "default";
+  }
+
+  private getCustomAnimation(state: "flight" | "windup" | "dive" | "recover" | "defeat"): string {
+    return `${this.visualTheme}-m2-${state}`;
   }
 
   completeStrike(): void {

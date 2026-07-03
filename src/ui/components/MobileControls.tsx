@@ -13,7 +13,27 @@ interface MobileControlsProps {
 
 export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: MobileControlsProps) {
   useEffect(() => {
-    return () => touchInputStore.reset();
+    const jumpFromOpenScreenArea = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const interactiveTarget = event.target.closest(
+        "button, a, input, select, textarea, [role='button']",
+      );
+      if (interactiveTarget) {
+        return;
+      }
+
+      touchInputStore.setAction("jump", true);
+      touchInputStore.setAction("jump", false);
+    };
+
+    document.addEventListener("pointerdown", jumpFromOpenScreenArea);
+    return () => {
+      document.removeEventListener("pointerdown", jumpFromOpenScreenArea);
+      touchInputStore.reset();
+    };
   }, []);
 
   return (
@@ -27,7 +47,6 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
       </div>
       <div className="mobile-controls__right">
         <div className="mobile-controls__cluster mobile-controls__cluster--actions">
-          <TouchButton action="jump" label="W" icon="jump" ariaLabel="Saltar" variant="combat" />
           <TouchButton action="melee" label="J" icon="melee" ariaLabel="Atacar" variant="combat" />
           <TouchButton action="shoot" label="K" icon="shoot" ariaLabel="Disparar" variant="combat" />
         </div>
@@ -126,7 +145,7 @@ function TouchButton({
   );
 }
 
-type TouchControlIconType = "left" | "right" | "jump" | "melee" | "shoot" | "pause";
+type TouchControlIconType = "left" | "right" | "melee" | "shoot" | "pause";
 
 function TouchControlIcon({ type }: { type: TouchControlIconType }) {
   if (type === "left" || type === "right") {
@@ -134,15 +153,6 @@ function TouchControlIcon({ type }: { type: TouchControlIconType }) {
       <svg className="touch-control-icon" viewBox="0 0 32 32" aria-hidden="true">
         <path d={type === "left" ? "M21 6 10 16l11 10" : "m11 6 11 10-11 10"} />
         <path className="touch-control-icon__accent" d={type === "left" ? "M26 9 18 16l8 7" : "m6 9 8 7-8 7"} />
-      </svg>
-    );
-  }
-
-  if (type === "jump") {
-    return (
-      <svg className="touch-control-icon" viewBox="0 0 32 32" aria-hidden="true">
-        <path d="m7 19 9-11 9 11" />
-        <path className="touch-control-icon__accent" d="M16 9v15M8 26h16" />
       </svg>
     );
   }

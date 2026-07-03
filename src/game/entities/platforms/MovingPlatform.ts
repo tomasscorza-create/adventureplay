@@ -47,6 +47,9 @@ export class MovingPlatform extends Phaser.GameObjects.Rectangle {
     if (theme === "enchanted-forest") {
       this.visual.setTint(0x79a66f);
       this.shadow.setFillStyle(0x0b2824, 0.42);
+    } else if (theme === "active-volcano") {
+      this.visual.setTint(0x8f3a2b);
+      this.shadow.setFillStyle(0x260909, 0.5);
     }
 
     const body = this.body as Phaser.Physics.Arcade.Body;

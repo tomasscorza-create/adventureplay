@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { gameEvents } from "./game/events/EventBus";
 import {
   canChooseInitialCharacter,
   getNextCharacterUnlockRequirement,
 } from "./game/data/characterUnlocks";
+import { levelDefinitions } from "./game/data/levels";
+import { getLevelMusicTrack } from "./game/data/music";
 import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
 import { normalizePlayerDisplayName } from "./game/systems/save/SaveDefaults";
 import type { AchievementIconId, AchievementReward } from "./game/data/achievements";
 import type { LevelRewardDefinition } from "./game/data/progression";
-import { gameAudio } from "./shared/audio/GameAudio";
+import { gameMusic } from "./shared/music/GameMusic";
+import { gameSfx } from "./shared/sfx/GameSfx";
 import { EVENTS } from "./shared/constants/events";
 import { MOBILE_GAMEPLAY_QUERY } from "./shared/constants/game";
 import type {
@@ -35,6 +38,7 @@ import { usePhaserGame } from "./ui/hooks/usePhaserGame";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { GameBootScreen } from "./ui/screens/GameBootScreen";
+import { GameIntroScreen } from "./ui/screens/GameIntroScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
 import { LevelSummaryScreen } from "./ui/screens/LevelSummaryScreen";
 import { PauseScreen } from "./ui/screens/PauseScreen";
@@ -89,6 +93,7 @@ function useMobileGameplayControls() {
 }
 
 export function App() {
+  const [showIntro, setShowIntro] = useState(true);
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
   const [healthPickupFeedback, setHealthPickupFeedback] = useState({ sequence: 0, restored: 0 });
@@ -120,6 +125,59 @@ export function App() {
     retry: retryPhaserLoad,
   } = usePhaserGame(!needsAuth, "game-root");
   const gameReady = phaserStatus === "ready";
+  const introDestinationReady = authStatus === "signed-out"
+    || phaserStatus === "ready"
+    || phaserStatus === "error";
+  const finishIntro = useCallback(() => setShowIntro(false), []);
+
+  useEffect(() => {
+    if (showIntro) {
+      gameMusic.stop(200);
+      return;
+    }
+
+    const level = levelDefinitions[activeLevelId];
+    const keepsLevelMusic = screen === "playing"
+      || screen === "paused"
+      || screen === "level-transition"
+      || screen === "power-shop"
+      || screen === "game-over";
+
+    if (keepsLevelMusic && level) {
+      gameMusic.play(getLevelMusicTrack(level.stageNumber));
+    } else {
+      gameMusic.play("menu");
+    }
+  }, [activeLevelId, screen, showIntro]);
+
+  useEffect(() => {
+    if (!showIntro) {
+      gameSfx.preload();
+    }
+  }, [showIntro]);
+
+  useEffect(() => {
+    const playButtonClick = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const button = event.target.closest("button");
+      if (
+        !button
+        || button.matches(":disabled")
+        || button.closest(".game-intro")
+        || button.matches(".touch-button, .ability-button")
+      ) {
+        return;
+      }
+
+      gameSfx.play("ui-click");
+    };
+
+    document.addEventListener("click", playButtonClick, true);
+    return () => document.removeEventListener("click", playButtonClick, true);
+  }, []);
 
   useEffect(() => {
     if (authStatus === "signed-out") {
@@ -139,6 +197,7 @@ export function App() {
       setDamageFeedbackSequence((current) => current + 1);
     });
     const offAchievementUnlocked = gameEvents.on(EVENTS.ACHIEVEMENT_UNLOCKED, (achievement) => {
+      gameSfx.play("progress");
       const notification: ProgressNotification = {
         ...achievement,
         key: `achievement:${achievement.id}`,
@@ -151,6 +210,7 @@ export function App() {
       ));
     });
     const offPlayerLeveledUp = gameEvents.on(EVENTS.PLAYER_LEVELED_UP, ({ level, reward }) => {
+      gameSfx.play("progress");
       const notification: ProgressNotification = {
         key: `level-up:${level}`,
         kind: "level-up",
@@ -165,6 +225,9 @@ export function App() {
     });
     const offActiveLevelChanged = gameEvents.on(EVENTS.ACTIVE_LEVEL_CHANGED, ({ levelId }) => {
       setActiveLevelId(levelId);
+    });
+    const offSfxRequested = gameEvents.on(EVENTS.SFX_REQUESTED, ({ cue }) => {
+      gameSfx.play(cue);
     });
     const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, (nextScreen) => {
       setScreen(nextScreen);
@@ -189,6 +252,7 @@ export function App() {
       offAchievementUnlocked();
       offPlayerLeveledUp();
       offActiveLevelChanged();
+      offSfxRequested();
       offScreen();
       offCompleted();
     };
@@ -212,7 +276,6 @@ export function App() {
   }, [activeNotification]);
 
   const signOut = async () => {
-    gameAudio.playUiSelect();
     if (!await signOutSession()) {
       return;
     }
@@ -220,7 +283,6 @@ export function App() {
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };
   const resetProgress = async () => {
-    gameAudio.playUiSelect();
     const freshSave = await resetSessionProgress();
     if (!freshSave) {
       return;
@@ -322,15 +384,12 @@ export function App() {
     return true;
   };
   const resumeGame = () => {
-    gameAudio.playUiSelect();
     gameEvents.emit(EVENTS.RESUME_GAME, undefined);
   };
   const restartGame = () => {
-    gameAudio.playUiSelect();
     gameEvents.emit(EVENTS.RESTART_GAME, { levelId: activeLevelId });
   };
   const goToMenu = () => {
-    gameAudio.playUiSelect();
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
     setSave(gameSaveStore.load());
   };
@@ -339,14 +398,13 @@ export function App() {
       return;
     }
 
-    gameAudio.playUiSelect();
+    gameSfx.stop("level-complete");
     gameEvents.emit(EVENTS.CONTINUE_LEVEL, {
       completedLevelId: levelSummary.levelId,
       nextLevelId: levelSummary.nextLevelId,
     });
   };
   const openPowerShop = (power: PurchasablePower) => {
-    gameAudio.playUiSelect();
     setSave(gameSaveStore.load());
     setActivePowerShop(power);
     gameEvents.emit(EVENTS.PAUSE_FOR_POWER_SHOP, undefined);
@@ -365,7 +423,6 @@ export function App() {
     );
   };
   const continueFromPowerShop = () => {
-    gameAudio.playUiSelect();
     gameEvents.emit(EVENTS.RESUME_GAME, undefined);
   };
 
@@ -479,6 +536,9 @@ export function App() {
         visible={needsAuth || screen === "main-menu" || screen === "game-over" || screen === "victory"}
       />
       <PwaUpdatePrompt />
+      {showIntro && (
+        <GameIntroScreen canExit={introDestinationReady} onComplete={finishIntro} />
+      )}
     </main>
   );
 }
