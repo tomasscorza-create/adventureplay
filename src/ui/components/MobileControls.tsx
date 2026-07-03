@@ -4,6 +4,7 @@ import { touchInputStore } from "../../game/systems/input/TouchInputStore";
 import type { HudState } from "../../shared/types/game";
 import type { AchievementReward } from "../../game/data/achievements";
 import { AbilityIcon } from "./AbilityIcon";
+import { isInOpenJumpArea } from "./mobileControlsInput";
 
 interface MobileControlsProps {
   hud: HudState;
@@ -15,6 +16,10 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
   useEffect(() => {
     const jumpFromOpenScreenArea = (event: PointerEvent) => {
       if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      if (!isInOpenJumpArea(event.clientX, window.innerWidth)) {
         return;
       }
 

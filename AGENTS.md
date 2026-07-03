@@ -356,6 +356,7 @@ Ya existe:
 - Aviso en vertical.
 - Layout landscape movil.
 - Camara de gameplay con zoom `1.15` en el mismo perfil mobile/compacto que activa `MobileControls`; escritorio conserva `1.0`. Mobile extiende visualmente el terreno 160 unidades hacia abajo y desplaza la camara sobre esa continuidad para elevar suelo, heroe y escenario por encima de los controles. Los calculos de seguimiento usan el ancho mundial visible despues del zoom para mantener los limites laterales correctos.
+- El perfil mobile renderiza Phaser internamente al 75% (`960x540`) y compensa ese factor en el zoom de camara para conservar exactamente el mismo campo visual y las mismas coordenadas de gameplay. Durante una partida tambien desactiva blur, sombras exteriores y decoracion CSS que obligaban a recomponer el canvas; no quitar esta compensacion ni volver a `1280x720` mobile sin medir rendimiento en dispositivo.
 - La linea roja se posiciona cada frame sobre el borde mundial realmente visible, compensando zoom y scroll. Su limite de dano usa el borde derecho de esa misma linea; no volver a calcular el contacto solo desde `camera.scrollX`.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
 
@@ -618,7 +619,7 @@ Reglas obligatorias de esta curva:
 - En vertical debe mantenerse el aviso de orientacion salvo que el usuario pida jugabilidad vertical real.
 - Los controles tactiles deben ocupar bordes inferiores y no tapar el centro del gameplay.
 - El suelo movil debe conservar su extension inferior continua para que los controles descansen visualmente sobre terreno y no sobre el heroe o las amenazas.
-- El salto mobile pertenece al area libre de pantalla; botones, enlaces y controles interactivos nunca deben dispararlo por propagacion.
+- El salto mobile pertenece unicamente al area libre de la mitad derecha de la pantalla; la mitad izquierda no dispara salto fuera de los botones de movimiento, y botones, enlaces o controles interactivos nunca deben activarlo por propagacion.
 - Separar visualmente movimiento, acciones normales y poderes; usar superficies translucidas e iconos en lugar de bloques opacos con letras como contenido principal.
 - Pausa debe quedar arriba derecha y lejos del HUD.
 - HUD movil debe ser compacto y legible.

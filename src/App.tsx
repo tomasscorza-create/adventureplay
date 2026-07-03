@@ -426,8 +426,10 @@ export function App() {
     gameEvents.emit(EVENTS.RESUME_GAME, undefined);
   };
 
+  const gameplayIsVisible = screen === "playing" || screen === "paused";
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell${gameplayIsVisible ? " app-shell--gameplay" : ""}`}>
       <div id="game-root" className="game-root" />
       {damageFeedbackSequence > 0 && (
         <div

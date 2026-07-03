@@ -2664,6 +2664,24 @@
     max-height: none;
   }
 
+  .app-shell--gameplay::before,
+  .app-shell--gameplay::after {
+    display: none;
+  }
+
+  .app-shell--gameplay .game-root {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .app-shell--gameplay .hud__item,
+  .app-shell--gameplay .hud__progress,
+  .app-shell--gameplay .stage-level-badge,
+  .app-shell--gameplay .touch-button {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   @supports (height: 100dvh) {
     .game-root {
       width: 100dvw;

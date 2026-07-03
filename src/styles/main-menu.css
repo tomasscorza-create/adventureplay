@@ -1306,6 +1306,11 @@
     gap: 9px;
   }
 
+  .app-shell > .mobile-controls .mobile-controls__cluster--movement {
+    gap: 16px;
+    transform: translateX(18px);
+  }
+
   .app-shell > .mobile-controls .mobile-controls__cluster--abilities {
     gap: 11px;
     padding-right: 4px;

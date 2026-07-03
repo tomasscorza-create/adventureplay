@@ -4,6 +4,7 @@ import {
   MOBILE_GAMEPLAY_CAMERA_ZOOM,
   MOBILE_GAMEPLAY_FLOOR_EXTENSION,
   MOBILE_GAMEPLAY_QUERY,
+  MOBILE_GAME_RENDER_SCALE,
 } from "../../../shared/constants/game";
 
 export class CameraSystem {
@@ -17,7 +18,11 @@ export class CameraSystem {
       const camera = scene.cameras.main;
       const visibleWorldLeft = this.getVisibleWorldLeft(scene);
       const mobileGameplay = mediaQuery.matches;
-      camera.setZoom(mobileGameplay ? MOBILE_GAMEPLAY_CAMERA_ZOOM : 1);
+      camera.setZoom(
+        mobileGameplay
+          ? MOBILE_GAMEPLAY_CAMERA_ZOOM * MOBILE_GAME_RENDER_SCALE
+          : 1,
+      );
       camera.setBounds(
         0,
         0,
