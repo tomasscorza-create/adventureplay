@@ -24,20 +24,23 @@ import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
 import { ExploreView } from "./main-menu/ExploreView";
 import { InventoryView } from "./main-menu/InventoryView";
+import { KeyboardBindingsView } from "./main-menu/KeyboardBindingsView";
 import { MenuHeading, SettingToggle, VolumeControl } from "./main-menu/MenuPrimitives";
+import { MobileGameplaySettingsView } from "./main-menu/MobileGameplaySettingsView";
 import {
   formatCompactAmount,
   formatGameplayTime,
   getCarouselOffset,
 } from "./main-menu/menuUtils";
 
-type MenuView = "main" | "profile" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options" | "audio";
+type MenuView = "main" | "profile" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options" | "audio" | "commands" | "mobile-controls";
 type ProfileSectionId = "edit" | "statistics";
 
 interface MainMenuScreenProps {
   playerEmail?: string;
   save: SaveData;
   onSignOut: () => void;
+  showDesktopCommandSettings: boolean;
   onResetProgress: () => Promise<void>;
   onStartLevel: (levelId: string) => void;
   onUpdatePlayerName: (displayName: string) => boolean;
@@ -62,6 +65,7 @@ export function MainMenuScreen({
   playerEmail,
   save,
   onSignOut,
+  showDesktopCommandSettings,
   onResetProgress,
   onStartLevel,
   onUpdatePlayerName,
@@ -258,6 +262,13 @@ export function MainMenuScreen({
               aria-label="Menu principal"
               style={{ "--menu-background-image": `url(${menuBackgroundUrl})` } as CSSProperties}
             >
+              <div className="menu-ambience" aria-hidden="true">
+                <span className="menu-ambience__glint menu-ambience__glint--one" />
+                <span className="menu-ambience__glint menu-ambience__glint--two" />
+                {Array.from({ length: 6 }, (_, index) => (
+                  <span className={`menu-ambience__leaf menu-ambience__leaf--${index + 1}`} key={index} />
+                ))}
+              </div>
               <div className="home-monument__topline">
                 <button
                   className="menu-player-profile"
@@ -554,6 +565,36 @@ export function MainMenuScreen({
                 <span className="settings-entry__arrow" aria-hidden="true">›</span>
               </button>
 
+              {showDesktopCommandSettings && (
+                <button
+                  className="settings-entry"
+                  type="button"
+                  onClick={() => setView("commands")}
+                >
+                  <span className="settings-entry__icon" aria-hidden="true">⌨</span>
+                  <span className="settings-entry__copy">
+                    <strong>Comandos</strong>
+                    <small>Personaliza teclas primarias y secundarias.</small>
+                  </span>
+                  <span className="settings-entry__arrow" aria-hidden="true">›</span>
+                </button>
+              )}
+
+              {!showDesktopCommandSettings && (
+                <button
+                  className="settings-entry"
+                  type="button"
+                  onClick={() => setView("mobile-controls")}
+                >
+                  <span className="settings-entry__icon" aria-hidden="true">✥</span>
+                  <span className="settings-entry__copy">
+                    <strong>Controles moviles</strong>
+                    <small>Posicion, vibracion y rendimiento.</small>
+                  </span>
+                  <span className="settings-entry__arrow" aria-hidden="true">›</span>
+                </button>
+              )}
+
               <section className="account-settings" aria-label="Cuenta y progreso">
                 <div className="account-settings__header">
                   <span>Cuenta</span>
@@ -657,6 +698,20 @@ export function MainMenuScreen({
                   />
                 </section>
               </div>
+            </div>
+          )}
+
+          {view === "commands" && showDesktopCommandSettings && (
+            <div className="menu-chamber menu-chamber--options menu-chamber--commands">
+              <MenuHeading title="Comandos" variant="settings" onBack={() => setView("options")} />
+              <KeyboardBindingsView />
+            </div>
+          )}
+
+          {view === "mobile-controls" && !showDesktopCommandSettings && (
+            <div className="menu-chamber menu-chamber--mobile-settings">
+              <MenuHeading title="Controles moviles" variant="settings" onBack={() => setView("options")} />
+              <MobileGameplaySettingsView />
             </div>
           )}
 

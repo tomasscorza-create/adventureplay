@@ -1,7 +1,7 @@
 import animationData from "../../assets/characters/faust-animation.json";
 import type { PlayerState, WeaponAttachmentFrame } from "../../shared/types/game";
 
-type FaustAnimationState = Exclude<PlayerState, "shoot">;
+type FaustAnimationState = Exclude<PlayerState, "spin">;
 
 export interface FaustAnimationRange {
   start: number;

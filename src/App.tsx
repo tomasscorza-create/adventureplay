@@ -13,6 +13,7 @@ import type { AchievementIconId, AchievementReward } from "./game/data/achieveme
 import type { LevelRewardDefinition } from "./game/data/progression";
 import { gameMusic } from "./shared/music/GameMusic";
 import { gameSfx } from "./shared/sfx/GameSfx";
+import { gameHaptics } from "./shared/haptics/GameHaptics";
 import { EVENTS } from "./shared/constants/events";
 import { MOBILE_GAMEPLAY_QUERY } from "./shared/constants/game";
 import type {
@@ -35,6 +36,7 @@ import { PwaInstallPrompt } from "./ui/components/PwaInstallPrompt";
 import { SaveSyncStatus } from "./ui/components/SaveSyncStatus";
 import { useGameSession } from "./ui/hooks/useGameSession";
 import { usePhaserGame } from "./ui/hooks/usePhaserGame";
+import { useMobileGameplaySettings } from "./ui/hooks/useMobileGameplaySettings";
 import { AuthScreen } from "./ui/screens/AuthScreen";
 import { GameOverScreen } from "./ui/screens/GameOverScreen";
 import { GameBootScreen } from "./ui/screens/GameBootScreen";
@@ -58,6 +60,7 @@ const initialHud: HudState = {
   timeRemaining: 90,
   timeLimit: 90,
   progressPercent: 0,
+  spinCooldownRemainingMs: 0,
 };
 
 type ProgressNotification = {
@@ -119,6 +122,7 @@ export function App() {
     signUp,
   } = useGameSession();
   const usesMobileGameplayControls = useMobileGameplayControls();
+  const mobileGameplaySettings = useMobileGameplaySettings();
   const needsAuth = authStatus !== "signed-in";
   const {
     status: phaserStatus,
@@ -167,7 +171,7 @@ export function App() {
         !button
         || button.matches(":disabled")
         || button.closest(".game-intro")
-        || button.matches(".touch-button, .ability-button")
+        || button.matches(".touch-button, .ability-button, .desktop-combat-button")
       ) {
         return;
       }
@@ -229,6 +233,9 @@ export function App() {
     const offSfxRequested = gameEvents.on(EVENTS.SFX_REQUESTED, ({ cue }) => {
       gameSfx.play(cue);
     });
+    const offHapticRequested = gameEvents.on(EVENTS.HAPTIC_REQUESTED, ({ cue }) => {
+      gameHaptics.play(cue);
+    });
     const offScreen = gameEvents.on(EVENTS.SCREEN_CHANGED, (nextScreen) => {
       setScreen(nextScreen);
       if (nextScreen !== "level-transition") {
@@ -253,6 +260,7 @@ export function App() {
       offPlayerLeveledUp();
       offActiveLevelChanged();
       offSfxRequested();
+      offHapticRequested();
       offScreen();
       offCompleted();
     };
@@ -427,9 +435,16 @@ export function App() {
   };
 
   const gameplayIsVisible = screen === "playing" || screen === "paused";
+  const appShellClassName = [
+    "app-shell",
+    gameplayIsVisible ? "app-shell--gameplay" : "",
+    usesMobileGameplayControls && mobileGameplaySettings.performanceMode === "performance"
+      ? "app-shell--mobile-performance"
+      : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <main className={`app-shell${gameplayIsVisible ? " app-shell--gameplay" : ""}`}>
+    <main className={appShellClassName}>
       <div id="game-root" className="game-root" />
       {damageFeedbackSequence > 0 && (
         <div
@@ -484,6 +499,7 @@ export function App() {
         <MainMenuScreen
           playerEmail={playerEmail}
           save={save}
+          showDesktopCommandSettings={!usesMobileGameplayControls}
           onSignOut={signOut}
           onResetProgress={resetProgress}
           onStartLevel={startGame}

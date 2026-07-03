@@ -64,7 +64,7 @@ export function getLevelRewardLabels(reward: LevelRewardDefinition | undefined):
   if (reward.maxHealth) labels.push(`+${reward.maxHealth} VIDA MAXIMA`);
   if (reward.speed) labels.push(`+${reward.speed} VELOCIDAD`);
   if (reward.meleeDamage) labels.push(`+${reward.meleeDamage} DANO CUERPO A CUERPO`);
-  if (reward.rangedDamage) labels.push(`+${reward.rangedDamage} DANO A DISTANCIA`);
+  if (reward.rangedDamage) labels.push(`+${reward.rangedDamage} DANO GIRATORIO`);
   if (reward.gold) labels.push(`+${reward.gold.toLocaleString("es-AR")} ORO`);
   if (reward.healingCharges) labels.push(`+${reward.healingCharges} REGENERACION`);
   if (reward.powerCharges) labels.push(`+${reward.powerCharges} PODER LETAL`);

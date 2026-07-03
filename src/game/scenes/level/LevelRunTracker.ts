@@ -5,7 +5,7 @@ export interface TrackedGameplayInput {
   right: boolean;
   jumpJustPressed: boolean;
   meleeJustPressed: boolean;
-  shootJustPressed: boolean;
+  spinJustPressed: boolean;
   healJustPressed: boolean;
   powerJustPressed: boolean;
 }
@@ -42,7 +42,7 @@ export class LevelRunTracker {
     this.actionCount += [
       input.jumpJustPressed,
       input.meleeJustPressed,
-      input.shootJustPressed,
+      input.spinJustPressed,
       input.healJustPressed,
       input.powerJustPressed,
     ].filter(Boolean).length;

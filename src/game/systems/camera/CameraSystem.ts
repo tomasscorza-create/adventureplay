@@ -4,8 +4,12 @@ import {
   MOBILE_GAMEPLAY_CAMERA_ZOOM,
   MOBILE_GAMEPLAY_FLOOR_EXTENSION,
   MOBILE_GAMEPLAY_QUERY,
-  MOBILE_GAME_RENDER_SCALE,
+  MOBILE_GAMEPLAY_VISIBLE_TOP,
 } from "../../../shared/constants/game";
+import {
+  getMobileRenderScale,
+  mobileGameplaySettingsStore,
+} from "../input/MobileGameplaySettings";
 
 export class CameraSystem {
   setBounds(scene: Phaser.Scene, worldWidth: number): void {
@@ -18,9 +22,12 @@ export class CameraSystem {
       const camera = scene.cameras.main;
       const visibleWorldLeft = this.getVisibleWorldLeft(scene);
       const mobileGameplay = mediaQuery.matches;
+      const renderScale = mobileGameplay
+        ? getMobileRenderScale(mobileGameplaySettingsStore.getSettings().performanceMode)
+        : 1;
       camera.setZoom(
         mobileGameplay
-          ? MOBILE_GAMEPLAY_CAMERA_ZOOM * MOBILE_GAME_RENDER_SCALE
+          ? MOBILE_GAMEPLAY_CAMERA_ZOOM * renderScale
           : 1,
       );
       camera.setBounds(
@@ -30,15 +37,17 @@ export class CameraSystem {
         GAME_HEIGHT + (mobileGameplay ? MOBILE_GAMEPLAY_FLOOR_EXTENSION : 0),
       );
       this.setVisibleWorldLeft(scene, visibleWorldLeft);
-      camera.scrollY = mobileGameplay ? MOBILE_GAMEPLAY_FLOOR_EXTENSION : 0;
+      this.setVisibleWorldTop(scene, mobileGameplay ? MOBILE_GAMEPLAY_VISIBLE_TOP : 0);
     };
 
     applyZoom();
     mediaQuery.addEventListener("change", applyZoom);
     window.addEventListener("resize", applyZoom);
+    const unbindSettings = mobileGameplaySettingsStore.onChange(applyZoom);
     return () => {
       mediaQuery.removeEventListener("change", applyZoom);
       window.removeEventListener("resize", applyZoom);
+      unbindSettings();
     };
   }
 
@@ -56,6 +65,12 @@ export class CameraSystem {
     const camera = scene.cameras.main;
     const zoomOffset = (camera.width - camera.width / camera.zoom) * 0.5;
     camera.scrollX = camera.clampX(worldX - zoomOffset);
+  }
+
+  setVisibleWorldTop(scene: Phaser.Scene, worldY: number): void {
+    const camera = scene.cameras.main;
+    const zoomOffset = (camera.height - camera.height / camera.zoom) * 0.5;
+    camera.scrollY = camera.clampY(worldY - zoomOffset);
   }
 
   follow(scene: Phaser.Scene, target: Phaser.GameObjects.GameObject, worldWidth: number): void {

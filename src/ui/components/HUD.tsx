@@ -45,15 +45,13 @@ export function HUD({ hud, healthPickupFeedback, achievementReward, rewardFeedba
             </span>
           )}
         </div>
-        <div className="hud__item">
-          <span className="hud__label">Nivel</span>
-          <span className="hud__value">{hud.level}</span>
-        </div>
         <div
-          className={`hud__item hud__item--experience${achievementReward?.experience ? " hud__item--reward-pulse" : ""}`}
+          className={`hud__item hud__item--progression${achievementReward?.experience ? " hud__item--reward-pulse" : ""}`}
+          aria-label={`Nivel ${hud.level}. Experiencia ${hud.level >= MAX_PLAYER_LEVEL ? "maxima" : `${hud.experience} de ${hud.experienceToNextLevel}`}`}
         >
-          <span className="hud__label">Experiencia</span>
-          <span className="hud__value">
+          <span className="hud__progression-level">Lv <strong>{hud.level}</strong></span>
+          <span className="hud__progression-divider" aria-hidden="true" />
+          <span className="hud__progression-experience">
             {hud.level >= MAX_PLAYER_LEVEL
               ? "MAX"
               : `${hud.experience}/${hud.experienceToNextLevel}`}

@@ -162,6 +162,7 @@ La demo actual permite:
 - Ver primero una intro de video de 4,5 segundos que cubre la carga inicial y cierra con una transicion cinematografica hacia el menu; si el motor tarda mas, conserva la intro con un estado discreto hasta que el destino esta listo.
 - Abrir menu principal.
 - Ver el menu principal ilustrado con marco, fondo nocturno y botones graficos funcionales, adaptado a desktop y landscape movil.
+- El menu principal suma ambiente CSS liviano: seis hojas con deriva lenta, dos destellos espaciados y una pequeña estela luminosa que recorre el contorno fijo de `Iniciar juego` mediante `offset-path`. No rotar el borde completo del boton. Debe respetar `prefers-reduced-motion` y ocultarse en el perfil mobile Rendimiento; no convertirlo en particulas Phaser ni agregar video/canvas extra al menu.
 - En landscape movil, el titulo del menu principal queda centrado arriba y los cuatro accesos se distribuyen en una grilla de dos columnas por dos filas.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
 - Las nueve cabeceras internas del menu usan `MenuHeading` con un unico titulo grande y centrado. Comparten la textura de madera `src/assets/menu/fondo100.jpg`, pero cada variante desplaza el fondo para mostrar un recorte diferente; no volver a agregar subtitulos/eyebrows dentro de estas cabeceras.
@@ -205,13 +206,13 @@ La demo actual permite:
 - Enfrentar a M3 desde el nivel 6; los niveles 7 a 10 reducen criaturas y peligros secundarios para dar mayor presencia a este enemigo.
 - Ver a M3 perseguir al jugador en ambas direcciones con un ciclo lateral de cinco cuadros y una escala visual cercana a la del heroe.
 - Ver a M3 alertarse una sola vez al adquirir objetivo, recordar brevemente su ultima posicion, perseguir a 140 px/s y preparar una embestida de hasta 180 px/s antes de poder danar por contacto.
-- Dañar a M3 con dos ataques normales o dos disparos; cada impacto vacia la mitad de su barra roja fina. El poder letal conserva su comportamiento de eliminacion inmediata.
+- Dañar a M3 con dos ataques normales o dos giros de espada; cada impacto vacia la mitad de su barra roja fina. El poder letal conserva su comportamiento de eliminacion inmediata.
 - Ver a M3 detectar el final de las plataformas: salta si existe una superficie alcanzable al otro lado y se detiene si el salto no es seguro.
 - Ver un pequeno efecto visual de explosion al derrotar monstruos.
 - Escuchar musica medieval tranquila en el menu, aventura orquestal en LV1-LV3, una marcha mas tensa en LV4-LV6 y una pieza intensa en LV7-LV10. Cada cambio usa una mezcla gradual, no un corte seco.
-- Escuchar efectos medievales/rudos sincronizados con botones, salto ejecutado, espada, disparo, poderes, impactos reales, derrotas, dano, ORO, pickups, checkpoints, progreso, meta y game over. Los controles de movimiento no deben emitir clics de UI adicionales.
+- Escuchar efectos medievales/rudos sincronizados con botones, salto ejecutado, espada, giro, poderes, impactos reales, derrotas, dano, ORO, pickups, checkpoints, progreso, meta y game over. Los controles de movimiento no deben emitir clics de UI adicionales.
 - El efecto musical de meta puede terminar naturalmente mientras se mira el resumen, pero `Proximo` o `Finalizar` deben cancelarlo inmediatamente antes de abandonar esa pantalla.
-- Disparar proyectiles.
+- Ejecutar con `K` un giro completo de espada con alcance circular de 128 px, daño unico por enemigo y 6 segundos de recarga. No consume cargas ni ORO; conserva `player.rangedDamage` como clave interna compatible para sus mejoras y combina ese valor con el daño melee vigente. Phaser publica en `HudState.spinCooldownRemainingMs` la recarga basada en su propio reloj para que se congele correctamente al pausar; los botones K mobile/desktop muestran anillo radial y segundos restantes.
 - Regenerar la vida hasta el maximo de 4 consumiendo una carga persistente; cada personaje comienza con 3 cargas propias.
 - La salud maxima comienza en 4, aumenta permanentemente a 5 en LV6, a 6 en LV10 y a 7 en LV15; no aumenta mediante objetos temporales del escenario.
 - Desde LV3 hasta LV10 aparece exactamente un corazon de salud temporal por nivel, siempre solo entre el 60% y el 80% del recorrido. Cura 1 punto sin superar el maximo actual, desaparece al tocarlo, dispara un pulso y mensaje en el HUD, y reaparece al reiniciar porque no se persiste.
@@ -272,7 +273,7 @@ La demo actual permite:
 - `src/game/data/characterUnlocks.ts` es la unica fuente de heroes iniciales, nivel requerido y costo creciente. `App.tsx` vuelve a calcular el requisito al confirmar para que la UI no pueda enviar un precio obsoleto o menor.
 - `src/game/data/characters.ts` define nombre, textura y prefijo de animacion por personaje.
 - `PreloadScene` normaliza los spritesheets de Amy, Dunel y Sarix a la misma grilla jugable 96x80 que Ruder. Faust ya ingresa como hoja 96x80 preparada desde sus fuentes independientes.
-- Faust usa `Espada 1` como `EquippedWeapon`: el arma se renderiza separada del cuerpo, sigue la mano derecha mediante los 45 anclajes de `faust-animation.json`, interpola posicion y giro por frame del motor, refleja ambos al cambiar de direccion y conserva un angulo estable durante el disparo.
+- Faust usa `Espada 1` como `EquippedWeapon`: el arma se renderiza separada del cuerpo, sigue la mano derecha mediante los 45 anclajes de `faust-animation.json`, interpola posicion y giro por frame del motor y refleja ambos al cambiar de direccion. El giro `K` agrega su propia representacion radial temporal sin hornear la espada dentro del personaje.
 - Las futuras espadas deben agregarse en `src/game/data/weapons.ts` y cargarse en `PreloadScene`; no volver a hornearlas dentro de los cuadros de Faust.
 - `Player` recibe un `CharacterDefinition`; no debe volver a depender de una textura fija como `"player"`.
 
@@ -303,7 +304,7 @@ Desktop:
 - Derecha: flecha derecha o `D`.
 - Salto: flecha arriba, `W` o espacio.
 - Ataque cuerpo a cuerpo: `J`.
-- Disparo: `K`.
+- Ataque giratorio: `K`.
 - Regenerar vida: `Q`.
 - Poder letal: `E`.
 - Pausa: `P` o `Esc`.
@@ -312,13 +313,16 @@ Mobile:
 
 - Controles tactiles en `MobileControls`.
 - Movimiento: dos controles translucidos con chevrones SVG a la izquierda.
-- Acciones normales: espada y disparo usan iconos SVG en una fila compacta a la derecha. El salto no tiene boton visible: cualquier `pointerdown` sobre un area de pantalla que no sea un boton/control interactivo encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
-- Acciones especiales: regeneracion y poder letal conservan icono, tecla y contador en una segunda fila mas baja y separada de las acciones normales.
+- Acciones normales: espada y ataque giratorio usan iconos SVG al comienzo de una unica fila compacta a la derecha. El salto no tiene boton visible: cualquier `pointerdown` sobre un area libre de la mitad derecha que no sea un boton/control interactivo encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
+- Acciones especiales: regeneracion y poder letal conservan icono, tecla y contador en esa misma fila, despues de espada y giro; el espacio entre grupos mantiene clara la separacion funcional sin apilarlos.
 - Pausa: icono SVG arriba a la derecha.
 - En vertical aparece aviso de orientacion y se ocultan controles.
 - En horizontal movil aparece HUD compacto arriba izquierda y controles abajo.
 - Durante gameplay React monta un solo conjunto de controles: `MobileControls` para puntero tactil o viewport compacto, y `AbilityControls` para escritorio amplio con puntero fino. No volver a montar ambos y depender solo de CSS para ocultar uno.
+- En desktop, `AbilityControls` incluye primero los botones J/K de 42 px y despues los poderes Q/E de 58 px. J/K deben permanecer visualmente menores que los poderes especiales; K comparte el mismo indicador de recarga que mobile.
 - `MOBILE_GAMEPLAY_QUERY` en `shared/constants/game.ts` es la fuente comun que decide controles y zoom; no duplicar la media query entre React y Phaser.
+- Opciones muestra `Comandos` solo cuando `MOBILE_GAMEPLAY_QUERY` no activa el perfil mobile. `KeyboardBindingStore` persiste localmente dos teclas configurables por accion, impide duplicados entre acciones y notifica cambios para actualizar en vivo las etiquetas J/K/Q/E de la interfaz. `GameplayInputSystem` toma ese mapa al crear cada recorrido; no volver a hardcodear teclas dentro de la escena.
+- Los comandos iniciales son A/Flecha izquierda, D/Flecha derecha, Espacio/W, J, K, Q, E y P/Esc. Cada accion debe conservar al menos una asignacion; Retroceso o Supr liberan una casilla y `Restaurar` recupera los defaults.
 
 ## Sistema de input
 
@@ -356,7 +360,9 @@ Ya existe:
 - Aviso en vertical.
 - Layout landscape movil.
 - Camara de gameplay con zoom `1.15` en el mismo perfil mobile/compacto que activa `MobileControls`; escritorio conserva `1.0`. Mobile extiende visualmente el terreno 160 unidades hacia abajo y desplaza la camara sobre esa continuidad para elevar suelo, heroe y escenario por encima de los controles. Los calculos de seguimiento usan el ancho mundial visible despues del zoom para mantener los limites laterales correctos.
-- El perfil mobile renderiza Phaser internamente al 75% (`960x540`) y compensa ese factor en el zoom de camara para conservar exactamente el mismo campo visual y las mismas coordenadas de gameplay. Durante una partida tambien desactiva blur, sombras exteriores y decoracion CSS que obligaban a recomponer el canvas; no quitar esta compensacion ni volver a `1280x720` mobile sin medir rendimiento en dispositivo.
+- El perfil mobile ofrece Calidad 90%, Equilibrado 75% (`960x540`) y Rendimiento 62,5%; Equilibrado es el default. `game/main.ts` redimensiona Phaser al cambiar el ajuste y `CameraSystem` compensa siempre el factor tanto en zoom como en el borde mundial superior visible para conservar el acercamiento `1.15`, elevar suelo/personajes y mantener el mismo campo visual. Rendimiento tambien elimina blur/sombras costosas durante partida; no desacoplar resolucion y compensacion de camara.
+- Opciones muestra `Controles moviles` exclusivamente bajo el perfil mobile. `MobileGameplaySettings` persiste tamaño, separacion, opacidad, desplazamiento de ambos bloques, modo zurdo, vibracion y perfil de rendimiento; React aplica los valores mediante variables CSS sin modificar hitboxes ni logica jugable.
+- Los toques validos de salto libre muestran un pulso local en la mitad derecha. `MobileActionBuffer` conserva J/K durante 120 ms solo en mobile; desktop mantiene input inmediato. `GameHaptics` usa `navigator.vibrate` cuando existe y esta habilitado para salto ejecutado, ataque, giro, daño real y fin de recarga.
 - La linea roja se posiciona cada frame sobre el borde mundial realmente visible, compensando zoom y scroll. Su limite de dano usa el borde derecho de esa misma linea; no volver a calcular el contacto solo desde `camera.scrollX`.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
 
@@ -556,7 +562,7 @@ Reglas obligatorias de esta curva:
 - `Player` mantiene stats, estado, direccion, dano, invulnerabilidad y hitbox melee.
 - `BaseEnemy` mantiene vida, dano, patrulla y recompensa.
 - Nuevos enemigos deben reutilizar `BaseEnemy` cuando sea posible.
-- M3 recibe exactamente un punto de dano por ataque normal aunque el heroe haya aumentado su dano RPG; debe requerir dos golpes o dos disparos. El poder letal sigue siendo la unica excepcion de un impacto.
+- M3 recibe exactamente un punto de dano por ataque normal aunque el heroe haya aumentado su dano RPG; debe requerir dos golpes o dos giros. El poder letal sigue siendo la unica excepcion de un impacto.
 - La carrera de M3 usa `enemy-m3-run-1` a `enemy-m3-run-5` a 10 FPS. Mantener los cinco cuadros con el mismo lienzo, linea de suelo y escala para evitar saltos visuales.
 - M3 muestra una alerta breve al detectar al jugador y su rango de persecucion escala aproximadamente de 1120 px en LV6 a 1280 px en LV10.
 - `LevelDefinition.m3Intelligence` escala de 0.55 en LV6 a 0.95 en LV10. Aumenta rango/recuerdo, anticipacion del ataque, frecuencia de embestida, correccion aerea y evaluacion de saltos; mantenerlo entre 0.35 y 1 y no reducirlo al avanzar de nivel.
@@ -610,7 +616,7 @@ Reglas obligatorias de esta curva:
 - `LEVEL_COMPLETED` transporta un `LevelCompletionSummary` con tema, nivel, monstruos derrotados, duracion activa, ORO recogido, APM, logros nuevos y destino siguiente. `CONTINUE_LEVEL` es la unica confirmacion que carga el nivel siguiente o cierra la region.
 - `LevelDefinition.stageNumber` conserva la numeracion real del escenario en HUD y resumen; no inferirla desde el nombre tematico.
 - Los contadores del resumen pertenecen al intento actual: se reinician al crear `LevelScene`, acumulan ORO del camino y recompensas de enemigos, y no muestran el saldo total persistente.
-- El APM cuenta inicios o cambios de direccion y pulsaciones de salto, ataque, disparo, regeneracion y poder. No cuenta cada frame de una tecla sostenida, no incluye pausa y divide las acciones por los minutos activos del intento.
+- El APM cuenta inicios o cambios de direccion y pulsaciones de salto, ataque, giro, regeneracion y poder. No cuenta cada frame de una tecla sostenida, no incluye pausa y divide las acciones por los minutos activos del intento.
 - El HUD muestra un indicador pequeno `LV I` a `LV X` para el nivel del escenario, separado del nivel RPG del personaje.
 
 ## Reglas mobile
@@ -619,10 +625,14 @@ Reglas obligatorias de esta curva:
 - En vertical debe mantenerse el aviso de orientacion salvo que el usuario pida jugabilidad vertical real.
 - Los controles tactiles deben ocupar bordes inferiores y no tapar el centro del gameplay.
 - El suelo movil debe conservar su extension inferior continua para que los controles descansen visualmente sobre terreno y no sobre el heroe o las amenazas.
+- En Frontera Verde, los segmentos centrales de la base se repiten solo en horizontal mediante imagenes consecutivas y se estiran una unica vez en vertical. No usar `TileSprite` con la altura mobile extendida: repetiria la franja superior de pasto dentro de la base y produciria falsos pisos o parches horizontales.
 - El salto mobile pertenece unicamente al area libre de la mitad derecha de la pantalla; la mitad izquierda no dispara salto fuera de los botones de movimiento, y botones, enlaces o controles interactivos nunca deben activarlo por propagacion.
+- Los ajustes de tamaño, separacion, opacidad y posicion deben afectar solo la presentacion de `MobileControls`; el modo zurdo intercambia los bloques completos sin cambiar el significado del lado libre de salto ni el input unificado.
+- La vibracion es mejora progresiva: debe fallar silenciosamente si `navigator.vibrate` no existe, y nunca sustituye feedback visual/sonoro.
 - Separar visualmente movimiento, acciones normales y poderes; usar superficies translucidas e iconos en lugar de bloques opacos con letras como contenido principal.
 - Pausa debe quedar arriba derecha y lejos del HUD.
 - HUD movil debe ser compacto y legible.
+- El HUD de gameplay agrupa nivel RPG y experiencia en un solo recuadro vertical: `Lv N`, divisor y cifras de XP sin etiqueta. Tiempo, vida, progresion, ORO y la barra del recorrido comparten una unica fila en landscape mobile; desktop usa la misma agrupacion y una barra de recorrido corta.
 - Mantener safe areas con `env(safe-area-inset-*)`.
 - No usar hover como unica senal de interaccion.
 - No depender de `pointer: coarse` solamente; hay pruebas de navegador con pointer fino y viewport chico.
@@ -656,7 +666,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - Moverse.
 - Saltar tocando un area libre de la pantalla, tambien mientras se mantiene una direccion; confirmar que tocar cualquier boton no agrega un salto.
 - Atacar.
-- Disparar.
+- Ejecutar ataque giratorio.
 - Pausar.
 - Recibir dano.
 - Derrotar enemigo.

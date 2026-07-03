@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { SPIN_ATTACK_COOLDOWN_MS } from "../../../shared/constants/game";
 import type { CharacterDefinition, PlayerState, PlayerStats } from "../../../shared/types/game";
 import { weaponDefinitions } from "../../data/weapons";
 import { EquippedWeapon } from "./EquippedWeapon";
@@ -10,7 +11,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private readonly animationPrefix: string;
   private readonly equippedWeapon?: EquippedWeapon;
   private invulnerableUntil = 0;
-  private lastShotAt = 0;
+  private lastSpinAt = Number.NEGATIVE_INFINITY;
+  private lastPowerAt = Number.NEGATIVE_INFINITY;
   private lastMeleeAt = 0;
   private actionLockedUntil = 0;
 
@@ -67,7 +69,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    if ((this.state === "attack" || this.state === "shoot") && this.scene.time.now < this.actionLockedUntil) {
+    if ((this.state === "attack" || this.state === "spin") && this.scene.time.now < this.actionLockedUntil) {
       return;
     }
 
@@ -94,7 +96,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   canMelee(now: number): boolean {
-    return now - this.lastMeleeAt > 280;
+    return now >= this.actionLockedUntil && now - this.lastMeleeAt > 280;
   }
 
   markAttacking(now: number): void {
@@ -110,17 +112,38 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
-  canShoot(now: number): boolean {
-    return now - this.lastShotAt > 280;
+  canSpin(now: number): boolean {
+    return now >= this.actionLockedUntil && this.getSpinCooldownRemaining(now) <= 0;
   }
 
-  markShooting(now: number): void {
-    this.lastShotAt = now;
+  getSpinCooldownRemaining(now: number): number {
+    return Math.max(0, SPIN_ATTACK_COOLDOWN_MS - (now - this.lastSpinAt));
+  }
+
+  markSpinning(now: number): void {
+    this.lastSpinAt = now;
+    this.actionLockedUntil = now + 420;
+    this.state = "spin";
+    this.playAnimation("attack");
+    this.scene.time.delayedCall(420, () => {
+      if (this.active && this.state === "spin") {
+        this.state = "idle";
+        this.playAnimation("idle");
+      }
+    });
+  }
+
+  canUsePower(now: number): boolean {
+    return now >= this.actionLockedUntil && now - this.lastPowerAt >= 280;
+  }
+
+  markUsingPower(now: number): void {
+    this.lastPowerAt = now;
     this.actionLockedUntil = now + 180;
-    this.state = "shoot";
+    this.state = "attack";
     this.playAnimation("attack");
     this.scene.time.delayedCall(180, () => {
-      if (this.active && this.state === "shoot") {
+      if (this.active && this.state === "attack") {
         this.state = "idle";
         this.playAnimation("idle");
       }
@@ -167,7 +190,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       jump: `${this.animationPrefix}-jump`,
       fall: `${this.animationPrefix}-fall`,
       attack: `${this.animationPrefix}-attack`,
-      shoot: `${this.animationPrefix}-attack`,
+      spin: `${this.animationPrefix}-attack`,
       hurt: `${this.animationPrefix}-hurt`,
       dead: `${this.animationPrefix}-dead`,
     };

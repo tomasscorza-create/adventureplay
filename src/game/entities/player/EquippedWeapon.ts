@@ -42,7 +42,7 @@ export class EquippedWeapon extends Phaser.GameObjects.Sprite {
       return;
     }
 
-    const targetAngle = state === "shoot" ? 12 : attachment.angle;
+    const targetAngle = state === "spin" ? 12 : attachment.angle;
     const responseMs = state === "attack" ? 24 : 48;
     const blend = this.hasSynced ? 1 - Math.exp(-delta / responseMs) : 1;
     this.localX = Phaser.Math.Linear(this.localX, attachment.x, blend);

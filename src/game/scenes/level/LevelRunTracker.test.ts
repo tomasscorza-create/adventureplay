@@ -7,7 +7,7 @@ const idleInput = {
   right: false,
   jumpJustPressed: false,
   meleeJustPressed: false,
-  shootJustPressed: false,
+  spinJustPressed: false,
   healJustPressed: false,
   powerJustPressed: false,
 };
@@ -31,7 +31,7 @@ describe("LevelRunTracker", () => {
     const tracker = new LevelRunTracker();
     const statistics = createStatistics();
     tracker.advance(1_600);
-    tracker.trackInput({ ...idleInput, shootJustPressed: true });
+    tracker.trackInput({ ...idleInput, spinJustPressed: true });
 
     expect(tracker.record(statistics, "completed")).toBe(true);
     expect(tracker.record(statistics, "defeat")).toBe(false);

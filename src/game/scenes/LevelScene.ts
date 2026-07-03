@@ -4,6 +4,7 @@ import {
   GAME_HEIGHT,
   GAME_WIDTH,
   MOBILE_GAMEPLAY_FLOOR_EXTENSION,
+  MOBILE_GAMEPLAY_QUERY,
 } from "../../shared/constants/game";
 import type {
   AchievementId,
@@ -22,7 +23,6 @@ import { MovingHazard } from "../entities/hazards/MovingHazard";
 import { Coin } from "../entities/items/Coin";
 import { MovingPlatform } from "../entities/platforms/MovingPlatform";
 import { Player } from "../entities/player/Player";
-import type { Projectile } from "../entities/projectiles/Projectile";
 import { PowerProjectile } from "../entities/projectiles/PowerProjectile";
 import { getCharacterDefinition } from "../data/characters";
 import { getAchievementDefinition } from "../data/achievements";
@@ -32,6 +32,7 @@ import { gameEvents } from "../events/EventBus";
 import { CameraSystem } from "../systems/camera/CameraSystem";
 import { CombatSystem } from "../systems/combat/CombatSystem";
 import { GameplayInputSystem } from "../systems/input/GameplayInputSystem";
+import { MobileActionBuffer } from "../systems/input/MobileActionBuffer";
 import { touchInputStore } from "../systems/input/TouchInputStore";
 import { InventorySystem } from "../systems/inventory/InventorySystem";
 import { MovementSystem } from "../systems/movement/MovementSystem";
@@ -53,7 +54,6 @@ export class LevelScene extends Phaser.Scene {
   private rewardBox?: Phaser.Physics.Arcade.Sprite;
   private staticHazards!: Phaser.Physics.Arcade.StaticGroup;
   private movingHazards!: Phaser.Physics.Arcade.Group;
-  private projectiles!: Phaser.Physics.Arcade.Group;
   private powerProjectiles!: Phaser.Physics.Arcade.Group;
   private checkpoint!: Phaser.Physics.Arcade.Sprite;
   private goal!: Phaser.Physics.Arcade.Sprite;
@@ -75,6 +75,8 @@ export class LevelScene extends Phaser.Scene {
   private levelFinished = false;
   private pressureScrollX = 0;
   private pressureDamageCooldownMs = 0;
+  private lastSpinCooldownStep = -1;
+  private readonly mobileActionBuffer = new MobileActionBuffer();
   private pressureLine!: Phaser.GameObjects.Rectangle;
   private readonly achievements = new AchievementSystem();
   private damageTakenThisLevel = false;
@@ -116,6 +118,8 @@ export class LevelScene extends Phaser.Scene {
     this.damageTakenThisLevel = false;
     this.pressureScrollX = 0;
     this.pressureDamageCooldownMs = 0;
+    this.lastSpinCooldownStep = -1;
+    this.mobileActionBuffer.reset(window.matchMedia(MOBILE_GAMEPLAY_QUERY).matches);
 
     touchInputStore.reset();
     this.movement.reset();
@@ -151,8 +155,10 @@ export class LevelScene extends Phaser.Scene {
     const didJump = this.movement.update(this.player, input, delta);
     if (didJump) {
       this.playSfx("jump");
+      this.requestHaptic("jump");
     }
     this.handleActions(input);
+    this.updateSpinCooldownHud();
     this.updateCameraPressure(delta);
     this.handlePressureLineDamage(delta);
     if (this.levelFinished) {
@@ -229,7 +235,6 @@ export class LevelScene extends Phaser.Scene {
     });
     this.healthPickups = this.physics.add.staticGroup();
     this.movingHazards = this.physics.add.group({ runChildUpdate: true });
-    this.projectiles = this.physics.add.group({ runChildUpdate: true });
     this.powerProjectiles = this.physics.add.group({
       allowGravity: false,
       runChildUpdate: true,
@@ -346,13 +351,6 @@ export class LevelScene extends Phaser.Scene {
       undefined,
       (enemyA, enemyB) => enemyA instanceof M3Enemy && enemyB instanceof M3Enemy,
     );
-    this.physics.add.collider(this.projectiles, this.platforms, (projectile) => {
-      projectile.destroy();
-    });
-    this.physics.add.collider(this.projectiles, this.movingPlatforms, (projectile) => {
-      projectile.destroy();
-    });
-
     this.physics.add.overlap(this.player, this.coins, (_player, coin) => {
       this.collectCoin(coin as Coin);
     });
@@ -379,9 +377,6 @@ export class LevelScene extends Phaser.Scene {
       this.handleHazardOverlap(hazard as Phaser.GameObjects.GameObject);
     });
 
-    this.physics.add.overlap(this.projectiles, this.enemies, (projectile, enemy) => {
-      this.hitEnemyWithProjectile(projectile as Projectile, enemy as BaseEnemy);
-    });
     this.physics.add.overlap(this.powerProjectiles, this.enemies, (projectile, enemy) => {
       this.hitEnemyWithPower(projectile as PowerProjectile, enemy as BaseEnemy);
     });
@@ -464,22 +459,39 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
-    if (input.meleeJustPressed) {
-      if (this.player.canMelee(this.time.now)) {
-        this.playSfx("sword-swing");
-      }
-
+    const now = this.time.now;
+    const wantsMelee = this.mobileActionBuffer.shouldExecute(
+      "melee",
+      input.meleeJustPressed,
+      now,
+      this.player.canMelee(now),
+    );
+    if (wantsMelee) {
+      this.playSfx("sword-swing");
+      this.requestHaptic("attack");
       this.combat.meleeAttack(this, this.player, this.enemies, (enemy) => {
         this.handleEnemyDefeated(enemy);
       });
     }
 
-    if (input.shootJustPressed) {
-      if (this.player.canShoot(this.time.now)) {
-        this.playSfx("projectile");
+    const wantsSpin = this.mobileActionBuffer.shouldExecute(
+      "spin",
+      input.spinJustPressed,
+      now,
+      this.player.canSpin(now),
+    );
+    if (wantsSpin) {
+      const didSpin = this.combat.spinAttack(
+        this,
+        this.player,
+        this.enemies,
+        (enemy) => this.handleEnemyDefeated(enemy),
+      );
+      if (didSpin) {
+        this.playSfx("sword-swing");
+        this.requestHaptic("spin");
+        this.emitHud();
       }
-
-      this.combat.shoot(this, this.player, this.projectiles);
     }
 
     if (input.healJustPressed) {
@@ -510,12 +522,12 @@ export class LevelScene extends Phaser.Scene {
 
   private useLethalPower(): void {
     const powerCharges = this.getActivePowerCharges();
-    if (powerCharges.powerCharges <= 0 || !this.player.canShoot(this.time.now)) {
+    if (powerCharges.powerCharges <= 0 || !this.player.canUsePower(this.time.now)) {
       return;
     }
 
     powerCharges.powerCharges -= 1;
-    this.player.markShooting(this.time.now);
+    this.player.markUsingPower(this.time.now);
     const direction = this.player.facing;
     const projectile = new PowerProjectile(
       this,
@@ -1055,10 +1067,11 @@ export class LevelScene extends Phaser.Scene {
     let index = Math.floor(platform.x / pieceWidth);
     while (cursorX < endX - 1) {
       const segmentWidth = Math.min(pieceWidth, endX - cursorX);
-      this.add
-        .tileSprite(cursorX, visualY, segmentWidth, pieceHeight, midKeys[index % midKeys.length])
+      const middle = this.add
+        .image(cursorX, visualY, midKeys[index % midKeys.length])
         .setOrigin(0, 0)
         .setDepth(depth);
+      middle.setDisplaySize(segmentWidth, pieceHeight);
       cursorX += segmentWidth;
       index += 1;
     }
@@ -1243,16 +1256,6 @@ export class LevelScene extends Phaser.Scene {
       ease: "Sine.easeOut",
       onComplete: () => label.destroy(),
     });
-  }
-
-  private hitEnemyWithProjectile(projectile: Projectile, enemy: BaseEnemy): void {
-    projectile.destroy();
-    const defeated = enemy.takeDamage(projectile.damage);
-    if (defeated) {
-      this.handleEnemyDefeated(enemy);
-    } else {
-      this.playSfx("enemy-hit");
-    }
   }
 
   private hitEnemyWithPower(projectile: PowerProjectile, enemy: BaseEnemy): void {
@@ -1441,6 +1444,7 @@ export class LevelScene extends Phaser.Scene {
     const defeated = this.player.takeDamage(amount);
     if (this.player.stats.health < previousHealth) {
       this.playSfx("player-hit");
+      this.requestHaptic("damage");
       this.showDamageFeedback(previousHealth - this.player.stats.health);
     }
 
@@ -1737,6 +1741,8 @@ export class LevelScene extends Phaser.Scene {
 
   private emitHud(): void {
     const powerCharges = this.getActivePowerCharges();
+    const spinCooldownRemainingMs = this.player.getSpinCooldownRemaining(this.time.now);
+    this.lastSpinCooldownStep = Math.ceil(spinCooldownRemainingMs / 100);
     gameEvents.emit(EVENTS.HUD_UPDATED, {
       stageNumber: this.level.stageNumber,
       health: this.save.player.health,
@@ -1750,11 +1756,27 @@ export class LevelScene extends Phaser.Scene {
       timeRemaining: Math.ceil(this.remainingTimeMs / 1000),
       timeLimit: this.level.timeLimitSeconds,
       progressPercent: this.getProgressPercent(),
+      spinCooldownRemainingMs,
     });
+  }
+
+  private updateSpinCooldownHud(): void {
+    const remainingMs = this.player.getSpinCooldownRemaining(this.time.now);
+    const cooldownStep = Math.ceil(remainingMs / 100);
+    if (cooldownStep !== this.lastSpinCooldownStep) {
+      if (this.lastSpinCooldownStep > 0 && cooldownStep === 0) {
+        this.requestHaptic("ready");
+      }
+      this.emitHud();
+    }
   }
 
   private playSfx(cue: SfxCue): void {
     gameEvents.emit(EVENTS.SFX_REQUESTED, { cue });
+  }
+
+  private requestHaptic(cue: "jump" | "attack" | "spin" | "damage" | "ready"): void {
+    gameEvents.emit(EVENTS.HAPTIC_REQUESTED, { cue });
   }
 
   private getActivePowerCharges(): PowerChargeState {

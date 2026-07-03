@@ -2,7 +2,6 @@ export type SfxCue =
   | "ui-click"
   | "jump"
   | "sword-swing"
-  | "projectile"
   | "heal"
   | "lethal-power"
   | "enemy-hit"
@@ -31,7 +30,6 @@ export const sfxDefinitions: Record<SfxCue, SfxDefinition> = {
     playbackRate: [0.94, 1.06],
     cooldownMs: 70,
   },
-  projectile: { sources: ["/sfx/projectile.ogg"], volume: 0.52, playbackRate: [0.97, 1.04] },
   heal: { sources: ["/sfx/heal.ogg"], volume: 0.58 },
   "lethal-power": { sources: ["/sfx/lethal-power.ogg"], volume: 0.62 },
   "enemy-hit": {

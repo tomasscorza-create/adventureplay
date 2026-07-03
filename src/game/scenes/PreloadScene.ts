@@ -24,7 +24,6 @@ export class PreloadScene extends Phaser.Scene {
     this.createEnchantedM1Texture();
     this.createVolcanicM0Texture();
     this.createVolcanicM1Texture();
-    this.createProjectileTexture();
     this.createPowerProjectileTexture();
     this.createCoinTexture();
     this.createInventoryPieceTexture();
@@ -795,16 +794,6 @@ export class PreloadScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x090506, 1);
     graphics.strokeRoundedRect(6, 12, 36, 32, 9);
     graphics.generateTexture("volcanic-enemy-m1", 48, 52);
-    graphics.destroy();
-  }
-
-  private createProjectileTexture(): void {
-    const graphics = this.add.graphics();
-    graphics.fillStyle(0xbfffe3, 1);
-    graphics.fillRoundedRect(1, 2, 15, 5, 3);
-    graphics.fillStyle(0xffe28a, 0.85);
-    graphics.fillCircle(15, 4.5, 3);
-    graphics.generateTexture("projectile", 18, 9);
     graphics.destroy();
   }
 

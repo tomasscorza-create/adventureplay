@@ -1322,9 +1322,9 @@ button {
   left: 50%;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(5, auto);
-  gap: 9px;
-  width: min(1080px, calc(100vw - 28px));
+  grid-template-columns: repeat(4, auto) minmax(170px, 260px);
+  gap: 7px;
+  width: min(860px, calc(100vw - 28px));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1344,8 +1344,8 @@ button {
 
 .hud__item {
   position: relative;
-  min-width: 118px;
-  padding: 9px 12px;
+  min-width: 108px;
+  padding: 6px 10px;
 }
 
 .hud__item--health-pulse {

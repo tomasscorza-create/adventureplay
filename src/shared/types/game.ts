@@ -6,7 +6,7 @@ export type PlayerState =
   | "jump"
   | "fall"
   | "attack"
-  | "shoot"
+  | "spin"
   | "hurt"
   | "dead";
 
@@ -79,6 +79,7 @@ export interface HudState extends PlayerHudState {
   timeRemaining: number;
   timeLimit: number;
   progressPercent: number;
+  spinCooldownRemainingMs: number;
 }
 
 export interface LevelCompletionSummary {

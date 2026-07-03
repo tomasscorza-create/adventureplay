@@ -4,6 +4,10 @@ import type { GameplayInputAction } from "../../shared/types/input";
 import type { PurchasablePower } from "../../game/data/powerShop";
 import type { AchievementReward } from "../../game/data/achievements";
 import { AbilityIcon } from "./AbilityIcon";
+import { CombatActionIcon } from "./CombatActionIcon";
+import { SpinCooldownIndicator } from "./SpinCooldownIndicator";
+import { getCompactActionBinding } from "../../game/systems/input/KeyboardBindingStore";
+import { useKeyboardBindings } from "../hooks/useKeyboardBindings";
 
 interface AbilityControlsProps {
   hud: HudState;
@@ -13,11 +17,22 @@ interface AbilityControlsProps {
 }
 
 export function AbilityControls({ hud, onOpenShop, achievementReward, rewardFeedbackKey }: AbilityControlsProps) {
+  const bindings = useKeyboardBindings();
   return (
-    <section className="ability-controls" aria-label="Poderes del personaje">
+    <section className="ability-controls" aria-label="Acciones y poderes del personaje">
+      <div className="desktop-combat-controls" aria-label="Ataques normales">
+        <CombatButton action="melee" keyLabel={getCompactActionBinding(bindings, "melee")} name="Ataque de espada" icon="melee" />
+        <CombatButton
+          action="spin"
+          keyLabel={getCompactActionBinding(bindings, "spin")}
+          name="Ataque giratorio"
+          icon="spin"
+          cooldownRemainingMs={hud.spinCooldownRemainingMs}
+        />
+      </div>
       <AbilityButton
         action="heal"
-        keyLabel="Q"
+        keyLabel={getCompactActionBinding(bindings, "heal")}
         name="Regenerar"
         count={hud.healingCharges}
         disabled={hud.healingCharges <= 0 || hud.health >= hud.maxHealth}
@@ -28,7 +43,7 @@ export function AbilityControls({ hud, onOpenShop, achievementReward, rewardFeed
       />
       <AbilityButton
         action="power"
-        keyLabel="E"
+        keyLabel={getCompactActionBinding(bindings, "power")}
         name="Poder letal"
         count={hud.powerCharges}
         disabled={hud.powerCharges <= 0}
@@ -38,6 +53,45 @@ export function AbilityControls({ hud, onOpenShop, achievementReward, rewardFeed
         onOpenShop={() => onOpenShop("powerCharges")}
       />
     </section>
+  );
+}
+
+interface CombatButtonProps {
+  action: "melee" | "spin";
+  keyLabel: string;
+  name: string;
+  icon: "melee" | "spin";
+  cooldownRemainingMs?: number;
+}
+
+function CombatButton({
+  action,
+  keyLabel,
+  name,
+  icon,
+  cooldownRemainingMs = 0,
+}: CombatButtonProps) {
+  const activate = () => {
+    touchInputStore.setAction(action, true);
+    touchInputStore.setAction(action, false);
+  };
+
+  const coolingDown = cooldownRemainingMs > 0;
+  return (
+    <button
+      className="desktop-combat-button"
+      type="button"
+      onClick={activate}
+      disabled={coolingDown}
+      aria-label={coolingDown
+        ? `${name}. Disponible en ${Math.ceil(cooldownRemainingMs / 1000)} segundos.`
+        : `${name}. Tecla ${keyLabel}.`}
+      title={`${name} - tecla ${keyLabel}`}
+    >
+      <span className="desktop-combat-button__key">{keyLabel}</span>
+      <CombatActionIcon type={icon} className="desktop-combat-button__icon" />
+      <SpinCooldownIndicator remainingMs={cooldownRemainingMs} />
+    </button>
   );
 }
 

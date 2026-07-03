@@ -3,8 +3,11 @@ import {
   GAME_HEIGHT,
   GAME_WIDTH,
   MOBILE_GAMEPLAY_QUERY,
-  MOBILE_GAME_RENDER_SCALE,
 } from "../../shared/constants/game";
+import {
+  getMobileRenderScale,
+  mobileGameplaySettingsStore,
+} from "../systems/input/MobileGameplaySettings";
 import { BattleScene } from "../scenes/BattleScene";
 import { BootScene } from "../scenes/BootScene";
 import { GameOverScene } from "../scenes/GameOverScene";
@@ -16,7 +19,9 @@ import { WorldMapScene } from "../scenes/WorldMapScene";
 
 export function createPhaserConfig(parent: string): Phaser.Types.Core.GameConfig {
   const usesMobileRenderProfile = window.matchMedia(MOBILE_GAMEPLAY_QUERY).matches;
-  const renderScale = usesMobileRenderProfile ? MOBILE_GAME_RENDER_SCALE : 1;
+  const renderScale = usesMobileRenderProfile
+    ? getMobileRenderScale(mobileGameplaySettingsStore.getSettings().performanceMode)
+    : 1;
 
   return {
     type: Phaser.AUTO,

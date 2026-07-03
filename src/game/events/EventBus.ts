@@ -7,6 +7,7 @@ import type {
 import type { AchievementIconId, AchievementReward } from "../data/achievements";
 import type { LevelRewardDefinition } from "../data/progression";
 import type { SfxCue } from "../data/sfx";
+import type { HapticCue } from "../../shared/haptics/GameHaptics";
 import { EVENTS } from "../../shared/constants/events";
 
 type GameEventMap = {
@@ -18,6 +19,7 @@ type GameEventMap = {
   [EVENTS.GO_TO_MENU]: undefined;
   [EVENTS.ACTIVE_LEVEL_CHANGED]: { levelId: string };
   [EVENTS.SFX_REQUESTED]: { cue: SfxCue };
+  [EVENTS.HAPTIC_REQUESTED]: { cue: HapticCue };
   [EVENTS.HUD_UPDATED]: HudState;
   [EVENTS.HEALTH_PICKUP_COLLECTED]: { restored: number };
   [EVENTS.PLAYER_DAMAGED]: { amount: number };

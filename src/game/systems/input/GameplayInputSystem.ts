@@ -4,9 +4,12 @@ import {
   type GameplayInputFrame,
 } from "../../../shared/types/input";
 import { touchInputStore } from "./TouchInputStore";
+import {
+  keyboardBindingStore,
+  type KeyboardCommandAction,
+} from "./KeyboardBindingStore";
 
 export class GameplayInputSystem {
-  private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private readonly keys: KeyboardBindings;
 
   constructor(scene: Phaser.Scene) {
@@ -15,70 +18,60 @@ export class GameplayInputSystem {
       throw new Error("Keyboard input is not available.");
     }
 
-    this.cursors = keyboard.createCursorKeys();
-    this.keys = {
-      left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      up: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      jump: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-      melee: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
-      shoot: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
-      heal: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
-      power: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-      pause: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P),
-      escape: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
-    };
+    const configuredBindings = keyboardBindingStore.getBindings();
+    this.keys = Object.fromEntries(
+      Object.entries(configuredBindings).map(([action, pair]) => [
+        action,
+        [pair.primary, pair.secondary]
+          .filter((code) => code !== null)
+          .map((code) => keyboard.addKey(code)),
+      ]),
+    ) as KeyboardBindings;
   }
 
   readFrame(): GameplayInputFrame {
     const touch = touchInputStore.getState();
     const frame = {
       ...emptyGameplayInputState,
-      left: this.cursors.left.isDown || this.keys.left.isDown || touch.left,
-      right: this.cursors.right.isDown || this.keys.right.isDown || touch.right,
-      jump: this.cursors.up.isDown || this.keys.up.isDown || this.keys.jump.isDown || touch.jump,
-      melee: this.keys.melee.isDown || touch.melee,
-      shoot: this.keys.shoot.isDown || touch.shoot,
-      heal: this.keys.heal.isDown || touch.heal,
-      power: this.keys.power.isDown || touch.power,
-      pause: this.keys.pause.isDown || this.keys.escape.isDown || touch.pause,
+      left: this.isDown("left") || touch.left,
+      right: this.isDown("right") || touch.right,
+      jump: this.isDown("jump") || touch.jump,
+      melee: this.isDown("melee") || touch.melee,
+      spin: this.isDown("spin") || touch.spin,
+      heal: this.isDown("heal") || touch.heal,
+      power: this.isDown("power") || touch.power,
+      pause: this.isDown("pause") || touch.pause,
       jumpJustPressed:
-        Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-        Phaser.Input.Keyboard.JustDown(this.keys.up) ||
-        Phaser.Input.Keyboard.JustDown(this.keys.jump) ||
+        this.wasJustPressed("jump") ||
         touchInputStore.wasJustPressed("jump"),
       meleeJustPressed:
-        Phaser.Input.Keyboard.JustDown(this.keys.melee) ||
+        this.wasJustPressed("melee") ||
         touchInputStore.wasJustPressed("melee"),
-      shootJustPressed:
-        Phaser.Input.Keyboard.JustDown(this.keys.shoot) ||
-        touchInputStore.wasJustPressed("shoot"),
+      spinJustPressed:
+        this.wasJustPressed("spin") ||
+        touchInputStore.wasJustPressed("spin"),
       healJustPressed:
-        Phaser.Input.Keyboard.JustDown(this.keys.heal) ||
+        this.wasJustPressed("heal") ||
         touchInputStore.wasJustPressed("heal"),
       powerJustPressed:
-        Phaser.Input.Keyboard.JustDown(this.keys.power) ||
+        this.wasJustPressed("power") ||
         touchInputStore.wasJustPressed("power"),
       pauseJustPressed:
-        Phaser.Input.Keyboard.JustDown(this.keys.pause) ||
-        Phaser.Input.Keyboard.JustDown(this.keys.escape) ||
+        this.wasJustPressed("pause") ||
         touchInputStore.wasJustPressed("pause"),
     };
 
     touchInputStore.commitFrame();
     return frame;
   }
+
+  private isDown(action: KeyboardCommandAction): boolean {
+    return this.keys[action].some((key) => key.isDown);
+  }
+
+  private wasJustPressed(action: KeyboardCommandAction): boolean {
+    return this.keys[action].some((key) => Phaser.Input.Keyboard.JustDown(key));
+  }
 }
 
-interface KeyboardBindings {
-  left: Phaser.Input.Keyboard.Key;
-  right: Phaser.Input.Keyboard.Key;
-  up: Phaser.Input.Keyboard.Key;
-  jump: Phaser.Input.Keyboard.Key;
-  melee: Phaser.Input.Keyboard.Key;
-  shoot: Phaser.Input.Keyboard.Key;
-  heal: Phaser.Input.Keyboard.Key;
-  power: Phaser.Input.Keyboard.Key;
-  pause: Phaser.Input.Keyboard.Key;
-  escape: Phaser.Input.Keyboard.Key;
-}
+type KeyboardBindings = Record<KeyboardCommandAction, Phaser.Input.Keyboard.Key[]>;
