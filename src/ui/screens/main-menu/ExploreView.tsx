@@ -118,6 +118,13 @@ export function ExploreView({
           <div className="map-scroll" role="region" aria-label="Mapa completo de regiones">
             <div className="continent-map explore-map" onPointerLeave={() => onPreviewRegionChange()}>
               <img className="explore-map__base" src={exploreMapUrl} alt="" aria-hidden="true" />
+              <img
+                className="explore-map__highlight"
+                src={activeRegion.mapImageUrl}
+                alt=""
+                aria-hidden="true"
+                key={activeRegion.id}
+              />
               {regions.map((region) => (
                 <button
                   className={`explore-map__region explore-map__region--${region.id}${region.id === activeRegion.id ? " explore-map__region--active" : ""}`}
@@ -130,9 +137,7 @@ export function ExploreView({
                   onBlur={() => onPreviewRegionChange()}
                   aria-label={`${region.name}. ${region.status}`}
                   aria-pressed={region.id === selectedRegion.id}
-                >
-                  <img src={region.mapImageUrl} alt="" aria-hidden="true" />
-                </button>
+                />
               ))}
             </div>
           </div>

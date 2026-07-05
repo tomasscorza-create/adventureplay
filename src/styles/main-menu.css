@@ -1186,8 +1186,8 @@
 }
 
 .explore-map__base,
-.explore-map__region,
-.explore-map__region img {
+.explore-map__highlight,
+.explore-map__region {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -1204,8 +1204,22 @@
   user-select: none;
 }
 
-.explore-map__region {
+.explore-map__highlight {
   z-index: 2;
+  display: block;
+  object-fit: contain;
+  filter:
+    brightness(1.14)
+    saturate(1.18)
+    drop-shadow(0 0 7px rgba(255, 232, 160, 0.72))
+    drop-shadow(0 0 13px rgba(255, 205, 95, 0.42));
+  animation: explore-region-highlight-in 180ms ease-out both;
+  pointer-events: none;
+  user-select: none;
+}
+
+.explore-map__region {
+  z-index: 3;
   display: block;
   padding: 0;
   border: 0;
@@ -1215,30 +1229,24 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.explore-map__region img {
-  display: block;
-  object-fit: contain;
-  opacity: 0;
-  filter:
-    brightness(1.14)
-    saturate(1.18)
-    drop-shadow(0 0 11px rgba(255, 226, 135, 0.86));
-  transition: opacity 150ms ease, filter 150ms ease;
-  pointer-events: none;
-  user-select: none;
+@keyframes explore-region-highlight-in {
+  from {
+    opacity: 0.28;
+    filter:
+      brightness(1.02)
+      saturate(1.02)
+      drop-shadow(0 0 2px rgba(255, 232, 160, 0.25));
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
-.explore-map__region:hover img,
-.explore-map__region:focus-visible img,
-.explore-map__region--active img {
-  opacity: 1;
-}
-
-.explore-map__region:active img {
-  filter:
-    brightness(1.26)
-    saturate(1.25)
-    drop-shadow(0 0 15px rgba(255, 238, 169, 0.95));
+@media (prefers-reduced-motion: reduce) {
+  .explore-map__highlight {
+    animation: none;
+  }
 }
 
 .explore-map__region--modern-jungle {
@@ -1549,23 +1557,23 @@
     grid-column: 1;
     grid-row: 1;
     justify-content: flex-start;
-    opacity: var(--mobile-control-opacity, 0.82);
-    transform: translateX(var(--mobile-movement-inset, 18px)) scale(var(--mobile-control-scale, 1));
+    opacity: var(--mobile-control-opacity, 0.92);
+    transform: translateX(var(--mobile-movement-inset, 24px)) scale(var(--mobile-control-scale, 1.08));
     transform-origin: left bottom;
   }
 
   .app-shell > .mobile-controls .mobile-controls__right {
     grid-column: 2;
     grid-row: 1;
-    opacity: var(--mobile-control-opacity, 0.82);
-    transform: translateX(calc(-1 * var(--mobile-actions-inset, 0px))) scale(var(--mobile-control-scale, 1));
+    opacity: var(--mobile-control-opacity, 0.92);
+    transform: translateX(calc(-1 * var(--mobile-actions-inset, 12px))) scale(var(--mobile-control-scale, 1.08));
     transform-origin: right bottom;
   }
 
   .app-shell > .mobile-controls--left-handed .mobile-controls__cluster--movement {
     grid-column: 2;
     justify-content: flex-end;
-    transform: translateX(calc(-1 * var(--mobile-movement-inset, 18px))) scale(var(--mobile-control-scale, 1));
+    transform: translateX(calc(-1 * var(--mobile-movement-inset, 24px))) scale(var(--mobile-control-scale, 1.08));
     transform-origin: right bottom;
   }
 
@@ -1573,7 +1581,7 @@
     grid-column: 1;
     justify-content: flex-start;
     justify-items: start;
-    transform: translateX(var(--mobile-actions-inset, 0px)) scale(var(--mobile-control-scale, 1));
+    transform: translateX(var(--mobile-actions-inset, 12px)) scale(var(--mobile-control-scale, 1.08));
     transform-origin: left bottom;
   }
 
@@ -1586,9 +1594,9 @@
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
-    margin-left: var(--mobile-movement-inset, 18px);
-    opacity: var(--mobile-control-opacity, 0.82);
-    transform: scale(var(--mobile-control-scale, 1));
+    margin-left: var(--mobile-movement-inset, 24px);
+    opacity: var(--mobile-control-opacity, 0.94);
+    transform: scale(var(--mobile-control-scale, 1.06));
     transform-origin: left bottom;
   }
 
@@ -1596,15 +1604,15 @@
     grid-column: 2;
     grid-row: 1;
     justify-content: flex-end;
-    opacity: var(--mobile-control-opacity, 0.82);
-    transform: translateX(calc(-1 * var(--mobile-actions-inset, 0px))) scale(var(--mobile-control-scale, 1));
+    opacity: var(--mobile-control-opacity, 0.94);
+    transform: translateX(calc(-1 * var(--mobile-actions-inset, 14px))) scale(var(--mobile-control-scale, 1.06));
     transform-origin: right bottom;
   }
 
   .app-shell > .mobile-controls--command-2.mobile-controls--left-handed .mobile-joystick {
     grid-column: 2;
     justify-self: end;
-    margin-right: var(--mobile-movement-inset, 18px);
+    margin-right: var(--mobile-movement-inset, 24px);
     margin-left: 0;
     transform-origin: right bottom;
   }
@@ -1612,7 +1620,7 @@
   .app-shell > .mobile-controls--command-2.mobile-controls--left-handed .mobile-controls__right--radial {
     grid-column: 1;
     justify-content: flex-start;
-    transform: translateX(var(--mobile-actions-inset, 0px)) scale(var(--mobile-control-scale, 1));
+    transform: translateX(var(--mobile-actions-inset, 14px)) scale(var(--mobile-control-scale, 1.06));
     transform-origin: left bottom;
   }
 
@@ -1620,12 +1628,12 @@
     position: relative;
     width: 116px;
     height: 116px;
-    border: 1px solid rgba(203, 238, 218, 0.4);
+    border: 2px solid rgba(203, 255, 228, 0.72);
     border-radius: 50%;
     background:
-      radial-gradient(circle, rgba(197, 240, 214, 0.09) 0 34%, transparent 35%),
-      rgba(8, 27, 22, 0.34);
-    box-shadow: inset 0 0 22px rgba(5, 12, 10, 0.34), 0 6px 18px rgba(0, 0, 0, 0.25);
+      radial-gradient(circle, rgba(197, 255, 224, 0.16) 0 34%, transparent 35%),
+      rgba(8, 35, 27, 0.64);
+    box-shadow: inset 0 0 24px rgba(5, 12, 10, 0.42), 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 14px rgba(123, 232, 186, 0.12);
     pointer-events: auto;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
@@ -1644,17 +1652,17 @@
     left: 34px;
     width: 48px;
     height: 48px;
-    border: 1px solid rgba(238, 246, 234, 0.55);
+    border: 2px solid rgba(238, 255, 245, 0.82);
     border-radius: 50%;
-    background: radial-gradient(circle at 38% 32%, rgba(224, 255, 235, 0.25), transparent 35%), rgba(20, 55, 42, 0.86);
-    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.32);
+    background: radial-gradient(circle at 38% 32%, rgba(224, 255, 235, 0.42), transparent 38%), rgba(25, 78, 55, 0.96);
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.38), 0 0 12px rgba(139, 255, 204, 0.2);
     pointer-events: none;
     will-change: transform;
   }
 
   .mobile-joystick__direction {
     position: absolute;
-    color: rgba(240, 249, 226, 0.62);
+    color: rgba(240, 255, 235, 0.82);
     font-size: 24px;
     font-weight: 900;
     line-height: 1;
@@ -1665,24 +1673,59 @@
   .mobile-joystick__direction--up { top: 5px; left: 48px; }
   .mobile-joystick__direction--right { top: 46px; right: 8px; }
 
+  .mobile-joystick:not(.mobile-joystick--idle) {
+    border-color: rgba(183, 255, 219, 0.96);
+    box-shadow: inset 0 0 26px rgba(83, 183, 127, 0.24), 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 20px rgba(116, 255, 188, 0.28);
+  }
+
+  .mobile-joystick--left .mobile-joystick__direction--left,
+  .mobile-joystick--up-left .mobile-joystick__direction--left,
+  .mobile-joystick--right .mobile-joystick__direction--right,
+  .mobile-joystick--up-right .mobile-joystick__direction--right,
+  .mobile-joystick--up .mobile-joystick__direction--up,
+  .mobile-joystick--up-left .mobile-joystick__direction--up,
+  .mobile-joystick--up-right .mobile-joystick__direction--up {
+    color: #fff2ad;
+    filter: drop-shadow(0 0 5px rgba(255, 221, 113, 0.8));
+    transform: scale(1.18);
+  }
+
   .mobile-action-wheel {
     display: grid;
     grid-template: 46px 68px / 46px 68px 46px;
-    gap: 7px;
+    gap: var(--mobile-control-gap, 10px);
     align-items: center;
     justify-items: center;
     pointer-events: auto;
+    transform: rotate(var(--mobile-action-wheel-rotation, 0deg));
+    transform-origin: center 68%;
   }
 
   .app-shell > .mobile-controls .mobile-action-wheel .touch-button {
     width: 46px;
     height: 46px;
+    transform: rotate(var(--mobile-action-wheel-counter-rotation, 0deg));
+  }
+
+  .app-shell > .mobile-controls .mobile-action-wheel .touch-button:active,
+  .app-shell > .mobile-controls .mobile-action-wheel .touch-button.is-pressed {
+    transform: rotate(var(--mobile-action-wheel-counter-rotation, 0deg)) translateY(2px) scale(0.92);
   }
 
   .mobile-action-wheel__spin { grid-area: 1 / 2; }
   .mobile-action-wheel__heal { grid-area: 2 / 1; }
   .mobile-action-wheel__melee { grid-area: 2 / 2; }
   .mobile-action-wheel__power { grid-area: 2 / 3; }
+
+  .app-shell > .mobile-controls .mobile-action-wheel--prefer-spin .mobile-action-wheel__spin,
+  .app-shell > .mobile-controls .mobile-action-wheel--prefer-heal .mobile-action-wheel__heal,
+  .app-shell > .mobile-controls .mobile-action-wheel--prefer-power .mobile-action-wheel__power {
+    width: 54px;
+    height: 54px;
+    z-index: 1;
+    border-color: rgba(255, 229, 155, 0.88);
+    box-shadow: 0 0 14px rgba(255, 205, 102, 0.28);
+  }
 
   .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__melee {
     width: 68px;

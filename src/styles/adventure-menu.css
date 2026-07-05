@@ -1023,6 +1023,59 @@
   gap: 5px;
 }
 
+.mobile-radial-preference,
+.mobile-haptic-strength {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: rgba(67, 48, 35, 0.12);
+}
+
+.mobile-radial-preference > span,
+.mobile-haptic-strength > span {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-radial-preference small,
+.mobile-haptic-strength small {
+  color: rgba(43, 23, 14, 0.68);
+  font-size: 0.62rem;
+}
+
+.mobile-radial-preference > div,
+.mobile-haptic-strength > div {
+  display: flex;
+  gap: 3px;
+}
+
+.mobile-radial-preference button,
+.mobile-haptic-strength button {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(65, 43, 28, 0.34);
+  border-radius: 7px;
+  color: #4a2b18;
+  background: rgba(255, 241, 200, 0.34);
+  font-size: 0.61rem;
+  font-weight: 900;
+}
+
+.mobile-radial-preference button.is-selected,
+.mobile-haptic-strength button.is-selected {
+  border-color: #856021;
+  color: #fff4ce;
+  background: #6a4b25;
+  box-shadow: 0 0 0 1px rgba(255, 226, 148, 0.22);
+}
+
+.mobile-haptic-strength button:disabled {
+  opacity: 0.42;
+}
+
 .mobile-setting-slider {
   display: grid;
   gap: 3px;
@@ -1181,6 +1234,8 @@
   --preview-gap: 4px;
   --preview-movement-inset: 3px;
   --preview-actions-inset: 0px;
+  --preview-wheel-rotation: 0deg;
+  --preview-wheel-counter-rotation: 0deg;
   position: relative;
   display: flex;
   min-width: 0;
@@ -1301,12 +1356,13 @@
   height: 68px;
   margin-right: var(--preview-actions-inset);
   opacity: var(--preview-opacity);
-  transform: scale(var(--preview-scale));
+  transform: scale(var(--preview-scale)) rotate(var(--preview-wheel-rotation));
   transform-origin: bottom right;
 }
 
 .mobile-command-preview__actions--wheel i {
   position: absolute;
+  transform: rotate(var(--preview-wheel-counter-rotation));
 }
 
 .mobile-command-preview__actions--wheel .is-main {
@@ -1321,6 +1377,14 @@
 .mobile-command-preview__actions--wheel .is-top { top: 0; right: 26px; }
 .mobile-command-preview__actions--wheel .is-left { bottom: 8px; left: 0; }
 .mobile-command-preview__actions--wheel .is-right { right: 0; bottom: 8px; }
+
+.mobile-command-preview__actions--prefer-spin .is-top,
+.mobile-command-preview__actions--prefer-heal .is-left,
+.mobile-command-preview__actions--prefer-power .is-right {
+  border-color: #ffe280;
+  filter: brightness(1.24);
+  box-shadow: 0 0 8px rgba(255, 211, 108, 0.42);
+}
 
 .mobile-command-preview--left-handed .mobile-command-preview__joystick {
   margin-right: var(--preview-movement-inset);

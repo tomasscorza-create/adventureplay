@@ -16,17 +16,18 @@ import {
 import { playableCharacters } from "../../game/data/characters";
 import { levelDefinitions } from "../../game/data/levels";
 import { getProfileIconDefinition, profileIconDefinitions } from "../../game/data/profileIcons";
-import { gameMusic } from "../../shared/music/GameMusic";
-import { gameSfx } from "../../shared/sfx/GameSfx";
 import type { CharacterId, ProfileIconId, SaveData } from "../../shared/types/game";
 import { AchievementIcon } from "../components/AchievementIcon";
 import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
 import { ExploreView } from "./main-menu/ExploreView";
 import { InventoryView } from "./main-menu/InventoryView";
-import { KeyboardBindingsView } from "./main-menu/KeyboardBindingsView";
-import { MenuHeading, SettingToggle, VolumeControl } from "./main-menu/MenuPrimitives";
-import { MobileGameplaySettingsView } from "./main-menu/MobileGameplaySettingsView";
+import { MenuHeading } from "./main-menu/MenuPrimitives";
+import {
+  AudioSettingsPage,
+  ControlSettingsPage,
+  SettingsNavigationEntries,
+} from "./settings/SettingsPages";
 import {
   formatCompactAmount,
   formatGameplayTime,
@@ -79,12 +80,6 @@ export function MainMenuScreen({
   const [activeProfileSectionId, setActiveProfileSectionId] = useState<ProfileSectionId>("edit");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
   const [previewRegionId, setPreviewRegionId] = useState<string>();
-  const [audioSettings, setAudioSettings] = useState({
-    soundEnabled: gameSfx.isEnabled(),
-    musicEnabled: gameMusic.isEnabled(),
-    soundVolume: gameSfx.getVolume(),
-    musicVolume: gameMusic.getVolume(),
-  });
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [isResettingProgress, setIsResettingProgress] = useState(false);
   const [showExploreEntryHint, setShowExploreEntryHint] = useState(false);
@@ -180,28 +175,6 @@ export function MainMenuScreen({
         characterSwipeConsumed.current = false;
       }, 0);
     }
-  };
-  const toggleSound = () => {
-    const soundEnabled = gameSfx.setEnabled(!gameSfx.isEnabled());
-    setAudioSettings((current) => ({
-      ...current,
-      soundEnabled,
-    }));
-  };
-  const toggleMusic = () => {
-    const musicEnabled = gameMusic.setEnabled(!gameMusic.isEnabled());
-    setAudioSettings((current) => ({
-      ...current,
-      musicEnabled,
-    }));
-  };
-  const setSoundVolume = (volume: number) => {
-    const soundVolume = gameSfx.setVolume(volume);
-    setAudioSettings((current) => ({ ...current, soundVolume }));
-  };
-  const setMusicVolume = (volume: number) => {
-    const musicVolume = gameMusic.setVolume(volume);
-    setAudioSettings((current) => ({ ...current, musicVolume }));
   };
   const openProfilePage = () => {
     runMenuAction(() => {
@@ -552,48 +525,11 @@ export function MainMenuScreen({
             <div className="menu-chamber menu-chamber--options">
               <MenuHeading title="Ajustes" variant="settings" onBack={() => setView("main")} />
 
-              <button
-                className="settings-entry"
-                type="button"
-                onClick={() => setView("audio")}
-              >
-                <span className="settings-entry__icon" aria-hidden="true">♪</span>
-                <span className="settings-entry__copy">
-                  <strong>Sonido y musica</strong>
-                  <small>Volumen, musica y efectos del juego.</small>
-                </span>
-                <span className="settings-entry__arrow" aria-hidden="true">›</span>
-              </button>
-
-              {showDesktopCommandSettings && (
-                <button
-                  className="settings-entry"
-                  type="button"
-                  onClick={() => setView("commands")}
-                >
-                  <span className="settings-entry__icon" aria-hidden="true">⌨</span>
-                  <span className="settings-entry__copy">
-                    <strong>Comandos</strong>
-                    <small>Personaliza teclas primarias y secundarias.</small>
-                  </span>
-                  <span className="settings-entry__arrow" aria-hidden="true">›</span>
-                </button>
-              )}
-
-              {!showDesktopCommandSettings && (
-                <button
-                  className="settings-entry"
-                  type="button"
-                  onClick={() => setView("mobile-controls")}
-                >
-                  <span className="settings-entry__icon" aria-hidden="true">✥</span>
-                  <span className="settings-entry__copy">
-                    <strong>Controles moviles</strong>
-                    <small>Tipo de comando, posicion, vibracion y rendimiento.</small>
-                  </span>
-                  <span className="settings-entry__arrow" aria-hidden="true">›</span>
-                </button>
-              )}
+              <SettingsNavigationEntries
+                showDesktopCommandSettings={showDesktopCommandSettings}
+                onOpenAudio={() => setView("audio")}
+                onOpenControls={() => setView(showDesktopCommandSettings ? "commands" : "mobile-controls")}
+              />
 
               <section className="account-settings" aria-label="Cuenta y progreso">
                 <div className="account-settings__header">
@@ -661,58 +597,17 @@ export function MainMenuScreen({
             </div>
           )}
 
-          {view === "audio" && (
-            <div className="menu-chamber menu-chamber--options menu-chamber--audio">
-              <MenuHeading
-                title="Sonido y música"
-                variant="audio"
-                onBack={() => setView("options")}
-              />
-
-              <div className="settings-panel settings-panel--audio" aria-label="Configuracion de sonido y musica">
-                <section className="audio-setting-card" aria-label="Configuracion de sonido">
-                  <SettingToggle
-                    label="Sonido"
-                    description="Efectos medievales de interfaz, combate y progreso."
-                    enabled={audioSettings.soundEnabled}
-                    onToggle={toggleSound}
-                  />
-                  <VolumeControl
-                    label="Sonido"
-                    value={audioSettings.soundVolume}
-                    onChange={setSoundVolume}
-                  />
-                </section>
-
-                <section className="audio-setting-card" aria-label="Configuracion de musica">
-                  <SettingToggle
-                    label="Musica"
-                    description="Musica medieval adaptada a menus y dificultad."
-                    enabled={audioSettings.musicEnabled}
-                    onToggle={toggleMusic}
-                  />
-                  <VolumeControl
-                    label="Musica"
-                    value={audioSettings.musicVolume}
-                    onChange={setMusicVolume}
-                  />
-                </section>
-              </div>
-            </div>
-          )}
+          {view === "audio" && <AudioSettingsPage onBack={() => setView("options")} />}
 
           {view === "commands" && showDesktopCommandSettings && (
-            <div className="menu-chamber menu-chamber--options menu-chamber--commands">
-              <MenuHeading title="Comandos" variant="settings" onBack={() => setView("options")} />
-              <KeyboardBindingsView />
-            </div>
+            <ControlSettingsPage showDesktopCommandSettings onBack={() => setView("options")} />
           )}
 
           {view === "mobile-controls" && !showDesktopCommandSettings && (
-            <div className="menu-chamber menu-chamber--mobile-settings">
-              <MenuHeading title="Controles moviles" variant="settings" onBack={() => setView("options")} />
-              <MobileGameplaySettingsView />
-            </div>
+            <ControlSettingsPage
+              showDesktopCommandSettings={false}
+              onBack={() => setView("options")}
+            />
           )}
 
           {view === "inventory" && <InventoryView save={save} onBack={() => setView("main")} />}

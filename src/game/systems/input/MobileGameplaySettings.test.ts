@@ -18,7 +18,7 @@ describe("MobileGameplaySettings", () => {
     });
     expect(settings.controlScalePercent).toBe(120);
     expect(settings.controlScheme).toBe("command-2");
-    expect(settings.controlOpacityPercent).toBe(45);
+    expect(settings.controlOpacityPercent).toBe(60);
     expect(settings.movementInset).toBe(40);
     expect(listener).toHaveBeenCalledOnce();
     unsubscribe();
@@ -35,12 +35,15 @@ describe("MobileGameplaySettings", () => {
       controlScalePercent: 112,
       movementInset: 31,
       leftHanded: true,
+      actionWheelRotationDegrees: -18,
     });
     mobileGameplaySettingsStore.update({
       controlScheme: "command-2",
       controlScalePercent: 91,
       movementInset: 7,
       leftHanded: false,
+      actionWheelRotationDegrees: 24,
+      preferredRadialAction: "power",
     });
 
     expect(mobileGameplaySettingsStore.getSettings()).toMatchObject({
@@ -48,12 +51,34 @@ describe("MobileGameplaySettings", () => {
       controlScalePercent: 91,
       movementInset: 7,
       leftHanded: false,
+      actionWheelRotationDegrees: 24,
+      preferredRadialAction: "power",
     });
 
     expect(mobileGameplaySettingsStore.update({ controlScheme: "command-1" })).toMatchObject({
       controlScalePercent: 112,
       movementInset: 31,
       leftHanded: true,
+      actionWheelRotationDegrees: -18,
+    });
+  });
+
+  it("restores the more visible recommended profile for each command", () => {
+    mobileGameplaySettingsStore.update({
+      controlScheme: "command-2",
+      controlOpacityPercent: 61,
+      controlScalePercent: 85,
+      actionWheelRotationDegrees: 30,
+    });
+
+    expect(mobileGameplaySettingsStore.resetControlProfile()).toMatchObject({
+      controlScheme: "command-2",
+      controlOpacityPercent: 94,
+      controlScalePercent: 106,
+      movementInset: 24,
+      actionsInset: 14,
+      actionWheelRotationDegrees: 0,
+      preferredRadialAction: "spin",
     });
   });
 });

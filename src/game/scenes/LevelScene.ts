@@ -160,6 +160,8 @@ export class LevelScene extends Phaser.Scene {
     this.handleActions(input);
     this.updateSpinCooldownHud();
     this.updateCameraPressure(delta);
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    this.cameraSystem.updateMobileJumpFollow(this, playerBody.top, delta);
     this.handlePressureLineDamage(delta);
     if (this.levelFinished) {
       return;

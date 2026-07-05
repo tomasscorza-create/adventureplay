@@ -2,9 +2,12 @@ import type { CSSProperties } from "react";
 import type {
   MobileControlScheme,
   MobileGameplaySettings,
+  MobileHapticStrength,
   MobilePerformanceMode,
+  PreferredRadialAction,
 } from "../../../game/systems/input/MobileGameplaySettings";
 import { mobileGameplaySettingsStore } from "../../../game/systems/input/MobileGameplaySettings";
+import { gameHaptics } from "../../../shared/haptics/GameHaptics";
 import { useMobileGameplaySettings } from "../../hooks/useMobileGameplaySettings";
 
 const performanceModes: readonly {
@@ -27,6 +30,18 @@ const commandCopy: Record<MobileControlScheme, { name: string; description: stri
     description: "Joystick y rueda de acciones",
   },
 };
+
+const radialActions: readonly { id: PreferredRadialAction; label: string }[] = [
+  { id: "spin", label: "Giro" },
+  { id: "heal", label: "Curacion" },
+  { id: "power", label: "Poder" },
+];
+
+const hapticStrengths: readonly { id: MobileHapticStrength; label: string }[] = [
+  { id: "soft", label: "Suave" },
+  { id: "balanced", label: "Equilibrada" },
+  { id: "strong", label: "Firme" },
+];
 
 export function MobileGameplaySettingsView() {
   const settings = useMobileGameplaySettings();
@@ -102,7 +117,7 @@ export function MobileGameplaySettingsView() {
               onChange={(controlOpacityPercent) => mobileGameplaySettingsStore.update({ controlOpacityPercent })}
             />
             <MobileSlider
-              label="Posicion movimiento"
+              label="Movimiento hacia centro"
               value={settings.movementInset}
               min={0}
               max={72}
@@ -110,15 +125,44 @@ export function MobileGameplaySettingsView() {
               onChange={(movementInset) => mobileGameplaySettingsStore.update({ movementInset })}
             />
             <MobileSlider
-              label="Posicion ataques"
+              label="Acciones hacia centro"
               value={settings.actionsInset}
               min={0}
               max={72}
               suffix=" px"
               onChange={(actionsInset) => mobileGameplaySettingsStore.update({ actionsInset })}
             />
+            {settings.controlScheme === "command-2" && (
+              <MobileSlider
+                label="Rotacion de la rueda"
+                value={settings.actionWheelRotationDegrees}
+                min={-30}
+                max={30}
+                suffix="°"
+                onChange={(actionWheelRotationDegrees) => mobileGameplaySettingsStore.update({ actionWheelRotationDegrees })}
+              />
+            )}
           </div>
         </div>
+        {settings.controlScheme === "command-2" && (
+          <div className="mobile-radial-preference">
+            <span><strong>Boton exterior preferido</strong><small>Recibe mas tamano y presencia alrededor del ataque central.</small></span>
+            <div role="radiogroup" aria-label="Boton exterior preferido">
+              {radialActions.map((action) => (
+                <button
+                  className={settings.preferredRadialAction === action.id ? "is-selected" : ""}
+                  type="button"
+                  role="radio"
+                  aria-checked={settings.preferredRadialAction === action.id}
+                  key={action.id}
+                  onClick={() => mobileGameplaySettingsStore.update({ preferredRadialAction: action.id })}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <MobileToggle
           label={`Modo zurdo en ${activeCommand.name}`}
           description="Intercambia movimiento y ataques solo en este comando."
@@ -130,7 +174,7 @@ export function MobileGameplaySettingsView() {
           type="button"
           onClick={() => mobileGameplaySettingsStore.resetControlProfile()}
         >
-          Restaurar solo {activeCommand.name}
+          Aplicar ajuste recomendado a {activeCommand.name}
         </button>
       </section>
 
@@ -142,6 +186,27 @@ export function MobileGameplaySettingsView() {
           checked={settings.hapticsEnabled}
           onChange={(hapticsEnabled) => mobileGameplaySettingsStore.update({ hapticsEnabled })}
         />
+        <div className="mobile-haptic-strength">
+          <span><strong>Intensidad</strong><small>Respuesta de joystick, botones y acciones.</small></span>
+          <div role="radiogroup" aria-label="Intensidad de vibracion">
+            {hapticStrengths.map((strength) => (
+              <button
+                className={settings.hapticStrength === strength.id ? "is-selected" : ""}
+                type="button"
+                role="radio"
+                aria-checked={settings.hapticStrength === strength.id}
+                disabled={!settings.hapticsEnabled}
+                key={strength.id}
+                onClick={() => {
+                  mobileGameplaySettingsStore.update({ hapticStrength: strength.id });
+                  gameHaptics.play("control");
+                }}
+              >
+                {strength.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="mobile-settings-card mobile-settings-card--performance">
@@ -179,6 +244,8 @@ function ControlPreview({
     "--preview-gap": `${Math.round(settings.controlGap * 0.35)}px`,
     "--preview-movement-inset": `${Math.round(settings.movementInset * 0.18)}px`,
     "--preview-actions-inset": `${Math.round(settings.actionsInset * 0.18)}px`,
+    "--preview-wheel-rotation": `${settings.actionWheelRotationDegrees}deg`,
+    "--preview-wheel-counter-rotation": `${-settings.actionWheelRotationDegrees}deg`,
   } as CSSProperties : undefined;
   const leftHanded = settings?.leftHanded ?? false;
 
@@ -206,7 +273,7 @@ function ControlPreview({
       ) : (
         <>
           <span className="mobile-command-preview__joystick"><i /></span>
-          <span className="mobile-command-preview__actions mobile-command-preview__actions--wheel">
+          <span className={`mobile-command-preview__actions mobile-command-preview__actions--wheel mobile-command-preview__actions--prefer-${settings?.preferredRadialAction ?? "spin"}`}>
             <i className="is-main">J</i><i className="is-top">K</i><i className="is-left">Q</i><i className="is-right">E</i>
           </span>
         </>

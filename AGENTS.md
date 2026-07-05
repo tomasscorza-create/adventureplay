@@ -144,6 +144,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/ui/screens/`: pantallas React.
 - `src/ui/screens/LevelSummaryScreen.tsx`: resumen animado posterior a cada meta; presenta estadisticas reales, logros del recorrido y avance manual con tema por region.
 - `src/ui/screens/PowerShopScreen.tsx`: compra pausada de cargas desde los botones de poder durante gameplay; confirma la operacion y ofrece continuar o volver al menu.
+- `src/ui/screens/settings/SettingsPages.tsx`: fuente compartida para las entradas de ajustes y las paginas de audio y controles usadas tanto desde menu como desde pausa; no duplicar estado, handlers ni markup de estas secciones en las pantallas anfitrionas.
 
 ## Escenas existentes
 
@@ -189,6 +190,7 @@ La demo actual permite:
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Ver el modo Explorar presentado con arte propio de aventura en su tarjeta `Campana del continente`; Desafio y Arena conservan su presentacion bloqueada.
 - En el explorador, el mapa de regiones izquierdo se escala completo al espacio disponible y no tiene scroll; la lista de niveles derecha conserva cabecera fija y scroll independiente. El contenedor general no debe capturar el desplazamiento de niveles.
+- La iluminacion del mapa usa una unica `explore-map__highlight` como hermana de los botones y toma el alfa detallado del WebP regional. Los `clip-path` poligonales se conservan solo como hitboxes invisibles: no volver a introducir la imagen regional dentro del boton, porque el poligono recortaria arboles, puentes y relieves visibles.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1 a 10 de Frontera Verde.
 - Seleccionar Bosque encantado como segunda region y jugar sus niveles 1 a 10; solo `Umbral encantado` comienza desbloqueado y los siguientes se abren en cadena.
@@ -251,7 +253,7 @@ La demo actual permite:
 - Ver game over.
 - Antes de abrir Game Over, reproducir la animacion de derrota completa durante 620 ms con la fisica del jugador deshabilitada; `Player.markDefeated()` cubre tambien derrotas por tiempo o presion que no pasan por `takeDamage()`.
 - Pausar.
-- La pantalla de pausa abre siempre primero su panel normal. Dentro de ese panel, una tuerca grafica igual a la del menu abre ajustes locales de `Sonido y musica` y `Controles`; `Aceptar` y `Volver a pausa` regresan exclusivamente al panel pausado, sin reanudar ni abandonar la partida. No expone Cuenta ni el reinicio destructivo del progreso.
+- La pantalla de pausa abre siempre primero su panel normal. Dentro de ese panel, una tuerca grafica igual a la del menu abre un flujo de Ajustes con la misma presentacion, entradas y subpaginas compartidas del menu. Las cabeceras vuelven de Audio/Controles a Ajustes y de Ajustes a Pausa, sin reanudar ni abandonar la partida. No expone Cuenta ni el reinicio destructivo del progreso.
 - Guardar progreso basico en `public.game_saves` para el usuario autenticado.
 - Ver un estado compacto de sincronizacion remota. `Sincronizado` desaparece tras una confirmacion breve; los errores permanecen con `Reintentar` y nunca se mezclan con los errores del formulario de autenticacion.
 - Guardar el personaje seleccionado en `public.game_saves`.
@@ -316,9 +318,11 @@ Mobile:
 - Controles tactiles en `MobileControls`.
 - Opciones > Controles moviles permite elegir de forma persistente entre `Comando 1` y `Comando 2` sin modificar el save remoto. La pantalla muestra una previsualizacion fiel de cada distribucion y cambia inmediatamente el panel inferior al perfil seleccionado.
 - Cada comando conserva de forma independiente tamano, separacion, opacidad, posicion de movimiento, posicion de ataques y modo zurdo. Cambiar o restaurar un comando no debe modificar el otro; vibracion y rendimiento siguen siendo ajustes generales compartidos.
+- Los perfiles recomendados priorizan legibilidad y alcance tactil: Comando 1 usa 108% de escala, 92% de opacidad y separacion 14; Comando 2 usa 106%, 94% y separacion 10. Restaurar un comando aplica estos valores sin tocar el otro. Los perfiles antiguos que aun conservaban exactamente los defaults previos migran a los nuevos valores; las personalizaciones distintas se preservan.
 - `Comando 1`: conserva dos controles translucidos de movimiento y una fila compacta de espada, giro, regeneracion y poder letal. El salto no tiene boton visible: cualquier `pointerdown` sobre la pantalla libre encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
 - `Comando 2`: usa un joystick de tres extremos en el lado de movimiento. Arrastrar a izquierda/derecha mantiene esa direccion, entrar en el extremo superior encola salto y una diagonal permite avanzar y saltar a la vez. Un toque libre en la pantalla tambien salta; un toque corto sobre el propio joystick salta al soltar sin convertir cada arrastre en un salto accidental.
 - En `Comando 2`, el ataque de espada J es el boton principal grande del lado de acciones; giro K, regeneracion Q y poder letal E son tres botones menores alrededor. Conservan recarga, disponibilidad, contadores y feedback de recompensas existentes.
+- Comando 2 permite rotar la rueda entre -30 y 30 grados y elegir giro, curacion o poder como boton exterior preferido; el elegido gana tamano y contraste sin reemplazar la espada central ni cambiar el mapeo jugable.
 - El modo zurdo intercambia completos los lados de movimiento y acciones en ambos esquemas sin limitar el area libre de salto.
 - En ambos comandos, cada boton tiene una zona tactil invisible ligeramente mayor; movimiento y espada reciben la ampliacion principal. Un halo adicional alrededor de botones y joystick bloquea el salto cuando el dedo falla por pocos pixeles. Cada `pointerdown` conserva una sola accion hasta levantarse, para que el salto de fondo no se mezcle con los controles.
 - Pausa: icono SVG arriba a la derecha.
@@ -366,9 +370,11 @@ Ya existe:
 - Aviso en vertical.
 - Layout landscape movil.
 - Camara de gameplay con zoom `1.15` en el mismo perfil mobile/compacto que activa `MobileControls`; escritorio conserva `1.0`. Mobile extiende visualmente el terreno 160 unidades hacia abajo y desplaza la camara sobre esa continuidad para elevar suelo, heroe y escenario por encima de los controles. Los calculos de seguimiento usan el ancho mundial visible despues del zoom para mantener los limites laterales correctos.
+- En mobile, la camara conserva su encuadre vertical estable mientras el heroe esta en la zona segura. Cuando la parte superior del cuerpo entra progresivamente en la franja alta durante un salto, `CameraSystem` eleva la vista hasta un maximo acotado y la devuelve con suavidad al encuadre base al descender. Desktop no usa este acompañamiento vertical.
 - El perfil mobile ofrece Calidad 90%, Equilibrado 75% (`960x540`) y Rendimiento 62,5%; Equilibrado es el default. `game/main.ts` redimensiona Phaser al cambiar el ajuste y `CameraSystem` compensa siempre el factor tanto en zoom como en el borde mundial superior visible para conservar el acercamiento `1.15`, elevar suelo/personajes y mantener el mismo campo visual. Rendimiento tambien elimina blur/sombras costosas durante partida; no desacoplar resolucion y compensacion de camara.
 - Opciones muestra `Controles moviles` exclusivamente bajo el perfil mobile. `MobileGameplaySettings` persiste tamaño, separacion, opacidad, desplazamiento de ambos bloques, modo zurdo, vibracion y perfil de rendimiento; React aplica los valores mediante variables CSS sin modificar hitboxes ni logica jugable.
 - Los toques validos de salto libre muestran un pulso local en el punto tocado. `MobileActionBuffer` conserva J/K durante 120 ms solo en mobile; desktop mantiene input inmediato. `GameHaptics` usa `navigator.vibrate` cuando existe y esta habilitado para salto ejecutado, ataque, giro, daño real y fin de recarga.
+- La vibracion mobile ofrece intensidad Suave, Equilibrada o Firme. Botones y zonas tactiles extendidas dan una confirmacion corta al presionar; el joystick vibra solo al entrar o cambiar de direccion, con cooldown para evitar zumbido continuo. Arrastrar fuera del dibujo de un boton no debe soltar la accion mientras ese pointer conserve la captura.
 - La linea roja se posiciona cada frame sobre el borde mundial realmente visible, compensando zoom y scroll. Su limite de dano usa el borde derecho de esa misma linea; no volver a calcular el contacto solo desde `camera.scrollX`.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
 

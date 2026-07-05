@@ -10,6 +10,7 @@ import { getCompactActionBinding } from "../../game/systems/input/KeyboardBindin
 import { useKeyboardBindings } from "../hooks/useKeyboardBindings";
 import { getJoystickIntent, getTouchControlZone } from "./mobileControlsInput";
 import { useMobileGameplaySettings } from "../hooks/useMobileGameplaySettings";
+import { gameHaptics } from "../../shared/haptics/GameHaptics";
 
 const TOUCH_ACTION_REACH_PX = 10;
 const PRIMARY_TOUCH_ACTION_REACH_PX = 16;
@@ -98,6 +99,7 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
           event.preventDefault();
           extendedPointers.set(event.pointerId, action);
           touchInputStore.setAction(action, true);
+          gameHaptics.play(action === "left" || action === "right" ? "joystick" : "control");
         }
         return;
       }
@@ -124,6 +126,8 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
     "--mobile-control-opacity": settings.controlOpacityPercent / 100,
     "--mobile-movement-inset": `${settings.movementInset}px`,
     "--mobile-actions-inset": `${settings.actionsInset}px`,
+    "--mobile-action-wheel-rotation": `${settings.actionWheelRotationDegrees}deg`,
+    "--mobile-action-wheel-counter-rotation": `${-settings.actionWheelRotationDegrees}deg`,
   } as CSSProperties;
 
   return (
@@ -153,7 +157,10 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
         <>
           <JoystickControl onJump={triggerJump} />
           <div className="mobile-controls__right mobile-controls__right--radial">
-            <div className="mobile-action-wheel" aria-label="Acciones del personaje">
+            <div
+              className={`mobile-action-wheel mobile-action-wheel--prefer-${settings.preferredRadialAction}`}
+              aria-label="Acciones del personaje"
+            >
               <TouchButton
                 action="spin"
                 label={getCompactActionBinding(bindings, "spin")}
@@ -252,6 +259,19 @@ function JoystickControl({ onJump }: { onJump: (x: number, y: number) => void })
   const maxTravel = useRef(0);
   const pointerStart = useRef({ x: 0, y: 0 });
   const [knobOffset, setKnobOffset] = useState({ x: 0, y: 0 });
+  const [direction, setDirection] = useState("idle");
+  const directionRef = useRef("idle");
+
+  const updateDirectionFeedback = (nextDirection: string) => {
+    if (directionRef.current === nextDirection) {
+      return;
+    }
+    directionRef.current = nextDirection;
+    setDirection(nextDirection);
+    if (nextDirection !== "idle") {
+      gameHaptics.play("joystick");
+    }
+  };
 
   const release = (event?: React.PointerEvent<HTMLDivElement>, allowTapJump = true) => {
     if (event && activePointer.current !== event.pointerId) {
@@ -267,6 +287,7 @@ function JoystickControl({ onJump }: { onJump: (x: number, y: number) => void })
     maxTravel.current = 0;
     pointerStart.current = { x: 0, y: 0 };
     setKnobOffset({ x: 0, y: 0 });
+    updateDirectionFeedback("idle");
   };
 
   useEffect(() => () => {
@@ -286,6 +307,9 @@ function JoystickControl({ onJump }: { onJump: (x: number, y: number) => void })
     const scale = travel > maxRadius ? maxRadius / travel : 1;
     const offset = { x: deltaX * scale, y: deltaY * scale };
     const intent = getJoystickIntent(deltaX, deltaY, rect.width * 0.16);
+    const nextDirection = intent.jump
+      ? intent.left ? "up-left" : intent.right ? "up-right" : "up"
+      : intent.left ? "left" : intent.right ? "right" : "idle";
 
     const gestureTravel = Math.hypot(
       event.clientX - pointerStart.current.x,
@@ -293,6 +317,7 @@ function JoystickControl({ onJump }: { onJump: (x: number, y: number) => void })
     );
     maxTravel.current = Math.max(maxTravel.current, gestureTravel);
     setKnobOffset(offset);
+    updateDirectionFeedback(nextDirection);
     touchInputStore.setAction("left", intent.left);
     touchInputStore.setAction("right", intent.right);
     if (intent.jump && !jumpHeld.current) {
@@ -304,7 +329,7 @@ function JoystickControl({ onJump }: { onJump: (x: number, y: number) => void })
   return (
     <div
       ref={baseRef}
-      className="mobile-joystick"
+      className={`mobile-joystick mobile-joystick--${direction}`}
       data-touch-control="joystick"
       role="application"
       aria-label="Joystick: arrastra a izquierda o derecha para moverte y hacia arriba para saltar"
@@ -363,12 +388,15 @@ function TouchButton({
   className = "",
 }: TouchButtonProps) {
   const ability = variant === "ability";
+  const [pressed, setPressedState] = useState(false);
   const setPressed = (pressed: boolean) => (event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     if (pressed) {
       event.currentTarget.setPointerCapture(event.pointerId);
+      gameHaptics.play(action === "left" || action === "right" ? "joystick" : "control");
     }
 
+    setPressedState(pressed);
     touchInputStore.setAction(action, pressed);
   };
 
@@ -378,6 +406,7 @@ function TouchButton({
         "touch-button",
         compact ? "touch-button--compact" : "",
         cooldownRemainingMs > 0 ? "touch-button--cooldown" : "",
+        pressed ? "is-pressed" : "",
         `touch-button--${variant}`,
         className,
       ].filter(Boolean).join(" ")}
@@ -389,7 +418,6 @@ function TouchButton({
       onPointerDown={setPressed(true)}
       onPointerUp={setPressed(false)}
       onPointerCancel={setPressed(false)}
-      onPointerLeave={setPressed(false)}
       onContextMenu={(event) => event.preventDefault()}
     >
       {ability

@@ -1,10 +1,11 @@
 import { useState, type CSSProperties } from "react";
 import menuGearUrl from "../../assets/menu/menu-gear.webp";
-import { gameMusic } from "../../shared/music/GameMusic";
-import { gameSfx } from "../../shared/sfx/GameSfx";
-import { KeyboardBindingsView } from "./main-menu/KeyboardBindingsView";
-import { SettingToggle, VolumeControl } from "./main-menu/MenuPrimitives";
-import { MobileGameplaySettingsView } from "./main-menu/MobileGameplaySettingsView";
+import { MenuHeading } from "./main-menu/MenuPrimitives";
+import {
+  AudioSettingsPage,
+  ControlSettingsPage,
+  SettingsNavigationEntries,
+} from "./settings/SettingsPages";
 
 interface PauseScreenProps {
   onResume: () => void;
@@ -13,7 +14,7 @@ interface PauseScreenProps {
   showDesktopCommandSettings: boolean;
 }
 
-type PauseSettingsSection = "audio" | "controls";
+type PauseView = "pause" | "settings" | "audio" | "controls";
 
 export function PauseScreen({
   onResume,
@@ -21,104 +22,43 @@ export function PauseScreen({
   onMenu,
   showDesktopCommandSettings,
 }: PauseScreenProps) {
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<PauseSettingsSection>("audio");
-  const [audioSettings, setAudioSettings] = useState({
-    soundEnabled: gameSfx.isEnabled(),
-    musicEnabled: gameMusic.isEnabled(),
-    soundVolume: gameSfx.getVolume(),
-    musicVolume: gameMusic.getVolume(),
-  });
-
-  const toggleSound = () => {
-    const soundEnabled = gameSfx.setEnabled(!gameSfx.isEnabled());
-    setAudioSettings((current) => ({ ...current, soundEnabled }));
-  };
-  const toggleMusic = () => {
-    const musicEnabled = gameMusic.setEnabled(!gameMusic.isEnabled());
-    setAudioSettings((current) => ({ ...current, musicEnabled }));
-  };
-  const setSoundVolume = (soundVolume: number) => {
-    setAudioSettings((current) => ({ ...current, soundVolume: gameSfx.setVolume(soundVolume) }));
-  };
-  const setMusicVolume = (musicVolume: number) => {
-    setAudioSettings((current) => ({ ...current, musicVolume: gameMusic.setVolume(musicVolume) }));
-  };
+  const [view, setView] = useState<PauseView>("pause");
 
   return (
     <section className="overlay overlay--pause">
-      {showSettings ? (
-        <div className="panel panel--pause-settings">
-          <header className="pause-settings__header">
-            <span className="panel__eyebrow">Partida en pausa</span>
-            <h2>Ajustes</h2>
-          </header>
-          <div className="pause-settings__tabs" role="tablist" aria-label="Secciones de ajustes">
-            <button
-              className={settingsSection === "audio" ? "is-active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={settingsSection === "audio"}
-              onClick={() => setSettingsSection("audio")}
-            >
-              Sonido y musica
-            </button>
-            <button
-              className={settingsSection === "controls" ? "is-active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={settingsSection === "controls"}
-              onClick={() => setSettingsSection("controls")}
-            >
-              Controles
-            </button>
-          </div>
-
-          <div className="pause-settings__body">
-            {settingsSection === "audio" ? (
-              <div className="settings-panel settings-panel--audio" aria-label="Configuracion de sonido y musica">
-                <section className="audio-setting-card" aria-label="Configuracion de sonido">
-                  <SettingToggle
-                    label="Sonido"
-                    description="Efectos de interfaz, combate y progreso."
-                    enabled={audioSettings.soundEnabled}
-                    onToggle={toggleSound}
-                  />
-                  <VolumeControl label="Sonido" value={audioSettings.soundVolume} onChange={setSoundVolume} />
-                </section>
-                <section className="audio-setting-card" aria-label="Configuracion de musica">
-                  <SettingToggle
-                    label="Musica"
-                    description="Musica adaptada a la dificultad del recorrido."
-                    enabled={audioSettings.musicEnabled}
-                    onToggle={toggleMusic}
-                  />
-                  <VolumeControl label="Musica" value={audioSettings.musicVolume} onChange={setMusicVolume} />
-                </section>
-              </div>
-            ) : showDesktopCommandSettings ? (
-              <KeyboardBindingsView />
-            ) : (
-              <MobileGameplaySettingsView />
-            )}
-          </div>
-          <div className="actions pause-settings__actions">
-            <button className="button" type="button" onClick={() => setShowSettings(false)}>
-              Aceptar
-            </button>
-            <button className="button button--secondary" type="button" onClick={() => setShowSettings(false)}>
-              Volver a pausa
-            </button>
-          </div>
+      {view === "settings" && (
+        <div className="menu-chamber menu-chamber--options pause-settings-menu">
+          <MenuHeading
+            title="Ajustes"
+            variant="settings"
+            onBack={() => setView("pause")}
+            backLabel="Pausa"
+          />
+          <SettingsNavigationEntries
+            showDesktopCommandSettings={showDesktopCommandSettings}
+            onOpenAudio={() => setView("audio")}
+            onOpenControls={() => setView("controls")}
+          />
         </div>
-      ) : (
+      )}
+
+      {view === "audio" && <AudioSettingsPage onBack={() => setView("settings")} />}
+
+      {view === "controls" && (
+        <ControlSettingsPage
+          showDesktopCommandSettings={showDesktopCommandSettings}
+          onBack={() => setView("settings")}
+        />
+      )}
+
+      {view === "pause" && (
         <div className="panel panel--pause">
           <button
             className="pause-settings-gear"
             type="button"
             aria-label="Abrir ajustes"
             style={{ "--pause-gear-image": `url(${menuGearUrl})` } as CSSProperties}
-            onClick={() => setShowSettings(true)}
+            onClick={() => setView("settings")}
           />
           <span className="panel__eyebrow">Sendero detenido</span>
           <h2>Pausa</h2>

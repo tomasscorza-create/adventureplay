@@ -1,5 +1,7 @@
 export type MobilePerformanceMode = "quality" | "balanced" | "performance";
 export type MobileControlScheme = "command-1" | "command-2";
+export type MobileHapticStrength = "soft" | "balanced" | "strong";
+export type PreferredRadialAction = "spin" | "heal" | "power";
 
 export function getMobileRenderScale(mode: MobilePerformanceMode): number {
   return mode === "quality" ? 0.9 : mode === "performance" ? 0.625 : 0.75;
@@ -12,11 +14,14 @@ export interface MobileControlProfile {
   movementInset: number;
   actionsInset: number;
   leftHanded: boolean;
+  actionWheelRotationDegrees: number;
+  preferredRadialAction: PreferredRadialAction;
 }
 
 export interface MobileGameplaySettings extends MobileControlProfile {
   controlScheme: MobileControlScheme;
   hapticsEnabled: boolean;
+  hapticStrength: MobileHapticStrength;
   performanceMode: MobilePerformanceMode;
 }
 
@@ -24,25 +29,48 @@ interface StoredMobileGameplaySettings {
   controlScheme: MobileControlScheme;
   controlProfiles: Record<MobileControlScheme, MobileControlProfile>;
   hapticsEnabled: boolean;
+  hapticStrength: MobileHapticStrength;
   performanceMode: MobilePerformanceMode;
 }
 
 const STORAGE_KEY = "adventurePlayMobileGameplaySettings";
-const defaultControlProfile: MobileControlProfile = {
+const legacyDefaultControlProfile = {
   controlScalePercent: 100,
   controlGap: 10,
   controlOpacityPercent: 82,
   movementInset: 18,
   actionsInset: 0,
-  leftHanded: false,
+} as const;
+const defaultControlProfiles: Record<MobileControlScheme, MobileControlProfile> = {
+  "command-1": {
+    controlScalePercent: 108,
+    controlGap: 14,
+    controlOpacityPercent: 92,
+    movementInset: 24,
+    actionsInset: 12,
+    leftHanded: false,
+    actionWheelRotationDegrees: 0,
+    preferredRadialAction: "spin",
+  },
+  "command-2": {
+    controlScalePercent: 106,
+    controlGap: 10,
+    controlOpacityPercent: 94,
+    movementInset: 24,
+    actionsInset: 14,
+    leftHanded: false,
+    actionWheelRotationDegrees: 0,
+    preferredRadialAction: "spin",
+  },
 };
 const defaultSettings: StoredMobileGameplaySettings = {
   controlScheme: "command-1",
   controlProfiles: {
-    "command-1": { ...defaultControlProfile },
-    "command-2": { ...defaultControlProfile },
+    "command-1": { ...defaultControlProfiles["command-1"] },
+    "command-2": { ...defaultControlProfiles["command-2"] },
   },
   hapticsEnabled: true,
+  hapticStrength: "balanced",
   performanceMode: "balanced",
 };
 
@@ -53,6 +81,8 @@ const controlProfileKeys = [
   "movementInset",
   "actionsInset",
   "leftHanded",
+  "actionWheelRotationDegrees",
+  "preferredRadialAction",
 ] as const satisfies readonly (keyof MobileControlProfile)[];
 
 class MobileGameplaySettingsStore {
@@ -65,6 +95,7 @@ class MobileGameplaySettingsStore {
       controlScheme: this.settings.controlScheme,
       ...profile,
       hapticsEnabled: this.settings.hapticsEnabled,
+      hapticStrength: this.settings.hapticStrength,
       performanceMode: this.settings.performanceMode,
     };
   }
@@ -87,6 +118,7 @@ class MobileGameplaySettingsStore {
         [controlScheme]: { ...currentProfile, ...profilePatch },
       },
       hapticsEnabled: patch.hapticsEnabled ?? this.settings.hapticsEnabled,
+      hapticStrength: patch.hapticStrength ?? this.settings.hapticStrength,
       performanceMode: patch.performanceMode ?? this.settings.performanceMode,
     });
     this.persist();
@@ -99,7 +131,7 @@ class MobileGameplaySettingsStore {
       ...this.settings,
       controlProfiles: {
         ...this.settings.controlProfiles,
-        [scheme]: { ...defaultControlProfile },
+        [scheme]: { ...defaultControlProfiles[scheme] },
       },
     };
     this.persist();
@@ -155,13 +187,12 @@ function normalizeStoredSettings(raw: unknown): StoredMobileGameplaySettings {
   const controlScheme = value.controlScheme === "command-2" ? "command-2" : "command-1";
   const hasSeparateProfiles = value.controlProfiles && typeof value.controlProfiles === "object";
   // Los ajustes antiguos eran compartidos: se copian a ambos perfiles al migrar.
-  const legacyProfile = normalizeControlProfile(value);
   const command1 = hasSeparateProfiles
-    ? normalizeControlProfile(value.controlProfiles?.["command-1"])
-    : legacyProfile;
+    ? normalizeControlProfile(value.controlProfiles?.["command-1"], "command-1")
+    : normalizeControlProfile(value, "command-1");
   const command2 = hasSeparateProfiles
-    ? normalizeControlProfile(value.controlProfiles?.["command-2"])
-    : legacyProfile;
+    ? normalizeControlProfile(value.controlProfiles?.["command-2"], "command-2")
+    : normalizeControlProfile(value, "command-2");
 
   return {
     controlScheme,
@@ -172,6 +203,11 @@ function normalizeStoredSettings(raw: unknown): StoredMobileGameplaySettings {
     hapticsEnabled: typeof value.hapticsEnabled === "boolean"
       ? value.hapticsEnabled
       : defaultSettings.hapticsEnabled,
+    hapticStrength: value.hapticStrength === "soft"
+      || value.hapticStrength === "balanced"
+      || value.hapticStrength === "strong"
+      ? value.hapticStrength
+      : defaultSettings.hapticStrength,
     performanceMode: value.performanceMode === "quality"
       || value.performanceMode === "balanced"
       || value.performanceMode === "performance"
@@ -180,17 +216,29 @@ function normalizeStoredSettings(raw: unknown): StoredMobileGameplaySettings {
   };
 }
 
-function normalizeControlProfile(raw: unknown): MobileControlProfile {
+function normalizeControlProfile(raw: unknown, scheme: MobileControlScheme): MobileControlProfile {
   const value = raw && typeof raw === "object"
     ? raw as Partial<MobileControlProfile>
     : {};
+  const recommended = defaultControlProfiles[scheme];
+  const legacyProfile = value.actionWheelRotationDegrees === undefined
+    && value.preferredRadialAction === undefined;
+  const migrateLegacyDefault = (key: keyof typeof legacyDefaultControlProfile) => (
+    legacyProfile && value[key] === legacyDefaultControlProfile[key]
+      ? recommended[key]
+      : value[key]
+  );
   return {
-    controlScalePercent: clampNumber(value.controlScalePercent, 85, 120, defaultControlProfile.controlScalePercent),
-    controlGap: clampNumber(value.controlGap, 6, 22, defaultControlProfile.controlGap),
-    controlOpacityPercent: clampNumber(value.controlOpacityPercent, 45, 100, defaultControlProfile.controlOpacityPercent),
-    movementInset: clampNumber(value.movementInset, 0, 72, defaultControlProfile.movementInset),
-    actionsInset: clampNumber(value.actionsInset, 0, 72, defaultControlProfile.actionsInset),
-    leftHanded: typeof value.leftHanded === "boolean" ? value.leftHanded : defaultControlProfile.leftHanded,
+    controlScalePercent: clampNumber(migrateLegacyDefault("controlScalePercent"), 85, 120, recommended.controlScalePercent),
+    controlGap: clampNumber(migrateLegacyDefault("controlGap"), 6, 22, recommended.controlGap),
+    controlOpacityPercent: clampNumber(migrateLegacyDefault("controlOpacityPercent"), 60, 100, recommended.controlOpacityPercent),
+    movementInset: clampNumber(migrateLegacyDefault("movementInset"), 0, 72, recommended.movementInset),
+    actionsInset: clampNumber(migrateLegacyDefault("actionsInset"), 0, 72, recommended.actionsInset),
+    leftHanded: typeof value.leftHanded === "boolean" ? value.leftHanded : recommended.leftHanded,
+    actionWheelRotationDegrees: clampNumber(value.actionWheelRotationDegrees, -30, 30, recommended.actionWheelRotationDegrees),
+    preferredRadialAction: value.preferredRadialAction === "heal" || value.preferredRadialAction === "power"
+      ? value.preferredRadialAction
+      : recommended.preferredRadialAction,
   };
 }
 
