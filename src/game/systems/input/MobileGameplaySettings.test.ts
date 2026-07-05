@@ -28,4 +28,32 @@ describe("MobileGameplaySettings", () => {
     expect(getMobileRenderScale("quality")).toBeGreaterThan(getMobileRenderScale("balanced"));
     expect(getMobileRenderScale("balanced")).toBeGreaterThan(getMobileRenderScale("performance"));
   });
+
+  it("keeps the customization of both mobile commands independent", () => {
+    mobileGameplaySettingsStore.update({
+      controlScheme: "command-1",
+      controlScalePercent: 112,
+      movementInset: 31,
+      leftHanded: true,
+    });
+    mobileGameplaySettingsStore.update({
+      controlScheme: "command-2",
+      controlScalePercent: 91,
+      movementInset: 7,
+      leftHanded: false,
+    });
+
+    expect(mobileGameplaySettingsStore.getSettings()).toMatchObject({
+      controlScheme: "command-2",
+      controlScalePercent: 91,
+      movementInset: 7,
+      leftHanded: false,
+    });
+
+    expect(mobileGameplaySettingsStore.update({ controlScheme: "command-1" })).toMatchObject({
+      controlScalePercent: 112,
+      movementInset: 31,
+      leftHanded: true,
+    });
+  });
 });
