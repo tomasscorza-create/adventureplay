@@ -93,6 +93,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/ui/screens/MainMenuScreen.tsx`: orquesta el flujo React del menu; las vistas de exploracion, inventario, logros y detalle de personaje viven en `src/ui/screens/main-menu/`.
 - `src/main.tsx`: entrada React.
 - `src/styles.css`: punto de entrada que conserva el orden de cascada; las reglas estan separadas por area en `src/styles/`.
+- `src/styles/navigation-polish.css`: ultima capa de cascada para densidad, scroll y navegacion coherentes en las secciones React; no contiene estilos del escenario Phaser.
 - `vite.config.ts`: manifiesto PWA, estrategia de actualizacion y politica de cache; las solicitudes a Supabase deben seguir usando red y no cachearse en el service worker.
 - `eslint.config.js`: reglas compartidas para TypeScript, React, hooks y scripts Node.
 - `.github/workflows/ci.yml`: pipeline de GitHub para lint, tipos, tests, auditorias de contenido, build y dependencias.
@@ -165,7 +166,7 @@ La demo actual permite:
 - El menu principal suma ambiente CSS liviano: seis hojas con deriva lenta, dos destellos espaciados y una pequeña estela luminosa que recorre el contorno fijo de `Iniciar juego` mediante `offset-path`. No rotar el borde completo del boton. Debe respetar `prefers-reduced-motion` y ocultarse en el perfil mobile Rendimiento; no convertirlo en particulas Phaser ni agregar video/canvas extra al menu.
 - En landscape movil, el titulo del menu principal queda centrado arriba y los cuatro accesos se distribuyen en una grilla de dos columnas por dos filas.
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
-- Las nueve cabeceras internas del menu usan `MenuHeading` con un unico titulo grande y centrado. Comparten la textura de madera `src/assets/menu/fondo100.jpg`, pero cada variante desplaza el fondo para mostrar un recorte diferente; no volver a agregar subtitulos/eyebrows dentro de estas cabeceras.
+- Las nueve cabeceras internas del menu usan `MenuHeading` con un unico titulo centrado y el retorno convencional a la izquierda. Comparten la textura de madera `src/assets/menu/fondo100.jpg`, pero cada variante desplaza el fondo para mostrar un recorte diferente; no volver a agregar subtitulos/eyebrows dentro de estas cabeceras. La cabecera permanece visible al desplazar contenido y, en landscape mobile, las tabs principales de perfil, logros e inventario quedan accesibles debajo.
 - Abrir desde la esquina superior izquierda una pagina completa de perfil con estetica derivada de la sala de Logros y paginas intercambiables `Editar perfil` y `Estadisticas`. Editar perfil permite cambiar un nombre persistente de 2 a 20 caracteres, consultar el correo y elegir uno de nueve iconos sin nombres visibles. Estadisticas combina progreso historico existente con tiempo activo, acciones, APM promedio, intentos, metas y derrotas acumulados al cerrar cada recorrido.
 - Desbloquear veinte logros: ocho faciles y doce medios, distribuidos en `Aventura`, `Combate` y `Descubrimiento`.
 - Ver cada logro nuevo durante la partida mediante una tarjeta animada `Logro desbloqueado` con icono y nombre. Si se obtienen varios a la vez, React los presenta en cola sin superponerlos.
@@ -641,6 +642,7 @@ Reglas obligatorias de esta curva:
 - No usar hover como unica senal de interaccion.
 - No depender de `pointer: coarse` solamente; hay pruebas de navegador con pointer fino y viewport chico.
 - Las superficies de pantalla completa deben conservar fallback `vh`/`vw` y preferir `dvh`/`dvw` cuando esten disponibles para respetar las barras dinamicas del navegador movil.
+- Las secciones React navegables deben mantener `MenuHeading` visible durante el scroll, con la accion de volver a la izquierda. En landscape mobile, compactar espacios y tarjetas antes de reducir legibilidad; perfil, logros e inventario conservan tambien sus tabs principales bajo la cabecera.
 - Probar al menos: desktop 1280x720, portrait 390x844, landscape 844x390.
 
 ## Verificacion obligatoria antes de entregar cambios

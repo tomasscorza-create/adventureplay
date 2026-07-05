@@ -17,18 +17,19 @@ export function MenuHeading({
 }) {
   return (
     <div className={`menu-heading menu-heading--${variant}${animatedTitle ? " menu-heading--shimmer" : ""}`}>
-      <div>
-        <h2>{title}</h2>
-      </div>
       {!hideBack && (
         <button
-          className="button button--secondary button--small"
+          className="button button--secondary button--small menu-heading__back"
           type="button"
           onClick={onBack}
         >
-          {backLabel}
+          <span className="menu-heading__back-icon" aria-hidden="true">&lsaquo;</span>
+          <span>{backLabel}</span>
         </button>
       )}
+      <div>
+        <h2>{title}</h2>
+      </div>
     </div>
   );
 }

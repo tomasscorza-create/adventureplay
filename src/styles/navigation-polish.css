@@ -1,0 +1,658 @@
+/* Shared density and navigation pass for React menu sections. */
+.menu-stage:not(.menu-stage--main) .menu-shell {
+  min-height: 0;
+}
+
+.menu-chamber {
+  padding: 20px;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(229, 191, 105, 0.78) rgba(28, 31, 30, 0.52);
+  scrollbar-width: thin;
+}
+
+.menu-chamber::-webkit-scrollbar {
+  width: 9px;
+}
+
+.menu-chamber::-webkit-scrollbar-track {
+  margin-block: 14px;
+  border-radius: 999px;
+  background: rgba(28, 31, 30, 0.52);
+}
+
+.menu-chamber::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e5c477, #9b672d) padding-box;
+}
+
+.menu-heading {
+  --heading-side-column: clamp(84px, 11vw, 112px);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: 68px;
+  margin-bottom: 14px;
+  padding: 9px 11px;
+  border-width: 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 233, 188, 0.22),
+    inset 0 -3px 0 rgba(48, 25, 16, 0.35),
+    0 6px 14px rgba(20, 14, 11, 0.32);
+}
+
+.menu-heading > .button,
+.menu-heading > .menu-heading__back {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+
+.menu-heading > div {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.menu-heading h2 {
+  font-size: clamp(1.55rem, 2.8vw, 2.35rem);
+}
+
+.menu-heading__back {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px 6px 8px;
+  border-width: 2px;
+  border-radius: 9px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -2px 0 rgba(45, 23, 16, 0.3),
+    0 3px 0 rgba(34, 25, 21, 0.35);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.menu-heading__back-icon {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
+  line-height: 0.65;
+}
+
+/* Inventory */
+.inventory-screen {
+  gap: 10px;
+}
+
+.inventory-screen__summary {
+  min-height: 38px;
+  padding: 7px 11px;
+  border-width: 2px;
+}
+
+.inventory-tabs {
+  gap: 7px;
+}
+
+.inventory-tab {
+  min-height: 60px;
+  padding: 7px 9px;
+  border-width: 2px;
+}
+
+.inventory-tab__seal {
+  width: 36px;
+  height: 36px;
+  border-width: 2px;
+}
+
+.inventory-page {
+  gap: 9px;
+  min-height: 260px;
+  padding: 11px;
+  border-width: 2px;
+}
+
+.inventory-page__header {
+  padding-bottom: 8px;
+}
+
+.inventory-slots {
+  gap: 8px;
+}
+
+.inventory-slot {
+  min-height: 62px;
+}
+
+.inventory-slot--filled {
+  gap: 8px;
+  padding: 8px;
+}
+
+.inventory-slot__icon {
+  width: 38px;
+  height: 38px;
+  border-width: 2px;
+}
+
+/* Achievements */
+.achievement-screen {
+  gap: 10px;
+}
+
+.achievement-summary {
+  grid-template-columns: 40px auto 1fr;
+  gap: 9px;
+  padding: 7px 11px;
+}
+
+.achievement-summary__icon {
+  width: 36px;
+  height: 36px;
+}
+
+.achievement-tabs {
+  gap: 7px;
+}
+
+.achievement-tab {
+  min-height: 54px;
+  gap: 7px;
+  padding: 7px 9px;
+}
+
+.achievement-tab__seal {
+  width: 34px;
+  height: 34px;
+}
+
+.achievement-page {
+  min-height: 260px;
+  gap: 9px;
+  padding: 11px;
+}
+
+.achievement-grid {
+  gap: 8px;
+}
+
+.achievement-card {
+  min-height: 96px;
+  gap: 8px;
+  padding: 9px;
+}
+
+/* Profile and statistics */
+.profile-screen {
+  gap: 10px;
+}
+
+.profile-tabs {
+  gap: 7px;
+}
+
+.profile-tab {
+  min-height: 54px;
+  padding: 7px 10px;
+}
+
+.profile-tab__seal {
+  width: 34px;
+  height: 34px;
+}
+
+.profile-section,
+.profile-section--statistics {
+  gap: 10px;
+  padding: 11px;
+}
+
+.profile-section__header {
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.profile-section__seal {
+  width: 42px;
+  height: 42px;
+}
+
+.profile-section__seal img {
+  width: 39px;
+  height: 39px;
+}
+
+.profile-editor {
+  grid-template-columns: minmax(150px, 0.58fr) minmax(0, 1.8fr);
+  gap: 10px;
+}
+
+.profile-preview {
+  min-height: 196px;
+  padding: 14px;
+}
+
+.profile-preview__portrait {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 9px;
+}
+
+.profile-preview__portrait img {
+  width: 65px;
+  height: 65px;
+}
+
+.profile-settings {
+  gap: 7px;
+}
+
+.profile-setting-card {
+  gap: 8px;
+  padding: 9px 11px;
+}
+
+.menu-stage--profile .menu-profile-icon-grid {
+  gap: 5px;
+}
+
+.menu-stage--profile .menu-profile-icon-choice {
+  min-height: 50px;
+  padding: 3px;
+}
+
+.menu-stage--profile .menu-profile-icon-choice img {
+  width: 40px;
+  height: 40px;
+}
+
+.profile-statistics-featured,
+.profile-statistics-grid {
+  gap: 7px;
+}
+
+.profile-stat-card {
+  gap: 7px;
+  padding: 8px;
+}
+
+.profile-stat-card--featured {
+  min-height: 74px;
+}
+
+.profile-statistics-group {
+  gap: 7px;
+  padding: 9px;
+}
+
+.profile-statistics-grid--runs .profile-stat-card {
+  min-height: 56px;
+}
+
+/* Settings and secondary navigation */
+.menu-chamber--options {
+  display: grid;
+  gap: 10px;
+}
+
+.menu-chamber--options > .menu-heading {
+  margin-bottom: 2px;
+}
+
+.settings-entry {
+  min-height: 74px;
+  grid-template-columns: 46px minmax(0, 1fr) 22px;
+  gap: 11px;
+  padding: 10px 12px;
+  border-width: 2px;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 220, 0.28),
+    inset 0 -3px 0 rgba(72, 45, 28, 0.2),
+    0 4px 0 rgba(31, 28, 25, 0.26);
+}
+
+.settings-entry__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  font-size: 1.35rem;
+}
+
+.settings-entry__copy {
+  gap: 2px;
+}
+
+.settings-entry__copy strong {
+  font-size: 1.13rem;
+}
+
+.settings-entry__copy small {
+  font-size: 0.72rem;
+}
+
+.settings-entry__arrow {
+  font-size: 1.65rem;
+}
+
+.account-settings {
+  gap: 9px;
+  margin-top: 2px;
+  padding: 10px;
+}
+
+.account-settings__actions {
+  gap: 8px;
+}
+
+.account-action {
+  min-height: 60px;
+  padding: 9px 11px;
+}
+
+.settings-panel {
+  gap: 10px;
+  padding: 12px;
+}
+
+.audio-setting-card {
+  gap: 8px;
+  padding: 9px;
+}
+
+.keyboard-settings,
+.mobile-gameplay-settings {
+  gap: 8px;
+}
+
+.mobile-settings-card {
+  padding: 9px;
+}
+
+/* Modes and explorer */
+.mode-grid {
+  gap: 10px;
+}
+
+.mode-tile {
+  min-height: 190px;
+  padding: 14px;
+  border-width: 2px;
+  box-shadow:
+    inset 0 0 0 4px rgba(220, 226, 214, 0.11),
+    inset 0 -11px 22px rgba(17, 15, 14, 0.22),
+    0 7px 0 rgba(35, 30, 27, 0.34);
+}
+
+.explore-layout {
+  gap: 12px;
+}
+
+.map-column,
+.menu-chamber--map .level-column {
+  border-width: 2px;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 0 4px rgba(255, 236, 190, 0.07),
+    0 7px 0 rgba(38, 29, 24, 0.28);
+}
+
+.map-column__header,
+.menu-chamber--map .level-column__header {
+  min-height: 46px;
+  padding: 8px 12px;
+  border-bottom-width: 2px;
+}
+
+.menu-chamber--map .level-card {
+  min-height: 48px;
+  border-width: 1px;
+  box-shadow: 0 3px 0 rgba(34, 29, 26, 0.26);
+}
+
+@media (max-width: 860px) {
+  .menu-chamber {
+    padding: 14px;
+  }
+
+  .menu-heading {
+    --heading-side-column: 88px;
+    min-height: 60px;
+    margin-bottom: 10px;
+    padding: 7px 9px;
+  }
+
+  .menu-heading h2 {
+    font-size: clamp(1.35rem, 4.3vw, 1.85rem);
+  }
+
+  .inventory-tabs,
+  .achievement-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profile-editor {
+    grid-template-columns: 135px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .profile-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .menu-stage:not(.menu-stage--main) {
+    align-items: stretch;
+  }
+
+  .menu-stage:not(.menu-stage--main) .menu-shell {
+    height: 100%;
+  }
+
+  .menu-chamber {
+    width: min(980px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    max-height: calc(100vh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding: 9px;
+  }
+
+  .menu-heading {
+    --heading-side-column: 82px;
+    top: -1px;
+    min-height: 48px;
+    margin-bottom: 8px;
+    padding: 5px 7px;
+    border-radius: 10px;
+  }
+
+  .menu-heading h2 {
+    font-size: clamp(1.15rem, 3.7vw, 1.5rem);
+  }
+
+  .menu-heading__back {
+    min-height: 34px;
+    padding: 4px 8px 4px 6px;
+    font-size: 0.64rem;
+  }
+
+  .menu-heading__back-icon {
+    font-size: 1.2rem;
+  }
+
+  .profile-tabs,
+  .achievement-tabs,
+  .inventory-tabs {
+    position: sticky;
+    top: 55px;
+    z-index: 20;
+    padding-bottom: 3px;
+  }
+
+  .profile-tab,
+  .achievement-tab,
+  .inventory-tab {
+    min-height: 42px;
+    padding: 5px 7px;
+    border-radius: 8px;
+  }
+
+  .profile-tab__seal,
+  .achievement-tab__seal,
+  .inventory-tab__seal {
+    width: 29px;
+    height: 29px;
+  }
+
+  .profile-section,
+  .achievement-page,
+  .inventory-page {
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .profile-section__header {
+    grid-template-columns: 38px minmax(0, 1fr);
+    padding: 6px 8px;
+  }
+
+  .profile-section__seal {
+    width: 34px;
+    height: 34px;
+  }
+
+  .profile-section__seal img {
+    width: 31px;
+    height: 31px;
+  }
+
+  .profile-section__header p {
+    display: none;
+  }
+
+  .profile-editor {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+
+  .profile-preview {
+    min-height: 150px;
+    padding: 9px;
+  }
+
+  .profile-preview__portrait {
+    width: 58px;
+    height: 58px;
+  }
+
+  .profile-preview__portrait img {
+    width: 52px;
+    height: 52px;
+  }
+
+  .profile-statistics-featured,
+  .profile-statistics-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .profile-stat-card {
+    grid-template-columns: 30px minmax(0, 1fr);
+    min-height: 54px;
+    padding: 6px;
+  }
+
+  .profile-stat-card__icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .achievement-summary {
+    min-height: 38px;
+    padding: 5px 8px;
+  }
+
+  .achievement-card {
+    min-height: 82px;
+    padding: 7px;
+  }
+
+  .inventory-screen__summary {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+
+  .inventory-slot {
+    min-height: 50px;
+  }
+
+  .settings-entry {
+    min-height: 58px;
+    grid-template-columns: 36px minmax(0, 1fr) 18px;
+    gap: 8px;
+    padding: 7px 9px;
+  }
+
+  .settings-entry__icon {
+    width: 34px;
+    height: 34px;
+    font-size: 1.1rem;
+  }
+
+  .settings-entry__copy strong {
+    font-size: 0.96rem;
+  }
+
+  .settings-entry__copy small {
+    font-size: 0.62rem;
+  }
+
+  .account-settings {
+    padding: 8px;
+  }
+
+  .account-action {
+    min-height: 50px;
+    padding: 7px 9px;
+  }
+
+  .mode-tile {
+    min-height: 102px;
+    padding: 10px;
+  }
+
+  .menu-chamber--map {
+    width: min(1040px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    height: calc(100vh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding: 9px;
+  }
+
+  .menu-chamber--map .menu-heading {
+    margin-bottom: 8px;
+  }
+
+  .map-column__header,
+  .menu-chamber--map .level-column__header {
+    min-height: 40px;
+    padding: 6px 9px;
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-height: 520px) and (orientation: landscape) {
+    .menu-chamber {
+      max-height: calc(100dvh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    }
+
+    .menu-chamber--map {
+      width: min(1040px, calc(100dvw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+      height: calc(100dvh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    }
+  }
+}
