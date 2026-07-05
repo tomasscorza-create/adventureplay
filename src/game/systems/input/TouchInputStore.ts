@@ -10,6 +10,10 @@ class TouchInputStore {
   private queuedPresses = new Set<GameplayInputAction>();
 
   setAction(action: GameplayInputAction, pressed: boolean): void {
+    if (this.state[action] === pressed) {
+      return;
+    }
+
     if (pressed) {
       this.queuedPresses.add(action);
     }

@@ -589,7 +589,7 @@ export function MainMenuScreen({
                   <span className="settings-entry__icon" aria-hidden="true">✥</span>
                   <span className="settings-entry__copy">
                     <strong>Controles moviles</strong>
-                    <small>Posicion, vibracion y rendimiento.</small>
+                    <small>Tipo de comando, posicion, vibracion y rendimiento.</small>
                   </span>
                   <span className="settings-entry__arrow" aria-hidden="true">›</span>
                 </button>

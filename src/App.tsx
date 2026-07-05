@@ -511,7 +511,12 @@ export function App() {
         />
       )}
       {gameReady && screen === "paused" && (
-        <PauseScreen onResume={resumeGame} onRestart={restartGame} onMenu={goToMenu} />
+        <PauseScreen
+          onResume={resumeGame}
+          onRestart={restartGame}
+          onMenu={goToMenu}
+          showDesktopCommandSettings={!usesMobileGameplayControls}
+        />
       )}
       {gameReady && screen === "game-over" && (
         <GameOverScreen onRestart={restartGame} onMenu={goToMenu} />

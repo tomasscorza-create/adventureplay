@@ -16,7 +16,33 @@ export function MobileGameplaySettingsView() {
   const settings = useMobileGameplaySettings();
   return (
     <div className="mobile-gameplay-settings" aria-label="Configuracion de jugabilidad movil">
-      <section className="mobile-settings-card">
+      <section className="mobile-settings-card mobile-settings-card--scheme">
+        <header><strong>Tipo de comando</strong><span>Elige la distribucion tactil para jugar.</span></header>
+        <div className="mobile-command-options" role="radiogroup" aria-label="Tipo de comando movil">
+          <button
+            className={settings.controlScheme === "command-1" ? "is-selected" : ""}
+            type="button"
+            role="radio"
+            aria-checked={settings.controlScheme === "command-1"}
+            onClick={() => mobileGameplaySettingsStore.update({ controlScheme: "command-1" })}
+          >
+            <strong>Comando 1</strong>
+            <small>Botones clasicos de movimiento y acciones en fila.</small>
+          </button>
+          <button
+            className={settings.controlScheme === "command-2" ? "is-selected" : ""}
+            type="button"
+            role="radio"
+            aria-checked={settings.controlScheme === "command-2"}
+            onClick={() => mobileGameplaySettingsStore.update({ controlScheme: "command-2" })}
+          >
+            <strong>Comando 2</strong>
+            <small>Joystick de movimiento y acciones alrededor del golpe principal.</small>
+          </button>
+        </div>
+      </section>
+
+      <section className="mobile-settings-card mobile-settings-card--controls">
         <header><strong>Controles tactiles</strong><span>Tamano, espacio y posicion.</span></header>
         <MobileSlider
           label="Tamaño"

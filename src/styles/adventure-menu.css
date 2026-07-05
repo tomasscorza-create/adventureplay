@@ -932,8 +932,14 @@
   color: #2b170e;
 }
 
-.mobile-settings-card:first-child {
+.mobile-settings-card--controls {
   grid-row: span 2;
+}
+
+.mobile-settings-card--scheme {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(150px, 0.65fr) minmax(0, 1.35fr);
+  align-items: center;
 }
 
 .mobile-settings-card header,
@@ -1029,6 +1035,49 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+}
+
+.mobile-command-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-command-options button {
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: 9px 11px;
+  border: 1px solid rgba(231, 199, 125, 0.24);
+  border-radius: 12px;
+  color: #f5e8c7;
+  text-align: left;
+  background: rgba(31, 23, 17, 0.72);
+}
+
+.mobile-command-options button.is-selected {
+  border-color: rgba(255, 220, 126, 0.82);
+  background: linear-gradient(145deg, rgba(105, 71, 31, 0.92), rgba(42, 31, 20, 0.94));
+  box-shadow: inset 0 0 0 1px rgba(255, 242, 191, 0.12), 0 0 18px rgba(225, 169, 69, 0.12);
+}
+
+.mobile-command-options small {
+  color: rgba(239, 224, 190, 0.7);
+  line-height: 1.3;
+}
+
+@media (max-width: 600px) {
+  .mobile-gameplay-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-settings-card--controls {
+    grid-row: auto;
+  }
+
+  .mobile-settings-card--scheme {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mobile-performance-options button {

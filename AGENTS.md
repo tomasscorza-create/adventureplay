@@ -250,6 +250,7 @@ La demo actual permite:
 - Ver game over.
 - Antes de abrir Game Over, reproducir la animacion de derrota completa durante 620 ms con la fisica del jugador deshabilitada; `Player.markDefeated()` cubre tambien derrotas por tiempo o presion que no pasan por `takeDamage()`.
 - Pausar.
+- La pantalla de pausa abre siempre primero su panel normal. Dentro de ese panel, una tuerca grafica igual a la del menu abre ajustes locales de `Sonido y musica` y `Controles`; `Aceptar` y `Volver a pausa` regresan exclusivamente al panel pausado, sin reanudar ni abandonar la partida. No expone Cuenta ni el reinicio destructivo del progreso.
 - Guardar progreso basico en `public.game_saves` para el usuario autenticado.
 - Ver un estado compacto de sincronizacion remota. `Sincronizado` desaparece tras una confirmacion breve; los errores permanecen con `Reintentar` y nunca se mezclan con los errores del formulario de autenticacion.
 - Guardar el personaje seleccionado en `public.game_saves`.
@@ -312,9 +313,11 @@ Desktop:
 Mobile:
 
 - Controles tactiles en `MobileControls`.
-- Movimiento: dos controles translucidos con chevrones SVG a la izquierda.
-- Acciones normales: espada y ataque giratorio usan iconos SVG al comienzo de una unica fila compacta a la derecha. El salto no tiene boton visible: cualquier `pointerdown` sobre un area libre de la mitad derecha que no sea un boton/control interactivo encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
-- Acciones especiales: regeneracion y poder letal conservan icono, tecla y contador en esa misma fila, despues de espada y giro; el espacio entre grupos mantiene clara la separacion funcional sin apilarlos.
+- Opciones > Controles moviles permite elegir de forma persistente entre `Comando 1` y `Comando 2` sin modificar el save remoto.
+- `Comando 1`: conserva dos controles translucidos de movimiento a la izquierda y una fila compacta de espada, giro, regeneracion y poder letal a la derecha. El salto no tiene boton visible: cualquier `pointerdown` sobre un area libre de la mitad derecha que no sea un boton/control interactivo encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
+- `Comando 2`: usa un joystick de tres extremos en el lado de movimiento. Arrastrar a izquierda/derecha mantiene esa direccion, entrar en el extremo superior encola salto y una diagonal permite avanzar y saltar a la vez. Un toque libre en la mitad del joystick tambien salta; un toque corto sobre el propio joystick salta al soltar sin convertir cada arrastre en un salto accidental.
+- En `Comando 2`, el ataque de espada J es el boton principal grande del lado de acciones; giro K, regeneracion Q y poder letal E son tres botones menores alrededor. Conservan recarga, disponibilidad, contadores y feedback de recompensas existentes.
+- El modo zurdo intercambia completos los lados de movimiento y acciones en ambos esquemas. En `Comando 2`, el area libre de salto acompana al lado del joystick.
 - Pausa: icono SVG arriba a la derecha.
 - En vertical aparece aviso de orientacion y se ocultan controles.
 - En horizontal movil aparece HUD compacto arriba izquierda y controles abajo.
@@ -626,11 +629,11 @@ Reglas obligatorias de esta curva:
 - Los controles tactiles deben ocupar bordes inferiores y no tapar el centro del gameplay.
 - El suelo movil debe conservar su extension inferior continua para que los controles descansen visualmente sobre terreno y no sobre el heroe o las amenazas.
 - En Frontera Verde, los segmentos centrales de la base se repiten solo en horizontal mediante imagenes consecutivas y se estiran una unica vez en vertical. No usar `TileSprite` con la altura mobile extendida: repetiria la franja superior de pasto dentro de la base y produciria falsos pisos o parches horizontales.
-- El salto mobile pertenece unicamente al area libre de la mitad derecha de la pantalla; la mitad izquierda no dispara salto fuera de los botones de movimiento, y botones, enlaces o controles interactivos nunca deben activarlo por propagacion.
-- Los ajustes de tamaño, separacion, opacidad y posicion deben afectar solo la presentacion de `MobileControls`; el modo zurdo intercambia los bloques completos sin cambiar el significado del lado libre de salto ni el input unificado.
+- En `Comando 1`, el salto mobile pertenece al area libre de la mitad derecha. En `Comando 2`, pertenece a la mitad del joystick: izquierda por defecto y derecha en modo zurdo. Botones, enlaces, el joystick u otros controles interactivos nunca deben activarlo por propagacion; el joystick resuelve su propio gesto y permite salto en su extremo superior o con un toque corto.
+- Los ajustes de tamaño, separacion, opacidad y posicion deben afectar solo la presentacion de `MobileControls`; el modo zurdo intercambia los bloques completos y, para `Comando 2`, tambien el lado libre de salto, sin salir del input unificado.
 - La vibracion es mejora progresiva: debe fallar silenciosamente si `navigator.vibrate` no existe, y nunca sustituye feedback visual/sonoro.
 - Separar visualmente movimiento, acciones normales y poderes; usar superficies translucidas e iconos en lugar de bloques opacos con letras como contenido principal.
-- Pausa debe quedar arriba derecha y lejos del HUD.
+- Pausa debe quedar arriba derecha y lejos del HUD principal. En landscape mobile, el indicador pequeno de LV del escenario comparte su fila, alineado a la izquierda del boton con un margen breve y sin superponerse.
 - HUD movil debe ser compacto y legible.
 - El HUD de gameplay agrupa nivel RPG y experiencia en un solo recuadro vertical: `Lv N`, divisor y cifras de XP sin etiqueta. Tiempo, vida, progresion, ORO y la barra del recorrido comparten una unica fila en landscape mobile; desktop usa la misma agrupacion y una barra de recorrido corta.
 - Mantener safe areas con `env(safe-area-inset-*)`.
@@ -665,6 +668,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - Iniciar partida.
 - Moverse.
 - Saltar tocando un area libre de la pantalla, tambien mientras se mantiene una direccion; confirmar que tocar cualquier boton no agrega un salto.
+- En `Comando 2`, arrastrar el joystick a ambos lados, saltar hacia arriba, probar avance + salto en diagonal y confirmar que un toque libre en la mitad del joystick tambien salta. Verificar por separado J central y K/Q/E alrededor.
 - Atacar.
 - Ejecutar ataque giratorio.
 - Pausar.

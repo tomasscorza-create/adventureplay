@@ -758,6 +758,90 @@
     linear-gradient(180deg, rgba(16, 42, 43, 0.42), rgba(5, 8, 14, 0.9));
 }
 
+.pause-settings-gear {
+  --pause-gear-image: none;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: var(--pause-gear-image) center / contain no-repeat;
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.46));
+  cursor: pointer;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.pause-settings-gear:hover {
+  filter: brightness(1.14) drop-shadow(0 6px 7px rgba(0, 0, 0, 0.55));
+}
+
+.pause-settings-gear:active {
+  transform: scale(0.94);
+}
+
+.pause-settings-gear:focus-visible {
+  outline: 3px solid #63d7ff;
+  outline-offset: 3px;
+}
+
+.panel--pause-settings {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(820px, 100%);
+  max-height: calc(100vh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding: 20px;
+}
+
+.pause-settings__header {
+  padding-right: 56px;
+}
+
+.pause-settings__header h2 {
+  margin-bottom: 12px;
+}
+
+.pause-settings__tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pause-settings__tabs button {
+  min-height: 42px;
+  border: 1px solid rgba(255, 229, 155, 0.34);
+  border-radius: 8px;
+  color: #e7d8b4;
+  background: rgba(15, 29, 24, 0.78);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.pause-settings__tabs button.is-active {
+  color: #2b190c;
+  border-color: #f0c65b;
+  background: linear-gradient(180deg, #ffe49a, #d7a947);
+}
+
+.pause-settings__body {
+  min-height: 0;
+  padding: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.pause-settings__actions {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.pause-settings__body .keyboard-settings,
+.pause-settings__body .mobile-gameplay-settings {
+  width: 100%;
+}
+
 .overlay--menu::before,
 .overlay--menu::after {
   position: absolute;
@@ -2655,6 +2739,13 @@
     padding: 22px;
   }
 
+  .pause-settings-gear {
+    top: 14px;
+    right: 14px;
+    width: 42px;
+    height: 42px;
+  }
+
   .menu-panel {
     max-height: calc(100vh - 28px);
     padding: 20px;
@@ -2887,9 +2978,36 @@
   }
 
   .stage-level-badge {
-    top: calc(62px + env(safe-area-inset-top));
-    right: calc(10px + env(safe-area-inset-right));
+    top: calc(25px + env(safe-area-inset-top));
+    right: calc(72px + env(safe-area-inset-right));
     padding: 5px 7px;
+  }
+
+  .panel--pause-settings {
+    width: min(800px, calc(100vw - 100px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    max-height: calc(100vh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding: 12px 16px;
+  }
+
+  .pause-settings__header h2 {
+    margin-bottom: 7px;
+    font-size: 2rem;
+  }
+
+  .pause-settings__tabs {
+    margin-bottom: 7px;
+  }
+
+  .pause-settings__tabs button {
+    min-height: 36px;
+  }
+
+  .pause-settings__actions {
+    margin-top: 7px;
+  }
+
+  .pause-settings__actions .button {
+    min-height: 40px;
   }
 
   .hud__item {

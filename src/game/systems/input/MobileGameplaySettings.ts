@@ -1,10 +1,12 @@
 export type MobilePerformanceMode = "quality" | "balanced" | "performance";
+export type MobileControlScheme = "command-1" | "command-2";
 
 export function getMobileRenderScale(mode: MobilePerformanceMode): number {
   return mode === "quality" ? 0.9 : mode === "performance" ? 0.625 : 0.75;
 }
 
 export interface MobileGameplaySettings {
+  controlScheme: MobileControlScheme;
   controlScalePercent: number;
   controlGap: number;
   controlOpacityPercent: number;
@@ -17,6 +19,7 @@ export interface MobileGameplaySettings {
 
 const STORAGE_KEY = "adventurePlayMobileGameplaySettings";
 const defaultSettings: MobileGameplaySettings = {
+  controlScheme: "command-1",
   controlScalePercent: 100,
   controlGap: 10,
   controlOpacityPercent: 82,
@@ -87,6 +90,7 @@ function normalizeSettings(raw: unknown): MobileGameplaySettings {
   }
   const value = raw as Partial<MobileGameplaySettings>;
   return {
+    controlScheme: value.controlScheme === "command-2" ? "command-2" : defaultSettings.controlScheme,
     controlScalePercent: clampNumber(value.controlScalePercent, 85, 120, defaultSettings.controlScalePercent),
     controlGap: clampNumber(value.controlGap, 6, 22, defaultSettings.controlGap),
     controlOpacityPercent: clampNumber(value.controlOpacityPercent, 45, 100, defaultSettings.controlOpacityPercent),
