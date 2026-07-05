@@ -1,21 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { getJoystickIntent, isInOpenJumpArea } from "./mobileControlsInput";
+import { getJoystickIntent, getTouchControlZone } from "./mobileControlsInput";
 
-describe("isInOpenJumpArea", () => {
-  it("ignores the left half of the viewport", () => {
-    expect(isInOpenJumpArea(0, 844)).toBe(false);
-    expect(isInOpenJumpArea(421, 844)).toBe(false);
+describe("getTouchControlZone", () => {
+  const bounds = { left: 100, right: 160, top: 200, bottom: 260 };
+
+  it("extends a control action beyond its visible bounds", () => {
+    expect(getTouchControlZone(92, 230, bounds, 12, 26)).toBe("action");
   });
 
-  it("accepts the center boundary and the right half", () => {
-    expect(isInOpenJumpArea(422, 844)).toBe(true);
-    expect(isInOpenJumpArea(843, 844)).toBe(true);
+  it("reserves a guard halo where a nearby miss cannot jump", () => {
+    expect(getTouchControlZone(80, 230, bounds, 12, 26)).toBe("guard");
   });
 
-  it("can move the open jump area to the left half", () => {
-    expect(isInOpenJumpArea(0, 844, "left")).toBe(true);
-    expect(isInOpenJumpArea(421, 844, "left")).toBe(true);
-    expect(isInOpenJumpArea(422, 844, "left")).toBe(false);
+  it("leaves the rest of the screen available for jumping", () => {
+    expect(getTouchControlZone(60, 230, bounds, 12, 26)).toBe("outside");
   });
 });
 

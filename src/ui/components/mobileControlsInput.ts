@@ -1,22 +1,34 @@
-export type ScreenHalf = "left" | "right";
-
 export interface JoystickIntent {
   left: boolean;
   right: boolean;
   jump: boolean;
 }
 
-export function isInOpenJumpArea(
+export type TouchControlZone = "action" | "guard" | "outside";
+
+interface TouchControlBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export function getTouchControlZone(
   pointerX: number,
-  viewportWidth: number,
-  half: ScreenHalf = "right",
-): boolean {
-  if (viewportWidth <= 0) {
-    return false;
+  pointerY: number,
+  bounds: TouchControlBounds,
+  actionReach: number,
+  guardReach: number,
+): TouchControlZone {
+  const deltaX = Math.max(bounds.left - pointerX, 0, pointerX - bounds.right);
+  const deltaY = Math.max(bounds.top - pointerY, 0, pointerY - bounds.bottom);
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance <= actionReach) {
+    return "action";
   }
-  return half === "left"
-    ? pointerX < viewportWidth / 2
-    : pointerX >= viewportWidth / 2;
+
+  return distance <= guardReach ? "guard" : "outside";
 }
 
 export function getJoystickIntent(deltaX: number, deltaY: number, deadZone: number): JoystickIntent {

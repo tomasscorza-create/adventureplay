@@ -8,8 +8,12 @@ import { CombatActionIcon } from "./CombatActionIcon";
 import { SpinCooldownIndicator } from "./SpinCooldownIndicator";
 import { getCompactActionBinding } from "../../game/systems/input/KeyboardBindingStore";
 import { useKeyboardBindings } from "../hooks/useKeyboardBindings";
-import { getJoystickIntent, isInOpenJumpArea } from "./mobileControlsInput";
+import { getJoystickIntent, getTouchControlZone } from "./mobileControlsInput";
 import { useMobileGameplaySettings } from "../hooks/useMobileGameplaySettings";
+
+const TOUCH_ACTION_REACH_PX = 10;
+const PRIMARY_TOUCH_ACTION_REACH_PX = 16;
+const TOUCH_GUARD_PADDING_PX = 14;
 
 interface MobileControlsProps {
   hud: HudState;
@@ -35,15 +39,20 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
   }, []);
 
   useEffect(() => {
-    const jumpFromOpenScreenArea = (event: PointerEvent) => {
-      if (!(event.target instanceof Element)) {
+    const extendedPointers = new Map<number, GameplayInputAction>();
+
+    const releaseExtendedPointer = (event: PointerEvent) => {
+      const action = extendedPointers.get(event.pointerId);
+      if (!action) {
         return;
       }
 
-      const jumpHalf = settings.controlScheme === "command-2"
-        ? settings.leftHanded ? "right" : "left"
-        : "right";
-      if (!isInOpenJumpArea(event.clientX, window.innerWidth, jumpHalf)) {
+      extendedPointers.delete(event.pointerId);
+      touchInputStore.setAction(action, false);
+    };
+
+    const jumpFromOpenScreenArea = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) {
         return;
       }
 
@@ -54,16 +63,60 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
         return;
       }
 
+      const controls = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-touch-action], [data-touch-control='joystick']"),
+      );
+      const nearbyControls = controls
+        .map((control) => {
+          const rect = control.getBoundingClientRect();
+          const primaryAction = control.dataset.touchPriority === "primary";
+          const actionReach = control.dataset.touchAction
+            ? primaryAction ? PRIMARY_TOUCH_ACTION_REACH_PX : TOUCH_ACTION_REACH_PX
+            : 0;
+          const zone = getTouchControlZone(
+            event.clientX,
+            event.clientY,
+            rect,
+            actionReach,
+            actionReach + TOUCH_GUARD_PADDING_PX,
+          );
+          const centerDistance = Math.hypot(
+            event.clientX - (rect.left + rect.width / 2),
+            event.clientY - (rect.top + rect.height / 2),
+          );
+
+          return { control, zone, centerDistance };
+        })
+        .filter(({ zone }) => zone !== "outside")
+        .sort((first, second) => first.centerDistance - second.centerDistance);
+
+      const nearestControl = nearbyControls[0];
+      if (nearestControl) {
+        const action = nearestControl.control.dataset.touchAction as GameplayInputAction | undefined;
+        const disabled = nearestControl.control.matches(":disabled");
+        if (nearestControl.zone === "action" && action && !disabled) {
+          event.preventDefault();
+          extendedPointers.set(event.pointerId, action);
+          touchInputStore.setAction(action, true);
+        }
+        return;
+      }
+
       triggerJump(event.clientX, event.clientY);
     };
 
-    document.addEventListener("pointerdown", jumpFromOpenScreenArea);
+    document.addEventListener("pointerdown", jumpFromOpenScreenArea, { passive: false });
+    document.addEventListener("pointerup", releaseExtendedPointer);
+    document.addEventListener("pointercancel", releaseExtendedPointer);
     return () => {
       document.removeEventListener("pointerdown", jumpFromOpenScreenArea);
+      document.removeEventListener("pointerup", releaseExtendedPointer);
+      document.removeEventListener("pointercancel", releaseExtendedPointer);
+      extendedPointers.forEach((action) => touchInputStore.setAction(action, false));
       window.clearTimeout(jumpFeedbackTimeout.current);
       touchInputStore.reset();
     };
-  }, [settings.controlScheme, settings.leftHanded, triggerJump]);
+  }, [triggerJump]);
 
   const controlStyle = {
     "--mobile-control-scale": settings.controlScalePercent / 100,
@@ -329,6 +382,8 @@ function TouchButton({
         className,
       ].filter(Boolean).join(" ")}
       type="button"
+      data-touch-action={action}
+      data-touch-priority={variant === "movement" || action === "melee" ? "primary" : undefined}
       aria-label={ariaLabel}
       disabled={disabled}
       onPointerDown={setPressed(true)}

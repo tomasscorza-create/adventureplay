@@ -1631,6 +1631,13 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  .mobile-joystick::before {
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    content: "";
+  }
+
   .mobile-joystick__knob {
     position: absolute;
     top: 34px;

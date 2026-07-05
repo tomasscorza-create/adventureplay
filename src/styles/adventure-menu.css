@@ -1199,21 +1199,13 @@
 
 .mobile-command-preview__jump-zone {
   position: absolute;
-  inset: 6px 8px auto auto;
+  inset: 6px 0 auto;
+  width: 100%;
   color: rgba(235, 224, 188, 0.3);
   font-size: 0.42rem;
   font-weight: 900;
   letter-spacing: 0.12em;
-}
-
-.mobile-command-preview--command-2 .mobile-command-preview__jump-zone {
-  right: auto;
-  left: 8px;
-}
-
-.mobile-command-preview--command-2.mobile-command-preview--left-handed .mobile-command-preview__jump-zone {
-  right: 8px;
-  left: auto;
+  text-align: center;
 }
 
 .mobile-command-preview__movement,

@@ -193,7 +193,7 @@ function ControlPreview({
       style={style}
       aria-hidden="true"
     >
-      <span className="mobile-command-preview__jump-zone">SALTO</span>
+      <span className="mobile-command-preview__jump-zone">SALTO: TODA LA PANTALLA</span>
       {scheme === "command-1" ? (
         <>
           <span className="mobile-command-preview__movement">
