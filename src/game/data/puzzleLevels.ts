@@ -32,6 +32,11 @@ export interface PuzzleLevelDefinition {
   goal: { x: number; y: number };
   requiredActivations: PuzzleActivationId[];
   supportsCooperative: boolean;
+  visualTheme: {
+    backgroundTextureKey: string;
+    shadeAlpha: number;
+    accentColor: number;
+  };
 
   // Retrocompatibilidad para campos singulares
   crate?: { x: number; y: number };
@@ -91,6 +96,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     goal: { x: 2320, y: 560 },
     requiredActivations: ["crate-plate", "upper-lever"],
     supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-1",
+      shadeAlpha: 0.18,
+      accentColor: 0x6eb8d8,
+    },
 
     // Compatibilidad singular
     crate: { x: 520, y: 560 },
@@ -147,6 +157,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     goal: { x: 2815, y: 560 },
     requiredActivations: ["crate-plate", "upper-lever"],
     supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-2",
+      shadeAlpha: 0.14,
+      accentColor: 0x78c2dc,
+    },
 
     // Compatibilidad singular
     crate: { x: 470, y: 560 },
@@ -217,6 +232,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     goal: { x: 3410, y: 560 },
     requiredActivations: ["crate-plate", "upper-lever", "lever-dist"],
     supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-3",
+      shadeAlpha: 0.1,
+      accentColor: 0x8fcbb2,
+    },
 
     // Compatibilidad singular
     crate: { x: 520, y: 560 },
@@ -292,6 +312,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     goal: { x: 4110, y: 560 },
     requiredActivations: ["crate-plate", "upper-lever", "lever-dist"],
     supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-4",
+      shadeAlpha: 0.07,
+      accentColor: 0xa5d29a,
+    },
 
     // Compatibilidad singular
     crate: { x: 500, y: 560 },
@@ -362,6 +387,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     goal: { x: 4400, y: 560 },
     requiredActivations: ["plate-1", "lever-1", "plate-2", "lever-dist"],
     supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-5",
+      shadeAlpha: 0.05,
+      accentColor: 0xd6b16a,
+    },
 
     // Compatibilidad singular
     crate: { x: 600, y: 560 },
@@ -384,8 +414,8 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 700, y: 400, width: 300, height: 24 },
       { x: 1400, y: 450, width: 400, height: 24 },
       { x: 2200, y: 380, width: 450, height: 24 },
-      { x: 2900, y: 360, width: 40, height: 280 }, // Pared del canal de disparo
-      { x: 2900, y: 280, width: 160, height: 24 }, // Techo del canal de disparo
+      { x: 2900, y: 440, width: 40, height: 200 }, // Pared del canal, bajada para disparar desde la caja anterior
+      { x: 2900, y: 360, width: 160, height: 24 }, // Techo del canal de disparo
       { x: 3200, y: 420, width: 400, height: 24 },
       { x: 4000, y: 460, width: 300, height: 24 },
     ],
@@ -399,7 +429,8 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     crates: [
       { x: 800, y: 320 },
       { x: 1500, y: 560 },
-      { x: 3300, y: 340 },
+      { x: 2800, y: 560 },
+      { x: 3300, y: 560 },
     ],
     plates: [
       { id: "plate-1", x: 1100, y: 625, width: 80 },
@@ -408,13 +439,14 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     ],
     levers: [
       { id: "lever-1", x: 2350, y: 332 },
-      { id: "lever-dist", x: 3000, y: 360 }, // Palanca a distancia
+      { id: "lever-dist", x: 3000, y: 440 }, // Palanca alineada con el canal accesible desde la caja
     ],
     gates: [
       { id: "gate-1", x: 1300, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
       { id: "gate-2", x: 2150, y: 0, width: 50, height: 640, requiredActivations: ["plate-2"] },
+      { id: "gate-lever-1", x: 2700, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
       { id: "gate-dist", x: 3100, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
-      { id: "gate-3", x: 3900, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      { id: "gate-3", x: 3900, y: 0, width: 50, height: 640, requiredActivations: ["plate-3"] },
     ],
     seals: [
       { x: 4300, y: 520, width: 50, height: 120 },
@@ -434,6 +466,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     goal: { x: 4800, y: 560 },
     requiredActivations: ["plate-1", "plate-2", "plate-3", "lever-1", "lever-dist"],
     supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-6",
+      shadeAlpha: 0.04,
+      accentColor: 0xe5bd62,
+    },
 
     // Compatibilidad singular
     crate: { x: 800, y: 320 },

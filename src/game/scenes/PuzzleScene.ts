@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { EVENTS } from "../../shared/constants/events";
-import { GAME_HEIGHT } from "../../shared/constants/game";
+import { GAME_HEIGHT, GAME_WIDTH } from "../../shared/constants/game";
 import type { AchievementId, HudState, SaveData } from "../../shared/types/game";
 import { getAchievementDefinition } from "../data/achievements";
 import { getCharacterDefinition } from "../data/characters";
@@ -20,7 +20,18 @@ import { touchInputStore } from "../systems/input/TouchInputStore";
 import { InventorySystem } from "../systems/inventory/InventorySystem";
 import { MovementSystem } from "../systems/movement/MovementSystem";
 import { ProgressionSystem } from "../systems/progression/ProgressionSystem";
+import { resolveProjectileImpact } from "../systems/projectiles/ProjectileImpactResolver";
 import { PuzzleActivationSystem } from "../systems/puzzles/PuzzleActivationSystem";
+import {
+  getSourceBodyDimension,
+  PUZZLE_CRATE_COLLISION_SIZE,
+  PUZZLE_CRATE_DISPLAY_SIZE,
+} from "../systems/puzzles/PuzzleGeometry";
+import {
+  averageOpaqueColor,
+  derivePuzzleVisualPalette,
+  type PuzzleVisualPalette,
+} from "../systems/puzzles/PuzzleVisualPalette";
 import { gameSaveStore } from "../systems/save/GameSaveStore";
 import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
 
@@ -28,10 +39,11 @@ export class PuzzleScene extends Phaser.Scene {
   private level!: PuzzleLevelDefinition;
   private save!: SaveData;
   private player!: Player;
-  private crates: Phaser.GameObjects.Rectangle[] = [];
+  private crates: Phaser.GameObjects.Image[] = [];
   private plates: Array<{
     id: string;
     rect: Phaser.GameObjects.Rectangle;
+    visual: Phaser.GameObjects.Image;
     definition: { id: string; x: number; y: number; width: number };
   }> = [];
   private boxJumpMarkers: Phaser.GameObjects.Rectangle[] = [];
@@ -39,17 +51,24 @@ export class PuzzleScene extends Phaser.Scene {
     id: string;
     rect: Phaser.GameObjects.Rectangle;
     knob: Phaser.GameObjects.Arc;
+    visual: Phaser.GameObjects.Image;
     definition: { id: string; x: number; y: number };
   }> = [];
   private gates: Array<{
     id: string;
     rect: Phaser.GameObjects.Rectangle;
+    visual: Phaser.GameObjects.Image;
     definition: { id: string; x: number; y: number; width: number; height: number; requiredActivations?: string[] };
     opened: boolean;
   }> = [];
   private goal!: Phaser.GameObjects.Arc;
-  private goalGate!: { rect: Phaser.GameObjects.Rectangle; opened: boolean };
+  private goalGate!: {
+    rect: Phaser.GameObjects.Rectangle;
+    visual: Phaser.GameObjects.Image;
+    opened: boolean;
+  };
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private visualPalette!: PuzzleVisualPalette;
   private coins!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
   private inventoryPickup?: Coin;
@@ -75,7 +94,10 @@ export class PuzzleScene extends Phaser.Scene {
   private readonly cameraSystem = new CameraSystem();
   private readonly runTracker = new LevelRunTracker();
   private readonly activations = new PuzzleActivationSystem();
-  private seals: Phaser.GameObjects.Rectangle[] = [];
+  private seals: Array<{
+    hitbox: Phaser.GameObjects.Rectangle;
+    visual: Phaser.GameObjects.Image;
+  }> = [];
 
   constructor() {
     super("PuzzleScene");
@@ -140,25 +162,128 @@ export class PuzzleScene extends Phaser.Scene {
   private createWorld(): void {
     this.cameras.main.setBackgroundColor("#111828");
     this.physics.world.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
-    this.add.rectangle(this.level.worldWidth / 2, 360, this.level.worldWidth, 720, 0x111828);
-    for (let x = 100; x < this.level.worldWidth; x += 220) {
-      this.add.circle(x, 135 + (x % 3) * 35, 34, 0x5aa7a1, 0.08).setDepth(1);
-      this.add.rectangle(x, 360, 8, 560, 0x9b7b49, 0.16).setDepth(1);
-    }
+    const backdrop = this.add
+      .image(0, 0, this.level.visualTheme.backgroundTextureKey)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(-40);
+    const backdropScale = Math.max(GAME_WIDTH / backdrop.width, GAME_HEIGHT / backdrop.height);
+    backdrop
+      .setScale(backdropScale)
+      .setPosition(
+        (GAME_WIDTH - backdrop.displayWidth) / 2,
+        (GAME_HEIGHT - backdrop.displayHeight) / 2,
+      );
+    this.visualPalette = derivePuzzleVisualPalette(
+      this.sampleBackdropColor(this.level.visualTheme.backgroundTextureKey),
+    );
+    this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x07101c, this.level.visualTheme.shadeAlpha)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(-39);
 
     this.platforms = this.physics.add.staticGroup();
     for (const platform of this.level.platforms) {
+      const isGround = platform.y >= 630;
+      if (!isGround) {
+        this.add
+          .rectangle(
+            platform.x + 7,
+            platform.y + 9,
+            platform.width,
+            platform.height + 8,
+            this.visualPalette.shadow,
+            0.58,
+          )
+          .setOrigin(0, 0)
+          .setDepth(5.4);
+        this.add
+          .rectangle(
+            platform.x + 2,
+            platform.y + platform.height - 1,
+            platform.width - 4,
+            10,
+            this.visualPalette.lowerFace,
+            0.98,
+          )
+          .setOrigin(0, 0)
+          .setDepth(5.8);
+      }
       const block = this.add
-        .rectangle(platform.x, platform.y, platform.width, platform.height, 0x394752)
+        .rectangle(
+          platform.x,
+          platform.y,
+          platform.width,
+          platform.height,
+          this.visualPalette.body,
+          1,
+        )
         .setOrigin(0, 0)
-        .setStrokeStyle(3, 0xb89a62, 0.7)
+        .setStrokeStyle(isGround ? 2 : 3, this.visualPalette.outline, isGround ? 0.7 : 0.96)
         .setDepth(6);
       this.physics.add.existing(block, true);
       this.platforms.add(block);
+      this.add
+        .tileSprite(
+          platform.x,
+          platform.y,
+          platform.width,
+          platform.height,
+          "ancient-trials-platform",
+        )
+        .setOrigin(0, 0)
+        .setTint(this.visualPalette.textureTint)
+        .setAlpha(isGround ? 0.58 : 0.9)
+        .setDepth(6.2);
+      const masonry = this.add.graphics().setDepth(6.6);
+      masonry.lineStyle(2, this.visualPalette.shadow, isGround ? 0.46 : 0.68);
+      for (let seamX = platform.x + 58; seamX < platform.x + platform.width; seamX += 64) {
+        masonry.lineBetween(
+          seamX,
+          platform.y + 5,
+          seamX,
+          platform.y + Math.min(platform.height, 30),
+        );
+      }
+      if (platform.height > 34) {
+        masonry.lineBetween(
+          platform.x,
+          platform.y + 32,
+          platform.x + platform.width,
+          platform.y + 32,
+        );
+      }
+      this.add
+        .rectangle(
+          platform.x,
+          platform.y,
+          platform.width,
+          Math.min(4, platform.height),
+          this.visualPalette.topEdge,
+          isGround ? 0.76 : 1,
+        )
+        .setOrigin(0, 0)
+        .setDepth(7);
     }
 
     this.cameras.main.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
     this.unbindCameraZoom = this.cameraSystem.bindResponsiveZoom(this, this.level.worldWidth);
+  }
+
+  private sampleBackdropColor(textureKey: string): number {
+    try {
+      const source = this.textures.get(textureKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+      const canvas = document.createElement("canvas");
+      canvas.width = 32;
+      canvas.height = 18;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) return 0x182635;
+      context.drawImage(source, 0, 0, source.width, source.height, 0, 0, canvas.width, canvas.height);
+      return averageOpaqueColor(context.getImageData(0, 0, canvas.width, canvas.height).data);
+    } catch {
+      return 0x182635;
+    }
   }
 
   private createPlayer(): void {
@@ -177,12 +302,28 @@ export class PuzzleScene extends Phaser.Scene {
     this.crates = [];
     for (const crateDef of this.level.crates) {
       const crate = this.add
-        .rectangle(crateDef.x, crateDef.y, 70, 70, 0x8b643f)
-        .setStrokeStyle(5, 0xd5b477)
+        .image(crateDef.x, crateDef.y, "ancient-trials-crate")
+        .setDisplaySize(PUZZLE_CRATE_DISPLAY_SIZE, PUZZLE_CRATE_DISPLAY_SIZE)
+        .setTint(this.visualPalette.objectTint)
         .setDepth(10);
       this.physics.add.existing(crate);
       const crateBody = crate.body as Phaser.Physics.Arcade.Body;
-      crateBody.setCollideWorldBounds(true)
+      // Arcade multiplica setSize por la escala visual. Convertimos 70 px de
+      // mundo a dimensiones fuente para conservar exactamente el cuerpo original.
+      crateBody.setSize(
+        getSourceBodyDimension(
+          crate.width,
+          crate.displayWidth,
+          PUZZLE_CRATE_COLLISION_SIZE,
+        ),
+        getSourceBodyDimension(
+          crate.height,
+          crate.displayHeight,
+          PUZZLE_CRATE_COLLISION_SIZE,
+        ),
+        true,
+      )
+        .setCollideWorldBounds(true)
         .setDragX(520)
         .setMaxVelocity(180, 700)
         .setBounce(0, 0);
@@ -193,13 +334,21 @@ export class PuzzleScene extends Phaser.Scene {
     this.plates = [];
     for (const plateDef of this.level.plates) {
       const rect = this.add
-        .rectangle(plateDef.x, plateDef.y, plateDef.width, 15, 0x8f6f46)
+        .rectangle(plateDef.x, plateDef.y, plateDef.width, 15, this.visualPalette.lowerFace)
         .setOrigin(0.5, 1)
-        .setStrokeStyle(2, 0xf2c45f)
+        .setStrokeStyle(2, this.visualPalette.topEdge, 0.96)
+        .setAlpha(0.94)
+        .setDepth(8);
+      const visual = this.add
+        .image(plateDef.x, plateDef.y + 2, "ancient-trials-plate")
+        .setOrigin(0.5, 1)
+        .setDisplaySize(plateDef.width + 18, 34)
+        .setTint(this.visualPalette.objectTint)
         .setDepth(8);
       this.plates.push({
         id: plateDef.id,
         rect,
+        visual,
         definition: plateDef,
       });
     }
@@ -214,31 +363,44 @@ export class PuzzleScene extends Phaser.Scene {
           zone.y,
           zone.width,
           12,
-          0x66dbc0,
-          0.16,
+          this.visualPalette.body,
+          0.34,
         )
         .setOrigin(0.5, 1)
-        .setStrokeStyle(2, 0x66dbc0, 0.72)
+        .setStrokeStyle(2, this.visualPalette.outline, 0.9)
         .setDepth(7);
       this.boxJumpMarkers.push(marker);
+      const rune = this.add.graphics().setDepth(7.2);
+      rune.lineStyle(2, this.visualPalette.topEdge, 0.82);
+      rune.lineBetween(zone.x - 14, zone.y - 5, zone.x, zone.y - 11);
+      rune.lineBetween(zone.x, zone.y - 11, zone.x + 14, zone.y - 5);
     }
 
     // 4. Palancas (Levers)
     this.levers = [];
     for (const leverDef of this.level.levers) {
       const rect = this.add
-        .rectangle(leverDef.x, leverDef.y, 18, 66, 0x80633d)
+        .rectangle(leverDef.x, leverDef.y, 18, 66, this.visualPalette.lowerFace)
         .setOrigin(0.5, 1)
-        .setStrokeStyle(3, 0xd8bd7c)
+        .setStrokeStyle(3, this.visualPalette.outline, 0.94)
+        .setAlpha(0.72)
         .setDepth(9);
       this.physics.add.existing(rect, true);
       const knob = this.add
         .circle(leverDef.x, leverDef.y - 63, 12, 0xc85d4d)
+        .setAlpha(0.001)
+        .setDepth(10);
+      const visual = this.add
+        .image(leverDef.x, leverDef.y + 7, "ancient-trials-lever")
+        .setOrigin(0.5, 1)
+        .setDisplaySize(64, 118)
+        .setTint(this.visualPalette.objectTint)
         .setDepth(10);
       this.levers.push({
         id: leverDef.id,
         rect,
         knob,
+        visual,
         definition: leverDef,
       });
     }
@@ -252,15 +414,27 @@ export class PuzzleScene extends Phaser.Scene {
           gateDef.y,
           gateDef.width,
           gateDef.height,
-          0x283840,
+          this.visualPalette.lowerFace,
+          0.86,
         )
         .setOrigin(0, 0)
-        .setStrokeStyle(4, 0x71c7b8)
+        .setStrokeStyle(3, this.level.visualTheme.accentColor, 0.9)
         .setDepth(11);
       this.physics.add.existing(rect, true);
+      const visual = this.add
+        .image(
+          gateDef.x + gateDef.width / 2,
+          gateDef.y + gateDef.height / 2,
+          "ancient-trials-barrier",
+        )
+        .setDisplaySize(gateDef.width + 22, gateDef.height)
+        .setTint(this.visualPalette.objectTint)
+        .setAlpha(0.9)
+        .setDepth(11);
       this.gates.push({
         id: gateDef.id,
         rect,
+        visual,
         definition: gateDef,
         opened: false,
       });
@@ -268,22 +442,38 @@ export class PuzzleScene extends Phaser.Scene {
 
     // 6. Sellos mágicos (Seals)
     this.seals = this.level.seals.map((sealDefinition) => {
-      const seal = this.add
+      const hitbox = this.add
         .rectangle(
           sealDefinition.x,
           sealDefinition.y,
           sealDefinition.width,
           sealDefinition.height,
-          0x4a3158,
+          0x301d43,
+          0.78,
         )
         .setOrigin(0, 0)
-        .setStrokeStyle(4, 0xd78ce8)
+        .setStrokeStyle(3, 0xca8de1, 0.92)
         .setDepth(11);
-      this.physics.add.existing(seal, true);
-      return seal;
+      this.physics.add.existing(hitbox, true);
+      const visual = this.add
+        .image(
+          sealDefinition.x + sealDefinition.width / 2,
+          sealDefinition.y + sealDefinition.height / 2,
+          "ancient-trials-door",
+        )
+        .setDisplaySize(sealDefinition.width + 28, sealDefinition.height + 8)
+        .setTint(0xbda2df)
+        .setDepth(11);
+      return { hitbox, visual };
     });
 
     // 7. Portal Meta (Goal)
+    this.add
+      .image(this.level.goal.x, this.level.goal.y + 12, "ancient-trials-door")
+      .setDisplaySize(118, 162)
+      .setTint(this.level.stageNumber >= 5 ? 0xffd778 : 0xa6ffe7)
+      .setAlpha(0.84)
+      .setDepth(8);
     this.goal = this.add
       .circle(this.level.goal.x, this.level.goal.y, 42, 0x66dbc0, 0.2)
       .setStrokeStyle(6, 0xa6ffe7, 0.9)
@@ -297,14 +487,22 @@ export class PuzzleScene extends Phaser.Scene {
         0,
         18,
         640,
-        0x334155,
+        this.visualPalette.lowerFace,
+        0.84,
       )
       .setOrigin(0, 0)
-      .setStrokeStyle(3, 0x64748b)
+      .setStrokeStyle(3, this.visualPalette.outline, 0.94)
       .setDepth(11);
     this.physics.add.existing(goalGateRect, true);
+    const goalGateVisual = this.add
+      .image(this.level.goal.x - 36, 320, "ancient-trials-barrier")
+      .setDisplaySize(38, 640)
+      .setTint(this.visualPalette.objectTint)
+      .setAlpha(0.94)
+      .setDepth(12);
     this.goalGate = {
       rect: goalGateRect,
+      visual: goalGateVisual,
       opened: false,
     };
 
@@ -321,6 +519,11 @@ export class PuzzleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(40);
+    this.add
+      .rectangle(640, 90, 610, 42, 0x08131d, 0.82)
+      .setStrokeStyle(2, this.visualPalette.topEdge, 0.78)
+      .setScrollFactor(0)
+      .setDepth(39);
   }
 
   private createCollectibles(): void {
@@ -342,40 +545,44 @@ export class PuzzleScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.crates);
     this.physics.add.collider(this.crates, this.crates); // Apilamiento de cajas!
 
+    // El proyectil desaparece al primer contacto. Los overlaps evitan que Arcade
+    // separe los cuerpos, detenga el disparo o transfiera velocidad a las cajas.
+    this.physics.add.overlap(this.projectiles, this.platforms, (first, second) => {
+      this.handleProjectileImpact(first, second);
+    });
+    this.physics.add.overlap(this.projectiles, this.crates, (first, second) => {
+      this.handleProjectileImpact(first, second);
+    });
+
     for (const gateObj of this.gates) {
       this.physics.add.collider(this.player, gateObj.rect);
       this.physics.add.collider(this.crates, gateObj.rect);
-      this.physics.add.collider(this.projectiles, gateObj.rect, (projectile) => {
-        (projectile as Phaser.GameObjects.GameObject).destroy();
+      this.physics.add.overlap(this.projectiles, gateObj.rect, (first, second) => {
+        this.handleProjectileImpact(first, second);
       });
     }
 
     this.physics.add.collider(this.player, this.goalGate.rect);
     this.physics.add.collider(this.crates, this.goalGate.rect);
-    // Destroy projectile when it hits the metal gate (no state change)
-    this.physics.add.collider(this.projectiles, this.goalGate.rect, (projectile) => {
-      (projectile as Phaser.GameObjects.GameObject).destroy();
+    this.physics.add.overlap(this.projectiles, this.goalGate.rect, (first, second) => {
+      this.handleProjectileImpact(first, second);
     });
-    // Destroy projectile when it hits the goal arc (prevent premature portal opening)
-    this.physics.add.collider(this.projectiles, this.goal, (projectile) => {
-      (projectile as Phaser.GameObjects.GameObject).destroy();
+    this.physics.add.overlap(this.projectiles, this.goal, (first, second) => {
+      this.handleProjectileImpact(first, second);
     });
 
     for (const leverObj of this.levers) {
-      this.physics.add.overlap(this.projectiles, leverObj.rect, (projectile) => {
-        // Ensure projectile is destroyed once and lever activation occurs only if not already active
-        (projectile as Phaser.GameObjects.GameObject).destroy();
-        if (!this.activations.isActive(leverObj.id)) {
-          this.activateLever(leverObj);
-        }
+      this.physics.add.overlap(this.projectiles, leverObj.rect, (first, second) => {
+        this.handleProjectileImpact(first, second, () => {
+          if (!this.activations.isActive(leverObj.id)) this.activateLever(leverObj);
+        });
       });
     }
 
     for (const seal of this.seals) {
-      this.physics.add.collider(this.player, seal);
-      this.physics.add.overlap(this.projectiles, seal, (projectile) => {
-        (projectile as Phaser.GameObjects.GameObject).destroy();
-        this.breakSeal(seal);
+      this.physics.add.collider(this.player, seal.hitbox);
+      this.physics.add.overlap(this.projectiles, seal.hitbox, (first, second) => {
+        this.handleProjectileImpact(first, second, () => this.breakSeal(seal));
       });
     }
 
@@ -408,10 +615,67 @@ export class PuzzleScene extends Phaser.Scene {
         .setOrigin(0, 0)
         .setDepth(9);
       this.physics.add.existing(hazard, true);
+      hazard.setFillStyle(0x481522, 0.96).setStrokeStyle(2, 0xff6b61, 0.9);
+      const hazardDetails = this.add.graphics().setDepth(9.2);
+      hazardDetails.fillStyle(0xff7358, 0.88);
+      const spikeWidth = 18;
+      for (
+        let spikeX = hazardDefinition.x + 2;
+        spikeX < hazardDefinition.x + hazardDefinition.width - 4;
+        spikeX += spikeWidth
+      ) {
+        hazardDetails.fillTriangle(
+          spikeX,
+          hazardDefinition.y + 4,
+          spikeX + spikeWidth / 2,
+          hazardDefinition.y - 12,
+          spikeX + spikeWidth,
+          hazardDefinition.y + 4,
+        );
+      }
+      hazardDetails.fillStyle(0xffb36b, 0.48);
+      hazardDetails.fillRect(
+        hazardDefinition.x + 3,
+        hazardDefinition.y + 8,
+        Math.max(0, hazardDefinition.width - 6),
+        4,
+      );
       this.physics.add.overlap(this.player, hazard, () => this.damagePlayer(hazardDefinition.damage));
+      this.physics.add.overlap(this.projectiles, hazard, (first, second) => {
+        this.handleProjectileImpact(first, second);
+      });
     }
 
     this.physics.add.overlap(this.player, this.goal, () => this.completeLevel());
+  }
+
+  private handleProjectileImpact(
+    rawFirst: Parameters<Phaser.Types.Physics.Arcade.ArcadePhysicsCallback>[0],
+    rawSecond: Parameters<Phaser.Types.Physics.Arcade.ArcadePhysicsCallback>[1],
+    applyImpact?: () => void,
+  ): void {
+    const first = this.getCollisionGameObject(rawFirst);
+    const second = this.getCollisionGameObject(rawSecond);
+    if (!first || !second) return;
+
+    const impact = resolveProjectileImpact(
+      first,
+      second,
+      (candidate): candidate is PowerProjectile => candidate instanceof PowerProjectile,
+    );
+    if (!impact?.projectile.consume()) return;
+
+    applyImpact?.();
+  }
+
+  private getCollisionGameObject(
+    candidate: Parameters<Phaser.Types.Physics.Arcade.ArcadePhysicsCallback>[0],
+  ): Phaser.GameObjects.GameObject | undefined {
+    if (candidate instanceof Phaser.Physics.Arcade.Body
+      || candidate instanceof Phaser.Physics.Arcade.StaticBody) {
+      return candidate.gameObject;
+    }
+    return candidate instanceof Phaser.GameObjects.GameObject ? candidate : undefined;
   }
 
   private handleActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
@@ -431,7 +695,12 @@ export class PuzzleScene extends Phaser.Scene {
       this.player.markSpinning(this.time.now);
       this.playSfx("sword-swing");
       for (const seal of [...this.seals]) {
-        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, seal.x, seal.y) < 145) {
+        if (Phaser.Math.Distance.Between(
+          this.player.x,
+          this.player.y,
+          seal.visual.x,
+          seal.visual.y,
+        ) < 145) {
           this.breakSeal(seal);
         }
       }
@@ -444,26 +713,22 @@ export class PuzzleScene extends Phaser.Scene {
     id: string;
     rect: Phaser.GameObjects.Rectangle;
     knob: Phaser.GameObjects.Arc;
+    visual: Phaser.GameObjects.Image;
     definition: { id: string; x: number; y: number };
   }): void {
     if (this.activations.isActive(leverObj.id)) return;
-    // Activate lever safely
-      this.activations.setParticipantActive(leverObj.id, "player-1", true);
-      // Rotate visual representation if rect exists
-      if (leverObj.rect) {
-        leverObj.rect.setAngle(42).setFillStyle(0x4f8f67);
-      }
-      // Position knob if present
-      if (leverObj.knob) {
-        const angleRad = Phaser.Math.DegToRad(42);
-        leverObj.knob.setPosition(
-          leverObj.rect.x - Math.sin(angleRad) * 63,
-          leverObj.rect.y - Math.cos(angleRad) * 63
-        ).setFillStyle(0x56b890);
-      }
-
-      this.playSfx("checkpoint");
-      this.updateGates();
+    this.activations.setParticipantActive(leverObj.id, "player-1", true);
+    leverObj.rect.setAngle(18).setFillStyle(0x3d765d);
+    leverObj.visual.setAngle(18).setTint(0x9ff0c5);
+    this.tweens.add({
+      targets: leverObj.visual,
+      scaleX: leverObj.visual.scaleX * 1.08,
+      scaleY: leverObj.visual.scaleY * 1.08,
+      yoyo: true,
+      duration: 140,
+    });
+    this.playSfx("checkpoint");
+    this.updateGates();
   }
 
   private tryActivateLever(): void {
@@ -486,21 +751,24 @@ export class PuzzleScene extends Phaser.Scene {
   private tryBreakSealWithMelee(): void {
     const seal = this.seals.find((candidate) => Phaser.Geom.Intersects.RectangleToRectangle(
       this.player.getMeleeHitbox(),
-      candidate.getBounds(),
+      candidate.hitbox.getBounds(),
     ));
     if (seal) this.breakSeal(seal);
   }
 
-  private breakSeal(seal: Phaser.GameObjects.Rectangle): void {
+  private breakSeal(seal: (typeof this.seals)[number]): void {
     if (!this.seals.includes(seal)) return;
     this.seals = this.seals.filter((candidate) => candidate !== seal);
-    (seal.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    (seal.hitbox.body as Phaser.Physics.Arcade.StaticBody).enable = false;
     this.tweens.add({
-      targets: seal,
+      targets: [seal.visual, seal.hitbox],
       alpha: 0,
       scale: 1.5,
       duration: 260,
-      onComplete: () => seal.destroy(),
+      onComplete: () => {
+        seal.visual.destroy();
+        seal.hitbox.destroy();
+      },
     });
     this.playSfx("enemy-defeat");
     if (this.seals.length === 0 && this.activations.isComplete()) {
@@ -531,7 +799,12 @@ export class PuzzleScene extends Phaser.Scene {
       const changed = this.activations.setParticipantActive(plateObj.id, "crate-system", active);
       if (changed) {
         stateChanged = true;
-        plateObj.rect.setFillStyle(active ? 0x56b890 : 0x8f6f46);
+        plateObj.rect.setFillStyle(active ? 0x3f8d6e : this.visualPalette.lowerFace);
+        plateObj.visual.setTint(active ? 0x9ff0c5 : this.visualPalette.objectTint);
+        plateObj.visual.setScale(
+          plateObj.visual.scaleX,
+          active ? plateObj.visual.scaleY * 0.78 : plateObj.visual.scaleY / 0.78,
+        );
         if (active) this.playSfx("checkpoint");
       }
     }
@@ -553,9 +826,15 @@ export class PuzzleScene extends Phaser.Scene {
         gateObj.opened = true;
         (gateObj.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
         this.tweens.add({
+          targets: gateObj.visual,
+          y: gateObj.visual.y - gateObj.definition.height,
+          alpha: 0.12,
+          duration: 720,
+        });
+        this.tweens.add({
           targets: gateObj.rect,
           y: gateObj.rect.y - gateObj.definition.height,
-          alpha: 0.12,
+          alpha: 0.06,
           duration: 720,
         });
         this.playSfx("progress");
@@ -569,9 +848,15 @@ export class PuzzleScene extends Phaser.Scene {
       this.goalGate.opened = true;
       (this.goalGate.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
       this.tweens.add({
+        targets: this.goalGate.visual,
+        y: this.goalGate.visual.y - 640,
+        alpha: 0.12,
+        duration: 850,
+      });
+      this.tweens.add({
         targets: this.goalGate.rect,
         y: this.goalGate.rect.y - 640,
-        alpha: 0.12,
+        alpha: 0.06,
         duration: 850,
       });
       this.playSfx("progress");
@@ -639,7 +924,9 @@ export class PuzzleScene extends Phaser.Scene {
     if (charges.powerCharges <= 0 || !this.player.canUsePower(this.time.now)) return;
     charges.powerCharges -= 1;
     this.player.markUsingPower(this.time.now);
-    this.projectiles.add(new PowerProjectile(this, this.player.x, this.player.y - 12, this.player.facing));
+    const projectile = new PowerProjectile(this, this.player.x, this.player.y - 12, this.player.facing);
+    this.projectiles.add(projectile);
+    projectile.launch();
     this.playSfx("lethal-power");
     gameSaveStore.save(this.save);
     this.emitHud();

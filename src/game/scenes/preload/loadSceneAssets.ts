@@ -45,6 +45,14 @@ import enchantedTree3Url from "../../../assets/scenery/enchanted-forest/tree-3.p
 import enchantedTree4Url from "../../../assets/scenery/enchanted-forest/tree-4.png";
 import volcanicBackgroundUrl from "../../../assets/scenery/active-volcano/background.png";
 import volcanicMidgroundUrl from "../../../assets/scenery/active-volcano/midground.png";
+import ancientBarrierSourceUrl from "../../../assets/scenery/ancient-trials/barrier-source.webp";
+import ancientChamber1Url from "../../../assets/scenery/ancient-trials/chamber-1-night.webp";
+import ancientChamber2Url from "../../../assets/scenery/ancient-trials/chamber-2-blue-hour.webp";
+import ancientChamber3Url from "../../../assets/scenery/ancient-trials/chamber-3-dawn.webp";
+import ancientChamber4Url from "../../../assets/scenery/ancient-trials/chamber-4-daylight.webp";
+import ancientChamber5Url from "../../../assets/scenery/ancient-trials/chamber-5-armory.webp";
+import ancientChamber6Url from "../../../assets/scenery/ancient-trials/chamber-6-treasure.webp";
+import ancientMechanismsSourceUrl from "../../../assets/scenery/ancient-trials/mechanisms-source.webp";
 import floorStripUrl from "../../../assets/scenery/forest-floor-strip.png";
 import lanternPostUrl from "../../../assets/scenery/lantern-post.png";
 import moonUrl from "../../../assets/scenery/moon-new-game.png";
@@ -129,6 +137,18 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
     scene.load.image("enchanted-tree-4", enchantedTree4Url);
     scene.load.image("volcanic-background", volcanicBackgroundUrl);
     scene.load.image("volcanic-midground", volcanicMidgroundUrl);
+    scene.load.image("ancient-trials-barrier-source", ancientBarrierSourceUrl);
+    scene.load.image("ancient-trials-mechanisms-source", ancientMechanismsSourceUrl);
+    [
+      ancientChamber1Url,
+      ancientChamber2Url,
+      ancientChamber3Url,
+      ancientChamber4Url,
+      ancientChamber5Url,
+      ancientChamber6Url,
+    ].forEach((url, index) => {
+      scene.load.image(`ancient-trials-chamber-${index + 1}`, url);
+    });
     scene.load.image("scenery-floor-strip", floorStripUrl);
     scene.load.image("scenery-lantern-post", lanternPostUrl);
     scene.load.image("scenery-moon", moonUrl);

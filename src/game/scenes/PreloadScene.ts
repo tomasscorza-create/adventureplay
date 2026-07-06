@@ -33,6 +33,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createSawTexture();
     this.createCheckpointTexture();
     this.createGoalTexture();
+    this.createAncientTrialTextures();
     this.scene.start("MainMenuScene");
   }
 
@@ -977,6 +978,69 @@ export class PreloadScene extends Phaser.Scene {
     graphics.strokeRoundedRect(8, 8, 26, 14, 7);
     graphics.generateTexture("goal", 42, 78);
     graphics.destroy();
+  }
+
+  private createAncientTrialTextures(): void {
+    const mechanismSource = "ancient-trials-mechanisms-source";
+    this.createWhiteKeyedTexture("ancient-trials-crate", mechanismSource, {
+      x: 238, y: 118, width: 170, height: 180,
+    });
+    this.createWhiteKeyedTexture("ancient-trials-plate", mechanismSource, {
+      x: 8, y: 300, width: 225, height: 185,
+    });
+    this.createWhiteKeyedTexture("ancient-trials-lever", mechanismSource, {
+      x: 765, y: 282, width: 125, height: 235,
+    });
+    this.createWhiteKeyedTexture("ancient-trials-door", mechanismSource, {
+      x: 1115, y: 545, width: 240, height: 310,
+    });
+    this.createWhiteKeyedTexture("ancient-trials-platform", mechanismSource, {
+      x: 438, y: 845, width: 640, height: 145,
+    });
+    this.createWhiteKeyedTexture("ancient-trials-barrier", "ancient-trials-barrier-source", {
+      x: 28, y: 82, width: 135, height: 850,
+    });
+  }
+
+  private createWhiteKeyedTexture(
+    textureKey: string,
+    sourceKey: string,
+    crop: { x: number; y: number; width: number; height: number },
+  ): void {
+    const sourceImage = this.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
+    const canvas = document.createElement("canvas");
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return;
+
+    context.drawImage(
+      sourceImage,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      crop.width,
+      crop.height,
+    );
+    const imageData = context.getImageData(0, 0, crop.width, crop.height);
+    const pixels = imageData.data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      const minimumChannel = Math.min(red, green, blue);
+      const maximumChannel = Math.max(red, green, blue);
+      if (minimumChannel >= 246) {
+        pixels[index + 3] = 0;
+      } else if (minimumChannel > 220 && maximumChannel - minimumChannel < 18) {
+        pixels[index + 3] = Math.round(pixels[index + 3] * ((246 - minimumChannel) / 26));
+      }
+    }
+    context.putImageData(imageData, 0, 0);
+    this.textures.addCanvas(textureKey, canvas);
   }
 
   private createSceneryTextures(): void {
