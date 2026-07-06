@@ -593,6 +593,9 @@ export class PuzzleScene extends Phaser.Scene {
       const amount = this.save.player.coins - previousGold;
       this.goldCollected += amount;
       this.announceAchievements(this.achievements.recordGoldCollected(this.save, amount));
+      if (amount > 0) {
+        this.createCoinGainEffect(coin.x, coin.y, amount);
+      }
       coin.disableBody(true, true);
       this.playSfx("coin");
       gameSaveStore.save(this.save);
@@ -1023,6 +1026,29 @@ export class PuzzleScene extends Phaser.Scene {
         reward: achievement.reward,
       });
     }
+  }
+
+  private createCoinGainEffect(x: number, y: number, amount: number): void {
+    const label = this.add
+      .text(x, y - 24, `+${amount} ORO`, {
+        color: "#ffe48a",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "15px",
+        fontStyle: "bold",
+        stroke: "#3a2710",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(33);
+
+    this.tweens.add({
+      targets: label,
+      y: y - 62,
+      alpha: 0,
+      duration: 850,
+      ease: "Sine.easeOut",
+      onComplete: () => label.destroy(),
+    });
   }
 
   private emitHud(): void {

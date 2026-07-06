@@ -1,5 +1,5 @@
 export const PUZZLE_CRATE_COLLISION_SIZE = 70;
-export const PUZZLE_CRATE_DISPLAY_SIZE = 82;
+export const PUZZLE_CRATE_DISPLAY_SIZE = 96;
 
 export function getSourceBodyDimension(
   sourceDimension: number,

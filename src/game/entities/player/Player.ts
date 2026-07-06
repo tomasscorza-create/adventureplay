@@ -77,7 +77,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const isGrounded = this.isGrounded();
     const nextState = !isGrounded && body.velocity.y < 0
       ? "jump"
-      : !isGrounded && body.velocity.y > 0
+      : !isGrounded && body.velocity.y > 18
         ? "fall"
         : isMoving
           ? "run"
