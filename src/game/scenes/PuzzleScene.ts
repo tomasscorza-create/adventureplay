@@ -28,13 +28,27 @@ export class PuzzleScene extends Phaser.Scene {
   private level!: PuzzleLevelDefinition;
   private save!: SaveData;
   private player!: Player;
-  private crate!: Phaser.GameObjects.Rectangle;
-  private plate!: Phaser.GameObjects.Rectangle;
-  private boxJumpMarker!: Phaser.GameObjects.Rectangle;
-  private lever!: Phaser.GameObjects.Rectangle;
-  private gate!: Phaser.GameObjects.Rectangle;
-  private seals: Phaser.GameObjects.Rectangle[] = [];
+  private crates: Phaser.GameObjects.Rectangle[] = [];
+  private plates: Array<{
+    id: string;
+    rect: Phaser.GameObjects.Rectangle;
+    definition: { id: string; x: number; y: number; width: number };
+  }> = [];
+  private boxJumpMarkers: Phaser.GameObjects.Rectangle[] = [];
+  private levers: Array<{
+    id: string;
+    rect: Phaser.GameObjects.Rectangle;
+    knob: Phaser.GameObjects.Arc;
+    definition: { id: string; x: number; y: number };
+  }> = [];
+  private gates: Array<{
+    id: string;
+    rect: Phaser.GameObjects.Rectangle;
+    definition: { id: string; x: number; y: number; width: number; height: number; requiredActivations?: string[] };
+    opened: boolean;
+  }> = [];
   private goal!: Phaser.GameObjects.Arc;
+  private goalGate!: { rect: Phaser.GameObjects.Rectangle; opened: boolean };
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private coins!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
@@ -42,7 +56,6 @@ export class PuzzleScene extends Phaser.Scene {
   private inputSystem!: GameplayInputSystem;
   private remainingTimeMs = 0;
   private levelFinished = false;
-  private gateOpened = false;
   private goldCollected = 0;
   private lastHudSecond = -1;
   private lastSpinHudStep = -1;
@@ -62,6 +75,7 @@ export class PuzzleScene extends Phaser.Scene {
   private readonly cameraSystem = new CameraSystem();
   private readonly runTracker = new LevelRunTracker();
   private readonly activations = new PuzzleActivationSystem();
+  private seals: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
     super("PuzzleScene");
@@ -74,7 +88,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.save.player.health = this.save.player.maxHealth;
     this.remainingTimeMs = this.level.timeLimitSeconds * 1000;
     this.levelFinished = false;
-    this.gateOpened = false;
     this.goldCollected = 0;
     this.lastHudSecond = -1;
     this.lastSpinHudStep = -1;
@@ -113,7 +126,8 @@ export class PuzzleScene extends Phaser.Scene {
     const jumped = this.movement.update(this.player, input, delta);
     if (jumped) this.playSfx("jump");
     this.handleActions(input);
-    this.updatePlateState();
+    this.handleStackedCratesPhysics();
+    this.updatePlateStates();
     this.updateObjectiveText();
 
     const hudSecond = Math.ceil(this.remainingTimeMs / 1000);
@@ -159,53 +173,100 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private createPuzzleObjects(): void {
-    this.crate = this.add
-      .rectangle(this.level.crate.x, this.level.crate.y, 70, 70, 0x8b643f)
-      .setStrokeStyle(5, 0xd5b477)
-      .setDepth(10);
-    this.physics.add.existing(this.crate);
-    const crateBody = this.crate.body as Phaser.Physics.Arcade.Body;
-    crateBody.setCollideWorldBounds(true).setDragX(520).setMaxVelocity(180, 700);
+    // 1. Cajas (Crates)
+    this.crates = [];
+    for (const crateDef of this.level.crates) {
+      const crate = this.add
+        .rectangle(crateDef.x, crateDef.y, 70, 70, 0x8b643f)
+        .setStrokeStyle(5, 0xd5b477)
+        .setDepth(10);
+      this.physics.add.existing(crate);
+      const crateBody = crate.body as Phaser.Physics.Arcade.Body;
+      crateBody.setCollideWorldBounds(true)
+        .setDragX(520)
+        .setMaxVelocity(180, 700)
+        .setBounce(0, 0);
+      this.crates.push(crate);
+    }
 
-    this.plate = this.add
-      .rectangle(this.level.plate.x, this.level.plate.y, this.level.plate.width, 15, 0x8f6f46)
-      .setOrigin(0.5, 1)
-      .setStrokeStyle(2, 0xf2c45f)
-      .setDepth(8);
+    // 2. Placas (Plates)
+    this.plates = [];
+    for (const plateDef of this.level.plates) {
+      const rect = this.add
+        .rectangle(plateDef.x, plateDef.y, plateDef.width, 15, 0x8f6f46)
+        .setOrigin(0.5, 1)
+        .setStrokeStyle(2, 0xf2c45f)
+        .setDepth(8);
+      this.plates.push({
+        id: plateDef.id,
+        rect,
+        definition: plateDef,
+      });
+    }
 
-    this.boxJumpMarker = this.add
-      .rectangle(
-        this.level.boxJumpZone.x,
-        this.level.boxJumpZone.y,
-        this.level.boxJumpZone.width,
-        12,
-        0x66dbc0,
-        0.16,
-      )
-      .setOrigin(0.5, 1)
-      .setStrokeStyle(2, 0x66dbc0, 0.72)
-      .setDepth(7);
+    // 3. Marcadores de salto (Box Jump Zones)
+    this.boxJumpMarkers = [];
+    const zones = this.level.boxJumpZones ?? (this.level.boxJumpZone ? [this.level.boxJumpZone] : []);
+    for (const zone of zones) {
+      const marker = this.add
+        .rectangle(
+          zone.x,
+          zone.y,
+          zone.width,
+          12,
+          0x66dbc0,
+          0.16,
+        )
+        .setOrigin(0.5, 1)
+        .setStrokeStyle(2, 0x66dbc0, 0.72)
+        .setDepth(7);
+      this.boxJumpMarkers.push(marker);
+    }
 
-    this.lever = this.add
-      .rectangle(this.level.lever.x, this.level.lever.y, 18, 66, 0x80633d)
-      .setOrigin(0.5, 1)
-      .setStrokeStyle(3, 0xd8bd7c)
-      .setDepth(9);
-    this.add.circle(this.level.lever.x, this.level.lever.y - 63, 12, 0xc85d4d).setDepth(10);
+    // 4. Palancas (Levers)
+    this.levers = [];
+    for (const leverDef of this.level.levers) {
+      const rect = this.add
+        .rectangle(leverDef.x, leverDef.y, 18, 66, 0x80633d)
+        .setOrigin(0.5, 1)
+        .setStrokeStyle(3, 0xd8bd7c)
+        .setDepth(9);
+      this.physics.add.existing(rect, true);
+      const knob = this.add
+        .circle(leverDef.x, leverDef.y - 63, 12, 0xc85d4d)
+        .setDepth(10);
+      this.levers.push({
+        id: leverDef.id,
+        rect,
+        knob,
+        definition: leverDef,
+      });
+    }
 
-    this.gate = this.add
-      .rectangle(
-        this.level.gate.x,
-        this.level.gate.y,
-        this.level.gate.width,
-        this.level.gate.height,
-        0x283840,
-      )
-      .setOrigin(0, 0)
-      .setStrokeStyle(4, 0x71c7b8)
-      .setDepth(11);
-    this.physics.add.existing(this.gate, true);
+    // 5. Puertas (Gates)
+    this.gates = [];
+    for (const gateDef of this.level.gates) {
+      const rect = this.add
+        .rectangle(
+          gateDef.x,
+          gateDef.y,
+          gateDef.width,
+          gateDef.height,
+          0x283840,
+        )
+        .setOrigin(0, 0)
+        .setStrokeStyle(4, 0x71c7b8)
+        .setDepth(11);
+      this.physics.add.existing(rect, true);
+      this.gates.push({
+        id: gateDef.id,
+        rect,
+        definition: gateDef,
+        opened: false,
+      });
+    }
 
+    // 6. Sellos mágicos (Seals)
     this.seals = this.level.seals.map((sealDefinition) => {
       const seal = this.add
         .rectangle(
@@ -222,12 +283,32 @@ export class PuzzleScene extends Phaser.Scene {
       return seal;
     });
 
+    // 7. Portal Meta (Goal)
     this.goal = this.add
       .circle(this.level.goal.x, this.level.goal.y, 42, 0x66dbc0, 0.2)
       .setStrokeStyle(6, 0xa6ffe7, 0.9)
       .setDepth(8);
     this.physics.add.existing(this.goal, true);
 
+    // Jaula metálica final que encierra y bloquea el acceso al portal
+    const goalGateRect = this.add
+      .rectangle(
+        this.level.goal.x - 45,
+        0,
+        18,
+        640,
+        0x334155,
+      )
+      .setOrigin(0, 0)
+      .setStrokeStyle(3, 0x64748b)
+      .setDepth(11);
+    this.physics.add.existing(goalGateRect, true);
+    this.goalGate = {
+      rect: goalGateRect,
+      opened: false,
+    };
+
+    // 8. Texto de objetivo en pantalla
     this.objectiveText = this.add
       .text(640, 90, "Empuja la caja sobre la placa", {
         color: "#fff2c4",
@@ -257,14 +338,46 @@ export class PuzzleScene extends Phaser.Scene {
 
   private createCollisions(): void {
     this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.collider(this.crate, this.platforms);
-    this.physics.add.collider(this.player, this.crate);
-    this.physics.add.collider(this.player, this.gate);
-    this.physics.add.collider(this.crate, this.gate);
-    this.physics.add.collider(this.projectiles, this.gate, (projectile) => {
+    this.physics.add.collider(this.crates, this.platforms);
+    this.physics.add.collider(this.player, this.crates);
+    this.physics.add.collider(this.crates, this.crates); // Apilamiento de cajas!
+
+    for (const gateObj of this.gates) {
+      this.physics.add.collider(this.player, gateObj.rect);
+      this.physics.add.collider(this.crates, gateObj.rect);
+      this.physics.add.collider(this.projectiles, gateObj.rect, (projectile) => {
+        (projectile as Phaser.GameObjects.GameObject).destroy();
+      });
+    }
+
+    this.physics.add.collider(this.player, this.goalGate.rect);
+    this.physics.add.collider(this.crates, this.goalGate.rect);
+    // Destroy projectile when it hits the metal gate (no state change)
+    this.physics.add.collider(this.projectiles, this.goalGate.rect, (projectile) => {
       (projectile as Phaser.GameObjects.GameObject).destroy();
     });
-    for (const seal of this.seals) this.physics.add.collider(this.player, seal);
+    // Destroy projectile when it hits the goal arc (prevent premature portal opening)
+    this.physics.add.collider(this.projectiles, this.goal, (projectile) => {
+      (projectile as Phaser.GameObjects.GameObject).destroy();
+    });
+
+    for (const leverObj of this.levers) {
+      this.physics.add.overlap(this.projectiles, leverObj.rect, (projectile) => {
+        // Ensure projectile is destroyed once and lever activation occurs only if not already active
+        (projectile as Phaser.GameObjects.GameObject).destroy();
+        if (!this.activations.isActive(leverObj.id)) {
+          this.activateLever(leverObj);
+        }
+      });
+    }
+
+    for (const seal of this.seals) {
+      this.physics.add.collider(this.player, seal);
+      this.physics.add.overlap(this.projectiles, seal, (projectile) => {
+        (projectile as Phaser.GameObjects.GameObject).destroy();
+        this.breakSeal(seal);
+      });
+    }
 
     this.physics.add.overlap(this.player, this.coins, (_player, rawCoin) => {
       const coin = rawCoin as Coin;
@@ -297,13 +410,8 @@ export class PuzzleScene extends Phaser.Scene {
       this.physics.add.existing(hazard, true);
       this.physics.add.overlap(this.player, hazard, () => this.damagePlayer(hazardDefinition.damage));
     }
+
     this.physics.add.overlap(this.player, this.goal, () => this.completeLevel());
-    for (const seal of this.seals) {
-      this.physics.add.overlap(this.projectiles, seal, (projectile) => {
-        (projectile as Phaser.GameObjects.GameObject).destroy();
-        this.breakSeal(seal);
-      });
-    }
   }
 
   private handleActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
@@ -332,18 +440,47 @@ export class PuzzleScene extends Phaser.Scene {
     if (input.powerJustPressed) this.useLethalPower();
   }
 
-  private tryActivateLever(): void {
-    if (this.activations.isActive("upper-lever") || Phaser.Math.Distance.Between(
-      this.player.x,
-      this.player.y,
-      this.lever.x,
-      this.lever.y,
-    ) > 105) return;
+  private activateLever(leverObj: {
+    id: string;
+    rect: Phaser.GameObjects.Rectangle;
+    knob: Phaser.GameObjects.Arc;
+    definition: { id: string; x: number; y: number };
+  }): void {
+    if (this.activations.isActive(leverObj.id)) return;
+    // Activate lever safely
+      this.activations.setParticipantActive(leverObj.id, "player-1", true);
+      // Rotate visual representation if rect exists
+      if (leverObj.rect) {
+        leverObj.rect.setAngle(42).setFillStyle(0x4f8f67);
+      }
+      // Position knob if present
+      if (leverObj.knob) {
+        const angleRad = Phaser.Math.DegToRad(42);
+        leverObj.knob.setPosition(
+          leverObj.rect.x - Math.sin(angleRad) * 63,
+          leverObj.rect.y - Math.cos(angleRad) * 63
+        ).setFillStyle(0x56b890);
+      }
 
-    this.activations.setParticipantActive("upper-lever", "player-1", true);
-    this.lever.setAngle(42).setFillStyle(0x4f8f67);
-    this.playSfx("checkpoint");
-    this.tryOpenGate();
+      this.playSfx("checkpoint");
+      this.updateGates();
+  }
+
+  private tryActivateLever(): void {
+    for (const leverObj of this.levers) {
+      if (this.activations.isActive(leverObj.id)) continue;
+
+      const dist = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        leverObj.rect.x,
+        leverObj.rect.y - 30
+      );
+
+      if (dist <= 105) {
+        this.activateLever(leverObj);
+      }
+    }
   }
 
   private tryBreakSealWithMelee(): void {
@@ -366,54 +503,125 @@ export class PuzzleScene extends Phaser.Scene {
       onComplete: () => seal.destroy(),
     });
     this.playSfx("enemy-defeat");
-    if (this.seals.length === 0 && this.activations.isActive("crate-plate")) {
+    if (this.seals.length === 0 && this.activations.isComplete()) {
       this.goal.setFillStyle(0x66dbc0, 0.34);
+      // Trigger gate opening check after last seal is removed
+      this.updateGates();
     }
   }
 
-  private updatePlateState(): void {
-    const plateBounds = new Phaser.Geom.Rectangle(
-      this.level.plate.x - this.level.plate.width / 2,
-      this.level.plate.y - 22,
-      this.level.plate.width,
-      30,
-    );
-    const active = Phaser.Geom.Intersects.RectangleToRectangle(this.crate.getBounds(), plateBounds);
-    if (!this.activations.setParticipantActive("crate-plate", "crate", active)) return;
-    this.plate.setFillStyle(active ? 0x56b890 : 0x8f6f46);
-    this.goal.setFillStyle(0x66dbc0, active && this.seals.length === 0 ? 0.34 : 0.12);
-    if (active) this.playSfx("checkpoint");
-    this.tryOpenGate();
+  private updatePlateStates(): void {
+    let stateChanged = false;
+    for (const plateObj of this.plates) {
+      const plateBounds = new Phaser.Geom.Rectangle(
+        plateObj.definition.x - plateObj.definition.width / 2,
+        plateObj.definition.y - 22,
+        plateObj.definition.width,
+        30,
+      );
+
+      let active = false;
+      for (const crate of this.crates) {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(crate.getBounds(), plateBounds)) {
+          active = true;
+          break;
+        }
+      }
+
+      const changed = this.activations.setParticipantActive(plateObj.id, "crate-system", active);
+      if (changed) {
+        stateChanged = true;
+        plateObj.rect.setFillStyle(active ? 0x56b890 : 0x8f6f46);
+        if (active) this.playSfx("checkpoint");
+      }
+    }
+
+    if (stateChanged) {
+      this.updateGates();
+    }
   }
 
-  private tryOpenGate(): void {
-    if (this.gateOpened || !this.activations.isActive("upper-lever")) return;
-    this.gateOpened = true;
-    (this.gate.body as Phaser.Physics.Arcade.StaticBody).enable = false;
-    this.tweens.add({
-      targets: this.gate,
-      y: this.gate.y - this.level.gate.height,
-      alpha: 0.12,
-      duration: 720,
-    });
-    this.playSfx("progress");
+  private updateGates(): void {
+    for (const gateObj of this.gates) {
+      if (gateObj.opened) continue;
+
+      const reqs = gateObj.definition.requiredActivations ?? [];
+      if (reqs.length === 0) continue;
+
+      const allMet = reqs.every((actId: string) => this.activations.isActive(actId));
+      if (allMet) {
+        gateObj.opened = true;
+        (gateObj.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+        this.tweens.add({
+          targets: gateObj.rect,
+          y: gateObj.rect.y - gateObj.definition.height,
+          alpha: 0.12,
+          duration: 720,
+        });
+        this.playSfx("progress");
+      }
+    }
+
+    const portalReady = this.activations.isComplete() && this.seals.length === 0;
+    this.goal.setFillStyle(0x66dbc0, portalReady ? 0.34 : 0.12);
+
+    if (portalReady && !this.goalGate.opened) {
+      this.goalGate.opened = true;
+      (this.goalGate.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+      this.tweens.add({
+        targets: this.goalGate.rect,
+        y: this.goalGate.rect.y - 640,
+        alpha: 0.12,
+        duration: 850,
+      });
+      this.playSfx("progress");
+    }
   }
 
   private updateObjectiveText(): void {
     if (!this.objectiveText) return;
-    const boxIsAtJumpZone = Math.abs(this.crate.x - this.level.boxJumpZone.x)
-      <= this.level.boxJumpZone.width / 2;
-    const nextText = !this.activations.isActive("upper-lever")
-      ? boxIsAtJumpZone
-        ? "Sube a la caja, salta a la cornisa y golpea la palanca"
-        : "Mueve la caja hasta el marcador bajo la cornisa"
-      : !this.activations.isActive("crate-plate")
-        ? "Puerta abierta: empuja la caja hasta la placa del otro lado"
-        : this.seals.length > 0
-          ? `Rompe ${this.seals.length === 1 ? "el ultimo sello" : `los ${this.seals.length} sellos`} con tus poderes`
-          : "Alcanza el portal antes de que acabe el tiempo";
+
+    // Verificar si alguna de las cajas está en alguna zona de salto (para los marcadores visuales)
+    let boxInAnyJumpZone = false;
+    const zones = this.level.boxJumpZones ?? (this.level.boxJumpZone ? [this.level.boxJumpZone] : []);
+    for (const zone of zones) {
+      for (const crate of this.crates) {
+        if (Math.abs(crate.x - zone.x) <= zone.width / 2) {
+          boxInAnyJumpZone = true;
+          break;
+        }
+      }
+    }
+
+    // Configurar la opacidad de los marcadores de salto
+    this.boxJumpMarkers.forEach((marker) => {
+      marker.setAlpha(this.activations.isComplete() ? 0.04 : boxInAnyJumpZone ? 0.42 : 0.18);
+    });
+
+    // Texto dinámico inteligente basado en activaciones pendientes
+    const pendingActivations = this.level.requiredActivations.filter(
+      (actId) => !this.activations.isActive(actId)
+    );
+
+    let nextText: string;
+    if (pendingActivations.length > 0) {
+      const nextAct = pendingActivations[0];
+      if (nextAct.includes("lever")) {
+        nextText = boxInAnyJumpZone
+          ? "Sube a la caja, salta y golpea la palanca"
+          : "Mueve la caja cerca de la cornisa para alcanzar la palanca";
+      } else if (nextAct.includes("plate")) {
+        nextText = "Empuja una caja sobre la placa de presion para abrir la puerta";
+      } else {
+        nextText = `Resuelve el siguiente paso: activa ${nextAct}`;
+      }
+    } else if (this.seals.length > 0) {
+      nextText = `Rompe ${this.seals.length === 1 ? "el ultimo sello" : `los ${this.seals.length} sellos`} con tus poderes`;
+    } else {
+      nextText = "Alcanza el portal antes de que acabe el tiempo";
+    }
+
     this.objectiveText.setText(nextText);
-    this.boxJumpMarker.setAlpha(this.activations.isActive("upper-lever") ? 0.04 : boxIsAtJumpZone ? 0.42 : 0.18);
   }
 
   private useHealingPower(): void {
@@ -464,7 +672,6 @@ export class PuzzleScene extends Phaser.Scene {
   private completeLevel(): void {
     if (
       this.levelFinished
-      || !this.gateOpened
       || !this.activations.isComplete()
       || this.seals.length > 0
     ) return;
@@ -597,5 +804,38 @@ export class PuzzleScene extends Phaser.Scene {
 
   private playSfx(cue: SfxCue): void {
     gameEvents.emit(EVENTS.SFX_REQUESTED, { cue });
+  }
+
+  private handleStackedCratesPhysics(): void {
+    for (let i = 0; i < this.crates.length; i++) {
+      const crateA = this.crates[i];
+      const bodyA = crateA.body as Phaser.Physics.Arcade.Body;
+
+      for (let j = 0; j < this.crates.length; j++) {
+        if (i === j) continue;
+        const crateB = this.crates[j];
+        const bodyB = crateB.body as Phaser.Physics.Arcade.Body;
+
+        // Verificar si crateA está directamente encima de crateB
+        const yDiff = bodyB.y - bodyA.y;
+        const xDiff = Math.abs(crateA.x - crateB.x);
+
+        // Si están apiladas (diferencia de y cercana al alto de la caja: 70px)
+        // y se solapan horizontalmente
+        if (yDiff >= 68 && yDiff <= 72 && xDiff < 35) {
+          // Si la de abajo se está moviendo horizontalmente
+          if (Math.abs(bodyB.velocity.x) > 0) {
+            const speed = Math.abs(bodyB.velocity.x);
+            if (speed < 110) {
+              // Empuje suave: la de arriba se mueve solidaria sin resbalar
+              bodyA.velocity.x = bodyB.velocity.x;
+            } else {
+              // Empuje brusco o carrera: la de arriba desliza por inercia y se cae
+              bodyA.velocity.x = bodyB.velocity.x * 0.65;
+            }
+          }
+        }
+      }
+    }
   }
 }

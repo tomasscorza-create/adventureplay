@@ -184,14 +184,16 @@ describe("normalizeSaveData", () => {
       ...defaults,
       player: {
         ...defaults.player,
-        inventory: ["ancientMechanism", "runicCounterweight", "echoPrism", "architectCore"],
+        inventory: ["ancientMechanism", "runicCounterweight", "echoPrism", "architectCore", "ancientGear", "architectScepter"],
       },
-      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4"],
+      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4", "trialChamber5", "trialChamber6"],
       claimedRewardBoxes: [
         "trialChamber1:mechanism",
         "trialChamber2:counterweight",
         "trialChamber3:prism",
         "trialChamber4:architect-core",
+        "trialChamber5:ancient-gear",
+        "trialChamber6:architect-scepter",
       ],
       achievements: {
         ...defaults.achievements,
@@ -204,19 +206,25 @@ describe("normalizeSaveData", () => {
       "trialChamber2",
       "trialChamber3",
       "trialChamber4",
+      "trialChamber5",
+      "trialChamber6",
     ]);
     expect(normalized.unlockedLevels).toEqual(expect.arrayContaining([
       "trialChamber1",
       "trialChamber2",
       "trialChamber3",
       "trialChamber4",
+      "trialChamber5",
+      "trialChamber6",
     ]));
-    expect(normalized.claimedRewardBoxes).toHaveLength(4);
+    expect(normalized.claimedRewardBoxes).toHaveLength(6);
     expect(normalized.player.inventory).toEqual([
       "ancientMechanism",
       "runicCounterweight",
       "echoPrism",
       "architectCore",
+      "ancientGear",
+      "architectScepter",
     ]);
     expect(normalized.achievements.unlockedIds).toContain("first-puzzle");
   });

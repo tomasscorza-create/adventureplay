@@ -157,7 +157,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `MainMenuScene`: fondo del menu y escucha `START_GAME`.
 - `WorldMapScene`: creada como placeholder para futuro mapa.
 - `LevelScene`: escena jugable principal.
-- `PuzzleScene`: escena del modo Desafio; consume datos de cuatro camaras y admite cantidades variables de sellos y peligros sin duplicar escenas.
+- `PuzzleScene`: escena del modo Desafio; consume datos de seis camaras y admite cantidades variables de sellos y peligros sin duplicar escenas.
 - `BattleScene`: creada como placeholder para futuros combates especiales.
 - `UIScene`: placeholder Phaser para UI interna si hiciera falta, pero la UI actual vive en React.
 - `GameOverScene`: escena de resultado que comunica derrota o victoria a React.
@@ -194,11 +194,11 @@ La demo actual permite:
 - Reiniciar todo el progreso desde Opciones con confirmacion destructiva, conservando la cuenta de autenticacion pero restaurando el save inicial.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Ver el modo Explorar presentado con arte propio de aventura en su tarjeta `Campana del continente`; Arena conserva su presentacion bloqueada.
-- Abrir Desafio y jugar cuatro camaras encadenadas: `La camara de los dos sellos`, `El corredor del contrapeso`, `La galeria de las tres rupturas` y `El reloj del arquitecto`. Cada una impone la secuencia fisica caja-cornisa-palanca-puerta-placa-sellos-portal: la cornisa queda fuera del salto normal y solo se alcanza usando la caja, la palanca abre una puerta de altura completa imposible de saltar, y despues la misma caja debe cruzar la puerta y quedar sobre la placa para habilitar la salida.
-- Ver una dificultad cuantificada 100, 123, 152 y 188: cada camara aumenta entre 20% y 25% respecto de la anterior mediante recorrido, sellos, peligros, plataformas y presion temporal, no mediante inflar dano arbitrariamente.
-- No agregar plataformas auxiliares antes de la puerta que permitan alcanzar la cornisa sin caja, ni reducir la puerta por debajo del alto jugable. `puzzleLevels.test.ts` protege ambas condiciones contra atajos accidentales.
+- Abrir Desafio y jugar seis camaras encadenadas: `La camara de los dos sellos`, `El corredor del contrapeso`, `La galeria de las tres rupturas`, `El reloj del arquitecto`, `La camara del laberinto` y `El templo de los contrapesos`. Los niveles iniciales imponen la secuencia fisica caja-cornisa-palanca-puerta-placa-sellos-portal; las camaras avanzadas incorporan multiples cajas, apilamiento con friccion inercial (el empuje moderado < 110 px/s permite transportarlas apiladas, mientras que el empuje brusco o carrera las desliza y cae) y una jaula metalica final que bloquea fisicamente la meta hasta resolver todas las condiciones del nivel.
+- Ver una dificultad cuantificada 100, 123, 152, 188, 231 y 285: cada camara aumenta entre 20% y 25% respecto de la anterior mediante recorrido, sellos, peligros, plataformas y presion temporal, no mediante inflar dano arbitrariamente.
+- No agregar plataformas auxiliares antes de la puerta que permitan alcanzar la cornisa sin caja, ni reducir la puerta por debajo del alto jugable. `puzzleLevels.test.ts` protege ambas condiciones contra atajos accidentales en las camaras 1-4.
 - Compartir entre Explorar y Desafio el heroe seleccionado, salud maxima, controles, poderes y cargas por personaje, ORO, XP/LV, inventario, logros, HUD, pausa, tienda de cargas, guardado remoto y estadisticas acumuladas.
-- Recoger en Desafio ORO persistente y una pieza unica por camara: `Mecanismo antiguo`, `Contrapeso runico`, `Prisma de eco` y `Nucleo del arquitecto`. Las recompensas de finalizacion escalan a 180, 220, 270 y 330 XP; la primera camara puede desbloquear `Mente y acero` una sola vez.
+- Recoger en Desafio ORO persistente y una pieza unica por camara: `Mecanismo antiguo`, `Contrapeso runico`, `Prisma de eco`, `Nucleo del arquitecto`, `Engranaje antiguo` y `Cetro del arquitecto`. Las recompensas de finalizacion escalan a 180, 220, 270, 330, 420 y 500 XP; la primera camara puede desbloquear `Mente y acero` una sola vez.
 - Ver la opcion Cooperativo dentro de Desafio marcada como proxima fase. `PuzzleLevelDefinition` ya declara activadores requeridos y `supportsCooperative`, pero la sesion de red, autoridad, sincronizacion y segundo jugador aun no estan implementados; no presentar esa opcion como jugable.
 - En el explorador, el mapa de regiones izquierdo se escala completo al espacio disponible y no tiene scroll; la lista de niveles derecha conserva cabecera fija y scroll independiente. El contenedor general no debe capturar el desplazamiento de niveles.
 - La iluminacion del mapa usa una unica `explore-map__highlight` como hermana de los botones y toma el alfa detallado del WebP regional. Los `clip-path` poligonales se conservan solo como hitboxes invisibles: no volver a introducir la imagen regional dentro del boton, porque el poligono recortaria arboles, puentes y relieves visibles.
@@ -748,7 +748,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 9. Agregar menu de configuracion y remapeo basico.
 10. Agregar Capacitor cuando la experiencia mobile web este comoda.
 11. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
-12. Validar manualmente las cuatro camaras de Desafio y afinar sus tiempos sin romper la progresion protegida 100/123/152/188.
+12. Validar manualmente las seis camaras de Desafio y afinar sus tiempos sin romper la progresion protegida 100/123/152/188/231/285.
 13. Diseñar el cooperativo de Desafio con autoridad de sesion, IDs de participante y sincronizacion determinista; no acoplar transporte de red directamente a `PuzzleScene`.
 
 ## Advertencias actuales
@@ -774,6 +774,22 @@ Actualizar `AGENTS.md` en el mismo cambio cuando se modifique de forma material 
 
 Al actualizarla:
 
+- La arquitectura esta preparada, pero debe crecer gradualmente para no volver la demo dificil de entender.
+- La velocidad acumulada actual llega a 310 en LV15 y sigue dentro del rango previsto. Antes de agregar mejoras que lleven al jugador a 340 o mas, revisar manualmente saltos, atajos, persecuciones y ritmo de camara; 340 es el umbral de advertencia de balance, no un aumento aprobado automaticamente.
+
+## Mantenimiento de esta guia
+
+Actualizar `AGENTS.md` en el mismo cambio cuando se modifique de forma material cualquiera de estos puntos:
+
+- Responsabilidad entre React y Phaser.
+- Flujo de escenas, eventos o input.
+- Estructura o version del guardado.
+- Reglas de Supabase y persistencia.
+- Contenido disponible, controles o progresion.
+- Politica mobile, comandos de verificacion o archivos de entrada importantes.
+
+Al actualizarla:
+
 1. Describir solo comportamiento implementado o marcarlo claramente como pendiente.
 2. Verificar rutas, nombres de tipos, comandos y versiones contra el repositorio actual.
 3. No borrar invariantes ni decisiones de compatibilidad sin confirmar primero que dejaron de aplicar.
@@ -783,4 +799,17 @@ Al actualizarla:
 
 El historial de comprobaciones anteriores se conserva en `docs/verification-history.md`. Es solo evidencia historica: el estado vigente, las reglas obligatorias y los riesgos actuales permanecen en este archivo.
 
-Ultima revision documental: 2026-07-05. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.
+Ultima revision documental: 2026-07-06. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.
+
+## Historial de modificaciones por agentes de IA
+
+### Sesión: 2026-07-06 (Mejoras, Ampliación de Desafío y Puzles de Disparo)
+- **Agente**: Antigravity (Gemini 3.5 Flash)
+- **Archivos Modificados**:
+  - [items.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/data/items.ts): Registro de ítems de recompensa `ancientGear` y `architectScepter`.
+  - [puzzleLevels.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/data/puzzleLevels.ts): Rediseño de tipos a listas de elementos, mejora de niveles 1-4, creación de niveles 5-6, reubicación de palanca en Nivel 5, escalón de accesibilidad en Nivel 6, y adición de palancas/puertas lógicas para puzles de disparo a distancia en niveles 3 a 6.
+  - [PuzzleScene.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/scenes/PuzzleScene.ts): Implementación de colecciones físicas de cajas, placas, palancas, jaula final (`goalGate`), física de apilamiento con fricción inercial (`handleStackedCratesPhysics`), activación de palancas a distancia por impacto de proyectiles letales, y corrección de cuerpo físico estático de palancas para prevenir tildados.
+  - [puzzleLevels.test.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/data/puzzleLevels.test.ts): Adaptación de aserciones de salto geométrico y cantidad de activaciones requeridas (2 en niveles 1-2, 3+ en niveles 3-6) para dar soporte al puzle de disparo.
+  - [SaveDefaults.test.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/systems/save/SaveDefaults.test.ts): Inclusión de cámaras 5 y 6 y sus recompensas en pruebas de guardado.
+  - [AGENTS.md](file:///c:/Users/usuario/Desktop/adventureplay/AGENTS.md): Actualización del estado de Desafío con 6 cámaras, física de apilamiento, jaula final y puzles de disparo horizontal de precisión.
+- **Estado de validación**: `npm run check` completado con éxito (compilación, linter, tests y build exitosos).

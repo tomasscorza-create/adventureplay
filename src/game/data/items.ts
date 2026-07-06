@@ -85,6 +85,22 @@ export const itemDefinitions: Record<string, ItemDefinition> = {
     inventoryCategory: "toolsWeapons",
     description: "Mecanismo maestro del reloj que gobierna las cuatro camaras.",
   },
+  ancientGear: {
+    id: "ancientGear",
+    name: "Engranaje antiguo",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Engranaje del laberinto recuperado en la quinta camara.",
+  },
+  architectScepter: {
+    id: "architectScepter",
+    name: "Cetro del arquitecto",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Cetro dorado obtenido al superar el gran templo de contrapesos.",
+  },
 };
 
 export const randomInventoryRewardItemIds = Object.values(itemDefinitions)
