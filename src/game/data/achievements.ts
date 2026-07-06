@@ -270,6 +270,17 @@ export const achievementDefinitions: AchievementDefinition[] = [
       ? 3
       : Math.min(save.achievements.treasureStreak.count, 3),
   },
+  {
+    id: "first-puzzle",
+    title: "Mente y acero",
+    description: "Completa tu primera camara del modo Desafio.",
+    category: "discovery",
+    difficulty: "easy",
+    icon: "checkpoint",
+    target: 1,
+    reward: { experience: 100, gold: 75 },
+    getProgress: (save) => save.completedLevels.some((id) => id.startsWith("trialChamber")) ? 1 : 0,
+  },
 ];
 
 function countCompletedLevelsInRegion(save: SaveData, prefix: string, limit: number): number {
@@ -278,7 +289,9 @@ function countCompletedLevelsInRegion(save: SaveData, prefix: string, limit: num
 
 function countDefeatedEnemyFamilies(save: SaveData): number {
   const defeatedFamilies = new Set(
-    save.achievements.defeatedEnemyIds.map((enemyId) => enemyId === "e2m3" ? "m3" : enemyId),
+    save.achievements.defeatedEnemyIds.map((enemyId) =>
+      enemyId === "e2m3" || enemyId === "e3m3" ? "m3" : enemyId,
+    ),
   );
   return ["m0", "m1", "m2", "m3"].filter((enemyId) => defeatedFamilies.has(enemyId)).length;
 }

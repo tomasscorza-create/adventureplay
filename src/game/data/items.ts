@@ -53,6 +53,38 @@ export const itemDefinitions: Record<string, ItemDefinition> = {
     inventoryCategory: "potions",
     description: "Consumible de recuperacion para sistemas futuros.",
   },
+  ancientMechanism: {
+    id: "ancientMechanism",
+    name: "Mecanismo antiguo",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Engranaje recuperado en una camara de ingenio.",
+  },
+  runicCounterweight: {
+    id: "runicCounterweight",
+    name: "Contrapeso runico",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Pesa calibrada que conserva el pulso de una camara antigua.",
+  },
+  echoPrism: {
+    id: "echoPrism",
+    name: "Prisma de eco",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "plansKeys",
+    description: "Cristal que replica brevemente la energia de los sellos.",
+  },
+  architectCore: {
+    id: "architectCore",
+    name: "Nucleo del arquitecto",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Mecanismo maestro del reloj que gobierna las cuatro camaras.",
+  },
 };
 
 export const randomInventoryRewardItemIds = Object.values(itemDefinitions)

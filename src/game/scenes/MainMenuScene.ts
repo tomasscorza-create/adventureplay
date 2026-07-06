@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { EVENTS } from "../../shared/constants/events";
 import { gameEvents } from "../events/EventBus";
+import { puzzleLevelDefinitions } from "../data/puzzleLevels";
 
 export class MainMenuScene extends Phaser.Scene {
   private unbindStart?: () => void;
@@ -15,7 +16,10 @@ export class MainMenuScene extends Phaser.Scene {
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "main-menu");
 
     this.unbindStart = gameEvents.on(EVENTS.START_GAME, (payload) => {
-      this.scene.start("LevelScene", { levelId: payload.levelId });
+      this.scene.start(
+        puzzleLevelDefinitions[payload.levelId] ? "PuzzleScene" : "LevelScene",
+        { levelId: payload.levelId },
+      );
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

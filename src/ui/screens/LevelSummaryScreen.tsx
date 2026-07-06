@@ -42,7 +42,9 @@ export function LevelSummaryScreen({ summary, onContinue }: LevelSummaryScreenPr
     ? "Bosque encantado"
     : summary.theme === "active-volcano"
       ? "Volcán Activo"
-      : "Frontera Verde";
+      : summary.theme === "ancient-trials"
+        ? "Las camaras antiguas"
+        : "Frontera Verde";
 
   return (
     <section className={`overlay level-summary level-summary--${summary.theme}`}>

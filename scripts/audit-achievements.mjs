@@ -34,13 +34,17 @@ for (const category of achievementCategories) {
   }
 }
 
-if (achievementDefinitions.length !== 20) {
-  errors.push(`Se esperaban 20 logros totales y hay ${achievementDefinitions.length}`);
+if (achievementDefinitions.length !== 21) {
+  errors.push(`Se esperaban 21 logros totales y hay ${achievementDefinitions.length}`);
+}
+
+if (!achievementIds.has("first-puzzle")) {
+  errors.push("Falta el logro inicial propio del modo Desafio");
 }
 
 if (errors.length > 0) {
   console.error(errors.map((error) => `- ${error}`).join("\n"));
   process.exitCode = 1;
 } else {
-  console.log("Auditoria superada: 20 logros, 12 medios, 4 por categoria.");
+  console.log("Auditoria superada: 21 logros, 12 medios, 4 por categoria y Desafio conectado.");
 }

@@ -14,6 +14,7 @@ import { GameOverScene } from "../scenes/GameOverScene";
 import { LevelScene } from "../scenes/LevelScene";
 import { MainMenuScene } from "../scenes/MainMenuScene";
 import { PreloadScene } from "../scenes/PreloadScene";
+import { PuzzleScene } from "../scenes/PuzzleScene";
 import { UIScene } from "../scenes/UIScene";
 import { WorldMapScene } from "../scenes/WorldMapScene";
 
@@ -46,6 +47,7 @@ export function createPhaserConfig(parent: string): Phaser.Types.Core.GameConfig
       MainMenuScene,
       WorldMapScene,
       LevelScene,
+      PuzzleScene,
       BattleScene,
       UIScene,
       GameOverScene,

@@ -15,7 +15,6 @@ const hapticPatterns: Record<HapticCue, number | number[]> = {
 
 const cueCooldownMs: Partial<Record<HapticCue, number>> = {
   control: 35,
-  joystick: 70,
 };
 
 const strengthFactors = {

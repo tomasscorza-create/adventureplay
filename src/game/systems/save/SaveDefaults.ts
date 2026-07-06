@@ -18,21 +18,29 @@ import { achievementIds } from "../../data/achievements";
 import { enemyDefinitions } from "../../data/enemies";
 import { itemDefinitions } from "../../data/items";
 import { levelDefinitions } from "../../data/levels";
+import {
+  puzzleLevelIds,
+  puzzleLevelOrder,
+  puzzleRewardClaimIds,
+} from "../../data/puzzleLevels";
 
-export const SAVE_SCHEMA_VERSION = 16;
+export const SAVE_SCHEMA_VERSION = 17;
 
 const characterIds: CharacterId[] = ["ruder", "amy", "dunel", "sarix", "faust"];
 const profileIconIds: ProfileIconId[] = ["icon-1", "icon-2", "icon-3", "icon-4", "icon-5", "icon-6", "icon-7", "icon-8", "icon-9"];
 const characterIdSet = new Set<string>(characterIds);
 const profileIconIdSet = new Set<string>(profileIconIds);
-const levelIdSet = new Set(Object.keys(levelDefinitions));
+const levelIdSet = new Set([...Object.keys(levelDefinitions), ...puzzleLevelIds]);
 const inventoryItemIdSet = new Set(
   Object.values(itemDefinitions)
     .filter((item) => Boolean(item.inventoryCategory))
     .map((item) => item.id),
 );
 const enemyIdSet = new Set(Object.keys(enemyDefinitions));
-const rewardBoxIdSet = new Set(Object.values(levelDefinitions).map((level) => level.rewardBox.id));
+const rewardBoxIdSet = new Set([
+  ...Object.values(levelDefinitions).map((level) => level.rewardBox.id),
+  ...puzzleRewardClaimIds,
+]);
 const checkpointIdSet = new Set(Object.values(levelDefinitions).map((level) => level.checkpoint.id));
 const achievementIdSet = new Set<string>(achievementIds);
 const MAX_SAFE_COUNTER = Number.MAX_SAFE_INTEGER;
@@ -62,7 +70,19 @@ const levelSequences = [
     "enchantedGrove9",
     "enchantedGrove10",
   ],
-  ["activeVolcano1", "activeVolcano2", "activeVolcano3"],
+  [
+    "activeVolcano1",
+    "activeVolcano2",
+    "activeVolcano3",
+    "activeVolcano4",
+    "activeVolcano5",
+    "activeVolcano6",
+    "activeVolcano7",
+    "activeVolcano8",
+    "activeVolcano9",
+    "activeVolcano10",
+  ],
+  [...puzzleLevelOrder],
 ];
 const defaultPowerCharges: PowerChargeState = {
   healingCharges: 3,
@@ -103,7 +123,7 @@ export const defaultSave: SaveData = {
   primaryCharacterId: undefined,
   unlockedCharacterIds: [],
   characterPowerCharges: createDefaultCharacterPowerCharges(),
-  unlockedLevels: ["meadowOutpost", "enchantedGrove1", "activeVolcano1"],
+  unlockedLevels: ["meadowOutpost", "enchantedGrove1", "activeVolcano1", "trialChamber1"],
   completedLevels: [],
   claimedLevelRewards: [1],
   claimedRewardBoxes: [],

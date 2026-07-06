@@ -20,6 +20,7 @@ import type { CharacterId, ProfileIconId, SaveData } from "../../shared/types/ga
 import { AchievementIcon } from "../components/AchievementIcon";
 import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
+import { ChallengeView } from "./main-menu/ChallengeView";
 import { ExploreView } from "./main-menu/ExploreView";
 import { InventoryView } from "./main-menu/InventoryView";
 import { MenuHeading } from "./main-menu/MenuPrimitives";
@@ -34,7 +35,7 @@ import {
   getCarouselOffset,
 } from "./main-menu/menuUtils";
 
-type MenuView = "main" | "profile" | "modes" | "explore" | "characters" | "inventory" | "achievements" | "options" | "audio" | "commands" | "mobile-controls";
+type MenuView = "main" | "profile" | "modes" | "explore" | "challenge" | "characters" | "inventory" | "achievements" | "options" | "audio" | "commands" | "mobile-controls";
 type ProfileSectionId = "edit" | "statistics";
 
 interface MainMenuScreenProps {
@@ -801,10 +802,14 @@ export function MainMenuScreen({
                   <span>Explorar</span>
                   <strong>Campana del continente</strong>
                 </button>
-                <button className="mode-tile mode-tile--locked" type="button" disabled>
+                <button
+                  className="mode-tile mode-tile--active mode-tile--challenge"
+                  type="button"
+                  onClick={() => runMenuAction(() => setView("challenge"))}
+                >
                   <span className="mode-tile__sigil" aria-hidden="true" />
                   <span>Desafio</span>
-                  <strong>Proximamente</strong>
+                  <strong>Las camaras antiguas</strong>
                 </button>
                 <button className="mode-tile mode-tile--locked" type="button" disabled>
                   <span className="mode-tile__sigil" aria-hidden="true" />
@@ -822,6 +827,14 @@ export function MainMenuScreen({
               previewRegionId={previewRegionId}
               onActiveRegionChange={setActiveRegionId}
               onPreviewRegionChange={setPreviewRegionId}
+              onBack={() => setView("modes")}
+              onStartLevel={onStartLevel}
+            />
+          )}
+
+          {view === "challenge" && (
+            <ChallengeView
+              save={save}
               onBack={() => setView("modes")}
               onStartLevel={onStartLevel}
             />

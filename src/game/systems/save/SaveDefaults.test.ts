@@ -23,6 +23,7 @@ describe("normalizeSaveData", () => {
       "meadowOutpost",
       "enchantedGrove1",
       "activeVolcano1",
+      "trialChamber1",
     ]);
   });
 
@@ -120,7 +121,7 @@ describe("normalizeSaveData", () => {
         unlockedIds: ["first-gold", "unknown-achievement"],
         monstersDefeated: 2.8,
         flawlessLevelIds: ["meadowOutpost", "unknown-level", "meadowOutpost"],
-        defeatedEnemyIds: ["m3", "unknown-enemy", "e2m3", "m3"],
+        defeatedEnemyIds: ["m3", "unknown-enemy", "e2m3", "e3m3", "m3"],
         mostEnemiesDefeatedInLevel: 4.9,
         goldCollected: 10.2,
         activatedCheckpointIds: [
@@ -140,13 +141,14 @@ describe("normalizeSaveData", () => {
       "meadowOutpost",
       "enchantedGrove1",
       "activeVolcano1",
+      "trialChamber1",
       "meadowOutpost2",
     ]);
     expect(normalized.completedLevels).toEqual(["meadowOutpost"]);
     expect(normalized.claimedRewardBoxes).toEqual(["reward-box-l1"]);
     expect(normalized.checkpointId).toBe("meadow-midpoint");
     expect(normalized.achievements.flawlessLevelIds).toEqual(["meadowOutpost"]);
-    expect(normalized.achievements.defeatedEnemyIds).toEqual(["m3", "e2m3"]);
+    expect(normalized.achievements.defeatedEnemyIds).toEqual(["m3", "e2m3", "e3m3"]);
     expect(normalized.achievements.activatedCheckpointIds).toEqual(["meadow-midpoint"]);
     expect(normalized.achievements.levelAdvanceStreak).toEqual({ count: 0 });
     expect(normalized.achievements.treasureStreak).toEqual({
@@ -174,6 +176,58 @@ describe("normalizeSaveData", () => {
       healingCharges: 9,
       powerCharges: 14,
     });
+  });
+
+  it("preserves challenge progress, its inventory reward and its own achievement", () => {
+    const defaults = createDefaultSave();
+    const normalized = normalizeSaveData({
+      ...defaults,
+      player: {
+        ...defaults.player,
+        inventory: ["ancientMechanism", "runicCounterweight", "echoPrism", "architectCore"],
+      },
+      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4"],
+      claimedRewardBoxes: [
+        "trialChamber1:mechanism",
+        "trialChamber2:counterweight",
+        "trialChamber3:prism",
+        "trialChamber4:architect-core",
+      ],
+      achievements: {
+        ...defaults.achievements,
+        unlockedIds: ["first-puzzle"],
+      },
+    });
+
+    expect(normalized.completedLevels).toEqual([
+      "trialChamber1",
+      "trialChamber2",
+      "trialChamber3",
+      "trialChamber4",
+    ]);
+    expect(normalized.unlockedLevels).toEqual(expect.arrayContaining([
+      "trialChamber1",
+      "trialChamber2",
+      "trialChamber3",
+      "trialChamber4",
+    ]));
+    expect(normalized.claimedRewardBoxes).toHaveLength(4);
+    expect(normalized.player.inventory).toEqual([
+      "ancientMechanism",
+      "runicCounterweight",
+      "echoPrism",
+      "architectCore",
+    ]);
+    expect(normalized.achievements.unlockedIds).toContain("first-puzzle");
+  });
+
+  it("unlocks the expanded volcanic sequence from existing completed progress", () => {
+    const normalized = normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: ["activeVolcano1", "activeVolcano2", "activeVolcano3"],
+    });
+
+    expect(normalized.unlockedLevels).toContain("activeVolcano4");
   });
 
   it("uses new-save defaults for empty or non-object payloads", () => {

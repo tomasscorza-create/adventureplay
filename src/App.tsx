@@ -5,6 +5,7 @@ import {
   getNextCharacterUnlockRequirement,
 } from "./game/data/characterUnlocks";
 import { levelDefinitions } from "./game/data/levels";
+import { puzzleLevelDefinitions } from "./game/data/puzzleLevels";
 import { getLevelMusicTrack } from "./game/data/music";
 import type { PowerPackage, PurchasablePower } from "./game/data/powerShop";
 import { gameSaveStore } from "./game/systems/save/GameSaveStore";
@@ -141,14 +142,15 @@ export function App() {
     }
 
     const level = levelDefinitions[activeLevelId];
+    const puzzleLevel = puzzleLevelDefinitions[activeLevelId];
     const keepsLevelMusic = screen === "playing"
       || screen === "paused"
       || screen === "level-transition"
       || screen === "power-shop"
       || screen === "game-over";
 
-    if (keepsLevelMusic && level) {
-      gameMusic.play(getLevelMusicTrack(level.stageNumber));
+    if (keepsLevelMusic && (level || puzzleLevel)) {
+      gameMusic.play(getLevelMusicTrack(level?.stageNumber ?? puzzleLevel?.stageNumber ?? 1));
     } else {
       gameMusic.play("menu");
     }

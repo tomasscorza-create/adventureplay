@@ -70,12 +70,19 @@ const regions: RegionDefinition[] = [
   {
     id: "active-volcano",
     name: "Volcán Activo",
-    status: "3 niveles",
+    status: "10 niveles",
     mapImageUrl: activeVolcanoMapUrl,
     levels: [
       { number: 1, levelId: "activeVolcano1", name: "Umbral de ceniza" },
       { number: 2, levelId: "activeVolcano2", name: "Ríos de magma" },
       { number: 3, levelId: "activeVolcano3", name: "Furia del cráter" },
+      { number: 4, levelId: "activeVolcano4", name: "Puentes de obsidiana" },
+      { number: 5, levelId: "activeVolcano5", name: "Cámara de magma" },
+      { number: 6, levelId: "activeVolcano6", name: "Despertar del coloso" },
+      { number: 7, levelId: "activeVolcano7", name: "Cacería ígnea I" },
+      { number: 8, levelId: "activeVolcano8", name: "Cacería ígnea II" },
+      { number: 9, levelId: "activeVolcano9", name: "Cacería ígnea III" },
+      { number: 10, levelId: "activeVolcano10", name: "Corazón del volcán" },
     ],
   },
 ];

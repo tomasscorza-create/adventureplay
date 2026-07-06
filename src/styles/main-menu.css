@@ -1670,7 +1670,6 @@
   }
 
   .mobile-joystick__direction--left { top: 46px; left: 8px; }
-  .mobile-joystick__direction--up { top: 5px; left: 48px; }
   .mobile-joystick__direction--right { top: 46px; right: 8px; }
 
   .mobile-joystick:not(.mobile-joystick--idle) {
@@ -1679,43 +1678,63 @@
   }
 
   .mobile-joystick--left .mobile-joystick__direction--left,
-  .mobile-joystick--up-left .mobile-joystick__direction--left,
-  .mobile-joystick--right .mobile-joystick__direction--right,
-  .mobile-joystick--up-right .mobile-joystick__direction--right,
-  .mobile-joystick--up .mobile-joystick__direction--up,
-  .mobile-joystick--up-left .mobile-joystick__direction--up,
-  .mobile-joystick--up-right .mobile-joystick__direction--up {
+  .mobile-joystick--right .mobile-joystick__direction--right {
     color: #fff2ad;
     filter: drop-shadow(0 0 5px rgba(255, 221, 113, 0.8));
     transform: scale(1.18);
   }
 
   .mobile-action-wheel {
-    display: grid;
-    grid-template: 46px 68px / 46px 68px 46px;
-    gap: var(--mobile-control-gap, 10px);
-    align-items: center;
-    justify-items: center;
+    position: relative;
+    width: 220px;
+    height: 150px;
     pointer-events: auto;
-    transform: rotate(var(--mobile-action-wheel-rotation, 0deg));
-    transform-origin: center 68%;
   }
 
   .app-shell > .mobile-controls .mobile-action-wheel .touch-button {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
     width: 46px;
     height: 46px;
-    transform: rotate(var(--mobile-action-wheel-counter-rotation, 0deg));
   }
 
-  .app-shell > .mobile-controls .mobile-action-wheel .touch-button:active,
-  .app-shell > .mobile-controls .mobile-action-wheel .touch-button.is-pressed {
-    transform: rotate(var(--mobile-action-wheel-counter-rotation, 0deg)) translateY(2px) scale(0.92);
+  .mobile-action-wheel__spin {
+    transform: translate(-50%, 50%) rotate(var(--mobile-wheel-spin-angle, -90deg)) translateX(var(--mobile-wheel-orbit-radius, 78px)) rotate(var(--mobile-wheel-spin-counter-angle, 90deg));
   }
 
-  .mobile-action-wheel__spin { grid-area: 1 / 2; }
-  .mobile-action-wheel__heal { grid-area: 2 / 1; }
-  .mobile-action-wheel__melee { grid-area: 2 / 2; }
-  .mobile-action-wheel__power { grid-area: 2 / 3; }
+  .mobile-action-wheel__heal {
+    transform: translate(-50%, 50%) rotate(var(--mobile-wheel-heal-angle, -158deg)) translateX(var(--mobile-wheel-orbit-radius, 78px)) rotate(var(--mobile-wheel-heal-counter-angle, 158deg));
+  }
+
+  .mobile-action-wheel__power {
+    transform: translate(-50%, 50%) rotate(var(--mobile-wheel-power-angle, -22deg)) translateX(var(--mobile-wheel-orbit-radius, 78px)) rotate(var(--mobile-wheel-power-counter-angle, 22deg));
+  }
+
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__spin:active,
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__spin.is-pressed {
+    transform: translate(-50%, 50%) rotate(var(--mobile-wheel-spin-angle, -90deg)) translateX(var(--mobile-wheel-orbit-radius, 78px)) rotate(var(--mobile-wheel-spin-counter-angle, 90deg)) scale(0.92);
+  }
+
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__heal:active,
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__heal.is-pressed {
+    transform: translate(-50%, 50%) rotate(var(--mobile-wheel-heal-angle, -158deg)) translateX(var(--mobile-wheel-orbit-radius, 78px)) rotate(var(--mobile-wheel-heal-counter-angle, 158deg)) scale(0.92);
+  }
+
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__power:active,
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__power.is-pressed {
+    transform: translate(-50%, 50%) rotate(var(--mobile-wheel-power-angle, -22deg)) translateX(var(--mobile-wheel-orbit-radius, 78px)) rotate(var(--mobile-wheel-power-counter-angle, 22deg)) scale(0.92);
+  }
+
+  .mobile-action-wheel__melee {
+    bottom: 0;
+    transform: translateX(-50%);
+  }
+
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__melee:active,
+  .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__melee.is-pressed {
+    transform: translateX(-50%) translateY(2px) scale(0.92);
+  }
 
   .app-shell > .mobile-controls .mobile-action-wheel--prefer-spin .mobile-action-wheel__spin,
   .app-shell > .mobile-controls .mobile-action-wheel--prefer-heal .mobile-action-wheel__heal,

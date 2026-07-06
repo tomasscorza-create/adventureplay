@@ -314,7 +314,7 @@ export class LevelScene extends Phaser.Scene {
       );
     }
 
-    if (enemy.enemyId === "m3" || enemy.enemyId === "e2m3") {
+    if (enemy.enemyId === "m3" || enemy.enemyId === "e2m3" || enemy.enemyId === "e3m3") {
       return new M3Enemy(
         this,
         enemy.x,
@@ -324,7 +324,11 @@ export class LevelScene extends Phaser.Scene {
           ...this.movingPlatforms.getChildren(),
         ] as Phaser.GameObjects.Rectangle[],
         this.level.m3Intelligence,
-        enemy.enemyId === "e2m3" ? "enchanted" : "default",
+        enemy.enemyId === "e2m3"
+          ? "enchanted"
+          : enemy.enemyId === "e3m3"
+            ? "volcanic"
+            : "default",
       );
     }
 

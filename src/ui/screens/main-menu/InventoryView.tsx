@@ -44,7 +44,7 @@ export function InventoryView({ save, onBack }: InventoryViewProps) {
   <div className="inventory-screen" aria-label="Inventario del jugador">
     <div className="inventory-screen__summary">
       <span>{save.player.inventory.length} piezas guardadas</span>
-      <strong>Frontera Verde</strong>
+      <strong>Compartido entre modos</strong>
     </div>
 
     <div className="inventory-tabs" role="tablist" aria-label="Categorias de inventario">

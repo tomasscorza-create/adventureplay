@@ -76,11 +76,11 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - El proyecto alojado actual es `adventureplay` (`hlfyhbvzenuepojifetb`). Las migraciones `20260626000000` y `20260630000000` estan aplicadas en remoto desde el 2026-06-30; todo cambio posterior debe agregarse como una migracion nueva.
 - El despliegue publico actual esta en `https://adventureplay.netlify.app/` y se construye desde `main` del repositorio `tomasscorza-create/adventureplay`. Netlify requiere `npm run build`, directorio publicado `dist`, `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` con alcance de build.
 - Supabase Auth debe conservar `https://adventureplay.netlify.app` como `Site URL` y como Redirect URL exacta para confirmaciones de email, recuperacion y retornos de autenticacion. No asumir que este ajuste del Dashboard se versiona en `supabase/config.toml`, porque ese archivo sigue describiendo el stack local.
-- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 16`; incluye nombre visible, icono de perfil y estadisticas acumuladas del jugador, cinco heroes, heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO.
+- El esquema de guardado de aplicacion esta en `SAVE_SCHEMA_VERSION = 17`; incluye nombre visible, icono de perfil y estadisticas acumuladas del jugador, cinco heroes, heroe principal, personajes desbloqueados, cargas por personaje, recompensas de nivel reclamadas, progreso ampliado de logros y rachas diarias, y conserva `player.coins` como clave interna para el ORO. La version 17 incorpora IDs persistentes del modo Desafio sin separar la progresion global.
 - El arte de gameplay sigue siendo mayormente placeholder; el selector de heroes ya usa retratos propios optimizados desde los PNG de diseno.
 - Frontera Verde tiene los niveles 1 a 10 implementados y encadenados; desde el nivel 6 aparece M3 y en los niveles 7 a 10 pasa a ser la amenaza principal.
 - Bosque encantado es la segunda region seleccionable y tiene LV1-LV10 implementados y encadenados desde `enchantedGrove1` hasta `enchantedGrove10`. Conserva tiempo, progreso, presion roja, checkpoint, meta, pozos y plataformas propias; reutiliza las IA/estadisticas de M0, M1, M2 y M3 con apariencias exclusivas del escenario. La variante tematica de M3 se identifica como E2M3 y domina la progresion avanzada.
-- Volcan Activo es la tercera region jugable y tiene LV1-LV3 implementados y encadenados desde `activeVolcano1` hasta `activeVolcano3`. Usa fondo y plataformas flotantes fuente propios, terreno de roca/lava, pozos de magma, skins procedurales para M0/M1 y dos hojas normalizadas para M2. M3 no forma parte de estos tres niveles y no debe agregarse hasta una fase posterior pedida por el usuario.
+- Volcan Activo es la tercera region jugable y tiene LV1-LV10 implementados y encadenados desde `activeVolcano1` hasta `activeVolcano10`. Usa fondo y plataformas flotantes fuente propios, terreno de roca/lava, pozos de magma, skins procedurales para M0/M1 y dos hojas normalizadas para M2. E3M3 aparece desde LV4 y pasa a ser la amenaza principal desde LV6.
 - La web es instalable como PWA movil bajo el nombre `Adventure Play`: usa manifiesto landscape/fullscreen, iconos Android/iOS y service worker generado en produccion. Las actualizaciones esperan confirmacion del jugador para no recargar una partida activa.
 - Phaser se carga de forma diferida despues de autenticar y queda en un chunk de gameplay independiente. Su advertencia de tamano es esperable; el chunk inicial tiene un presupuesto automatizado de 450 KiB.
 - La entrada inicial usa `public/media/adventure-play-intro.mp4`: React intenta reproducirla de inmediato con su audio original, mientras autenticacion y Phaser cargan por debajo, y aplica una transicion breve antes de revelar el menu o la pantalla de acceso. Como los navegadores pueden bloquear autoplay con sonido, `GameIntroScreen` ofrece `Tocar para comenzar` solo cuando hace falta. La copia web conserva el indice MP4 al comienzo para iniciar rapido.
@@ -130,11 +130,15 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/assets/scenery/enchanted-forest/`: fondo y cuatro arboles por capas de Bosque encantado; las fuentes maestras pueden archivarse fuera del repositorio.
 - `src/assets/scenery/active-volcano/`: fondo y capa media usados por Volcan Activo; la hoja de capa media se recorta en runtime para distribuir cuatro islas de parallax.
 - `src/assets/enemies/active-volcano-m2/`: hojas fuente de vuelo y ataque del M2 volcanico; `PreloadScene` las separa, limpia sus indices y normaliza a cuadros 320x320.
+- `src/assets/enemies/active-volcano-m3/`: siete poses transparentes y alineadas de E3M3 para reposo, carrera, alerta, preparacion, impacto y derrota; derivadas de la lamina fuente externa y listas para futuros niveles de Volcan Activo.
 - `src/assets/enemies/enchanted-m2/`: diez poses fuente del M2 de Bosque encantado, normalizadas a cuadros 320x320 durante `PreloadScene`; los originales pueden archivarse fuera del repositorio.
 - `src/assets/enemies/enchanted-m3/`: siete poses de E2M3 para reposo, carrera, ataque y derrota; los originales pueden archivarse fuera del repositorio.
 - `src/game/entities/enemies/M3Enemy.ts`: enemigo perseguidor M3 con estados de alerta, persecucion, salto, ataque, recuperacion, dano y derrota; tiene dos puntos de vida, barra propia y navegacion preventiva de bordes/plataformas.
 - `src/game/scenes/preload/loadSceneAssets.ts`: registra las rutas y claves de assets; `PreloadScene` conserva la generacion de texturas y animaciones.
 - `src/game/scenes/level/LevelRunTracker.ts`: cuenta tiempo/acciones del intento y aplica estadisticas una sola vez; `LevelScene` conserva la orquestacion jugable.
+- `src/game/scenes/PuzzleScene.ts`: orquesta el gameplay del modo Desafio sin mezclar sus mecanismos con `LevelScene`; reutiliza personaje, input, poderes, HUD, guardado, inventario, progresion y estadisticas.
+- `src/game/data/puzzleLevels.ts`: contrato orientado a datos para cuatro camaras de ingenio encadenadas, activadores requeridos, dificultad cuantificada y compatibilidad cooperativa futura.
+- `src/game/systems/puzzles/PuzzleActivationSystem.ts`: estado puro de activadores por participante; `PuzzleScene` lo usa para resolver objetivos y un futuro transporte cooperativo debe alimentarlo sin acoplar red a Phaser.
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
@@ -153,6 +157,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `MainMenuScene`: fondo del menu y escucha `START_GAME`.
 - `WorldMapScene`: creada como placeholder para futuro mapa.
 - `LevelScene`: escena jugable principal.
+- `PuzzleScene`: escena del modo Desafio; consume datos de cuatro camaras y admite cantidades variables de sellos y peligros sin duplicar escenas.
 - `BattleScene`: creada como placeholder para futuros combates especiales.
 - `UIScene`: placeholder Phaser para UI interna si hiciera falta, pero la UI actual vive en React.
 - `GameOverScene`: escena de resultado que comunica derrota o victoria a React.
@@ -169,7 +174,7 @@ La demo actual permite:
 - Ver cuatro accesos graficos compactos en el menu principal: Iniciar juego, Personaje, Inventario y Logros. Logros usa `src/assets/menu/menu-achievements.webp` y abre una sala de trofeos responsive con progreso real.
 - Las nueve cabeceras internas del menu usan `MenuHeading` con un unico titulo centrado y el retorno convencional a la izquierda. Comparten la textura de madera `src/assets/menu/fondo100.jpg`, pero cada variante desplaza el fondo para mostrar un recorte diferente; no volver a agregar subtitulos/eyebrows dentro de estas cabeceras. La cabecera permanece visible al desplazar contenido y, en landscape mobile, las tabs principales de perfil, logros e inventario quedan accesibles debajo.
 - Abrir desde la esquina superior izquierda una pagina completa de perfil con estetica derivada de la sala de Logros y paginas intercambiables `Editar perfil` y `Estadisticas`. Editar perfil permite cambiar un nombre persistente de 2 a 20 caracteres, consultar el correo y elegir uno de nueve iconos sin nombres visibles. Estadisticas combina progreso historico existente con tiempo activo, acciones, APM promedio, intentos, metas y derrotas acumulados al cerrar cada recorrido.
-- Desbloquear veinte logros: ocho faciles y doce medios, distribuidos en `Aventura`, `Combate` y `Descubrimiento`.
+- Desbloquear veintiun logros: los veinte originales y `Mente y acero`, logro inicial propio de Desafio; los doce medios siguen distribuidos de a cuatro entre `Aventura`, `Combate` y `Descubrimiento`.
 - Ver cada logro nuevo durante la partida mediante una tarjeta animada `Logro desbloqueado` con icono y nombre. Si se obtienen varios a la vez, React los presenta en cola sin superponerlos.
 - Ver cada subida mediante una tarjeta superior `Nivel aumentado` con el nuevo LV y sus recompensas ya acreditadas. Subidas y logros comparten una unica cola React: nunca se superponen y cada aviso espera a que termine el anterior.
 - La sala de logros divide las veinte definiciones en subpaginas internas para `Aventura`, `Combate` y `Descubrimiento`, siguiendo el patron de tabs del inventario; usa iconos SVG semanticos compartidos con los avisos, tarjetas compactas y una paleta marron/dorada coherente con el menu.
@@ -188,13 +193,19 @@ La demo actual permite:
 - Salir de la cuenta desde la seccion Cuenta dentro de Opciones; el acceso ya no vive junto a la tuerca del menu principal.
 - Reiniciar todo el progreso desde Opciones con confirmacion destructiva, conservando la cuenta de autenticacion pero restaurando el save inicial.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
-- Ver el modo Explorar presentado con arte propio de aventura en su tarjeta `Campana del continente`; Desafio y Arena conservan su presentacion bloqueada.
+- Ver el modo Explorar presentado con arte propio de aventura en su tarjeta `Campana del continente`; Arena conserva su presentacion bloqueada.
+- Abrir Desafio y jugar cuatro camaras encadenadas: `La camara de los dos sellos`, `El corredor del contrapeso`, `La galeria de las tres rupturas` y `El reloj del arquitecto`. Cada una impone la secuencia fisica caja-cornisa-palanca-puerta-placa-sellos-portal: la cornisa queda fuera del salto normal y solo se alcanza usando la caja, la palanca abre una puerta de altura completa imposible de saltar, y despues la misma caja debe cruzar la puerta y quedar sobre la placa para habilitar la salida.
+- Ver una dificultad cuantificada 100, 123, 152 y 188: cada camara aumenta entre 20% y 25% respecto de la anterior mediante recorrido, sellos, peligros, plataformas y presion temporal, no mediante inflar dano arbitrariamente.
+- No agregar plataformas auxiliares antes de la puerta que permitan alcanzar la cornisa sin caja, ni reducir la puerta por debajo del alto jugable. `puzzleLevels.test.ts` protege ambas condiciones contra atajos accidentales.
+- Compartir entre Explorar y Desafio el heroe seleccionado, salud maxima, controles, poderes y cargas por personaje, ORO, XP/LV, inventario, logros, HUD, pausa, tienda de cargas, guardado remoto y estadisticas acumuladas.
+- Recoger en Desafio ORO persistente y una pieza unica por camara: `Mecanismo antiguo`, `Contrapeso runico`, `Prisma de eco` y `Nucleo del arquitecto`. Las recompensas de finalizacion escalan a 180, 220, 270 y 330 XP; la primera camara puede desbloquear `Mente y acero` una sola vez.
+- Ver la opcion Cooperativo dentro de Desafio marcada como proxima fase. `PuzzleLevelDefinition` ya declara activadores requeridos y `supportsCooperative`, pero la sesion de red, autoridad, sincronizacion y segundo jugador aun no estan implementados; no presentar esa opcion como jugable.
 - En el explorador, el mapa de regiones izquierdo se escala completo al espacio disponible y no tiene scroll; la lista de niveles derecha conserva cabecera fija y scroll independiente. El contenedor general no debe capturar el desplazamiento de niveles.
 - La iluminacion del mapa usa una unica `explore-map__highlight` como hermana de los botones y toma el alfa detallado del WebP regional. Los `clip-path` poligonales se conservan solo como hitboxes invisibles: no volver a introducir la imagen regional dentro del boton, porque el poligono recortaria arboles, puentes y relieves visibles.
 - Elegir niveles desbloqueados desde Frontera Verde.
 - Jugar los niveles 1 a 10 de Frontera Verde.
 - Seleccionar Bosque encantado como segunda region y jugar sus niveles 1 a 10; solo `Umbral encantado` comienza desbloqueado y los siguientes se abren en cadena.
-- Seleccionar Volcan Activo como tercera region y jugar `Umbral de ceniza`, `Rios de magma` y `Furia del crater`; solo LV1 comienza desbloqueado y LV3 cierra temporalmente la region.
+- Seleccionar Volcan Activo como tercera region y jugar sus diez niveles; solo `Umbral de ceniza` comienza desbloqueado y los siguientes se abren en cadena hasta `Corazon del volcan`.
 - Recorrer Bosque encantado sobre piedra verde azulada con musgo y raices, con el fondo y cuatro arboles propios distribuidos en capas de parallax.
 - Enfrentar en `Umbral encantado` dos M0 inmoviles con aspecto de guardianes de musgo y dos M1 perseguidores con aspecto de criaturas de corteza; su comportamiento sigue reutilizando `BasicEnemy` y `M1Enemy`.
 - Enfrentar un M2 de Bosque encantado que reutiliza la IA aerea existente y sincroniza poses propias de vuelo, frenado/preparacion, picada, recuperacion y explosion. El ave fuente mira a la izquierda; `M2Enemy` usa `flipX` cuando avanza a la derecha e inclina el sprite segun la trayectoria real de picada.
@@ -316,15 +327,15 @@ Desktop:
 Mobile:
 
 - Controles tactiles en `MobileControls`.
-- Opciones > Controles moviles permite elegir de forma persistente entre `Comando 1` y `Comando 2` sin modificar el save remoto. La pantalla muestra una previsualizacion fiel de cada distribucion y cambia inmediatamente el panel inferior al perfil seleccionado.
+- Opciones > Controles moviles permite elegir de forma persistente entre `Comando 1` y `Comando 2` sin modificar el save remoto. El editor muestra una previsualizacion landscape con proporcion `915x412`, similar a un telefono Pixel promedio: escala botones, joystick, separaciones y desplazamientos desde las mismas medidas CSS del gameplay para reflejar su tamano y posicion relativos. Cambia inmediatamente al perfil seleccionado.
 - Cada comando conserva de forma independiente tamano, separacion, opacidad, posicion de movimiento, posicion de ataques y modo zurdo. Cambiar o restaurar un comando no debe modificar el otro; vibracion y rendimiento siguen siendo ajustes generales compartidos.
 - Los perfiles recomendados priorizan legibilidad y alcance tactil: Comando 1 usa 108% de escala, 92% de opacidad y separacion 14; Comando 2 usa 106%, 94% y separacion 10. Restaurar un comando aplica estos valores sin tocar el otro. Los perfiles antiguos que aun conservaban exactamente los defaults previos migran a los nuevos valores; las personalizaciones distintas se preservan.
 - `Comando 1`: conserva dos controles translucidos de movimiento y una fila compacta de espada, giro, regeneracion y poder letal. El salto no tiene boton visible: cualquier `pointerdown` sobre la pantalla libre encola `jump` mediante `TouchInputStore`, incluso mientras otro dedo mantiene movimiento.
-- `Comando 2`: usa un joystick de tres extremos en el lado de movimiento. Arrastrar a izquierda/derecha mantiene esa direccion, entrar en el extremo superior encola salto y una diagonal permite avanzar y saltar a la vez. Un toque libre en la pantalla tambien salta; un toque corto sobre el propio joystick salta al soltar sin convertir cada arrastre en un salto accidental.
+- `Comando 2`: usa un joystick exclusivamente horizontal en el lado de movimiento. Arrastrar a izquierda/derecha mantiene esa direccion; tocarlo, soltarlo o desplazarlo hacia arriba nunca encola salto. El salto sigue disponible al tocar la pantalla libre fuera del joystick y de su halo de proteccion.
 - En `Comando 2`, el ataque de espada J es el boton principal grande del lado de acciones; giro K, regeneracion Q y poder letal E son tres botones menores alrededor. Conservan recarga, disponibilidad, contadores y feedback de recompensas existentes.
-- Comando 2 permite rotar la rueda entre -30 y 30 grados y elegir giro, curacion o poder como boton exterior preferido; el elegido gana tamano y contraste sin reemplazar la espada central ni cambiar el mapeo jugable.
+- Comando 2 permite desplazar entre -30 y 30 grados la orbita de giro, curacion y poder alrededor de la espada central. J permanece fijo. En el punto medio, Q y E quedan abiertos a los lados y K arriba, con una separacion semejante a la rueda original; al ajustar, K recorre el arco completo y los dos exteriores solo el 40%. El area protegida es de 220x150 px incluso con un boton exterior agrandado. Separacion regula el radio entre 76 y 84 px, y la vista previa usa los mismos angulos y limites.
 - El modo zurdo intercambia completos los lados de movimiento y acciones en ambos esquemas sin limitar el area libre de salto.
-- En ambos comandos, cada boton tiene una zona tactil invisible ligeramente mayor; movimiento y espada reciben la ampliacion principal. Un halo adicional alrededor de botones y joystick bloquea el salto cuando el dedo falla por pocos pixeles. Cada `pointerdown` conserva una sola accion hasta levantarse, para que el salto de fondo no se mezcle con los controles.
+- En ambos comandos, cada boton tiene una zona tactil invisible ligeramente mayor; movimiento y espada reciben la ampliacion principal. Un halo adicional alrededor de botones bloquea el salto cuando el dedo falla por pocos pixeles; en Comando 2 el joystick conserva un halo mayor de 32 px. Cada `pointerdown` conserva una sola accion hasta levantarse, para que el salto de fondo no se mezcle con los controles.
 - Pausa: icono SVG arriba a la derecha.
 - En vertical aparece aviso de orientacion y se ocultan controles.
 - En horizontal movil aparece HUD compacto arriba izquierda y controles abajo.
@@ -374,7 +385,7 @@ Ya existe:
 - El perfil mobile ofrece Calidad 90%, Equilibrado 75% (`960x540`) y Rendimiento 62,5%; Equilibrado es el default. `game/main.ts` redimensiona Phaser al cambiar el ajuste y `CameraSystem` compensa siempre el factor tanto en zoom como en el borde mundial superior visible para conservar el acercamiento `1.15`, elevar suelo/personajes y mantener el mismo campo visual. Rendimiento tambien elimina blur/sombras costosas durante partida; no desacoplar resolucion y compensacion de camara.
 - Opciones muestra `Controles moviles` exclusivamente bajo el perfil mobile. `MobileGameplaySettings` persiste tamaño, separacion, opacidad, desplazamiento de ambos bloques, modo zurdo, vibracion y perfil de rendimiento; React aplica los valores mediante variables CSS sin modificar hitboxes ni logica jugable.
 - Los toques validos de salto libre muestran un pulso local en el punto tocado. `MobileActionBuffer` conserva J/K durante 120 ms solo en mobile; desktop mantiene input inmediato. `GameHaptics` usa `navigator.vibrate` cuando existe y esta habilitado para salto ejecutado, ataque, giro, daño real y fin de recarga.
-- La vibracion mobile ofrece intensidad Suave, Equilibrada o Firme. Botones y zonas tactiles extendidas dan una confirmacion corta al presionar; el joystick vibra solo al entrar o cambiar de direccion, con cooldown para evitar zumbido continuo. Arrastrar fuera del dibujo de un boton no debe soltar la accion mientras ese pointer conserve la captura.
+- La vibracion mobile ofrece intensidad Suave, Equilibrada o Firme. Botones y zonas tactiles extendidas dan una confirmacion corta al presionar; el joystick da una unica vibracion sutil al iniciar cada nueva pulsacion y no vuelve a vibrar mientras el mismo dedo siga apoyado. Arrastrar fuera del dibujo de un boton no debe soltar la accion mientras ese pointer conserve la captura.
 - La linea roja se posiciona cada frame sobre el borde mundial realmente visible, compensando zoom y scroll. Su limite de dano usa el borde derecho de esa misma linea; no volver a calcular el contacto solo desde `camera.scrollX`.
 - Uso de `env(safe-area-inset-*)` para notch/barras del sistema.
 
@@ -489,12 +500,30 @@ Esta seccion resume la construccion de Bosque encantado y convierte sus decision
 
 ### Implementacion actual de Volcan Activo
 
-- Region/tema: `active-volcano`; niveles `activeVolcano1` a `activeVolcano3`, disponibles como tercera pieza del mapa y encadenados solo dentro de la region.
-- Base: 5600 px, seis rios/pozos de magma, superficies bajas y elevadas, ORO 25/28/30, caja unica, checkpoint y meta por nivel.
+- Region/tema: `active-volcano`; niveles `activeVolcano1` a `activeVolcano10`, disponibles como tercera pieza del mapa y encadenados solo dentro de la region.
+- Base: 5600 px, seis rios/pozos de magma, superficies bajas y elevadas, ORO progresivo de 25 a 59, caja unica, checkpoint y meta por nivel.
 - Curva inicial: LV1 68 s/60 presion/6 enemigos/3 peligros; LV2 64 s/70/8/5; LV3 60 s/82/10/7 y tres plataformas moviles.
-- Enemigos: reutiliza las IA de M0, M1 y M2. M0/M1 usan texturas `volcanic-enemy-*` generadas por Phaser; M2 usa animaciones `volcanic-m2-flight|windup|dive|recover|defeat` sincronizadas con su maquina de estados.
+- Enemigos actuales: reutiliza las IA de M0, M1, M2 y M3. M0/M1 usan texturas `volcanic-enemy-*` generadas por Phaser; M2 usa animaciones `volcanic-m2-flight|windup|dive|recover|defeat` sincronizadas con su maquina de estados.
+- Pipeline de E3M3: siete PNG 320x410 forman `volcanic-m3-idle`, `volcanic-m3-run`, `volcanic-m3-alert`, `volcanic-m3-attack-windup`, `volcanic-m3-attack`, `volcanic-m3-hurt` y `volcanic-m3-defeat`. `M3Enemy` selecciona la variante `volcanic`, conserva la IA compartida y aplica carga, estela y derrota en tonos lava. El ID `e3m3` cuenta como familia M3 para logros.
 - Arte: `volcanic-background` queda fijo; `volcanic-midground` aporta cuatro recortes alternados de parallax; el terreno y los pozos se dibujan con roca oscura, bordes incandescentes y grietas de lava.
-- Restriccion vigente: ningun spawn `m3`/`e2m3` en LV1-LV3. La auditoria exige exactamente tres niveles, cadena completa, progresion esperada y ausencia de M3.
+- Restriccion vigente: ningun spawn `m3`/`e2m3`/`e3m3` en LV1-LV3. E3M3 se introduce en LV4 con IA 0.58, crece a dos ejemplares en LV5 y domina LV6-LV10 con cuatro a ocho ejemplares e IA 0.84-1.00.
+
+### Curva de progresion de Volcan Activo LV1-LV10
+
+| Nivel | Nombre | Tiempo | Presion roja | Enemigos | M2 | E3M3 | Peligros ofensivos | Plataformas moviles | Funcion de diseno |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| LV1 | Umbral de ceniza | 68 s | 60 | 6 | 1 | 0 | 3 | 0 | Presenta magma, skins y ritmo base de la region. |
+| LV2 | Rios de magma | 64 s | 70 | 8 | 2 | 0 | 5 | 0 | Combina persecucion terrestre y dos amenazas aereas. |
+| LV3 | Furia del crater | 60 s | 82 | 10 | 3 | 0 | 7 | 3 | Introduce plataformas moviles y el primer corazon. |
+| LV4 | Puentes de obsidiana | 57 s | 94 | 12 | 4 | 1 | 9 | 5 | Presenta E3M3 dentro de una composicion ya aprendida. |
+| LV5 | Camara de magma | 54 s | 106 | 14 | 5 | 2 | 11 | 7 | Examen de M2, superficies moviles y dos colosos. |
+| LV6 | Despertar del coloso | 52 s | 118 | 15 | 4 | 4 | 12 | Transfiere el protagonismo terrestre a E3M3. |
+| LV7 | Caceria ignea I | 50 s | 128 | 16 | 4 | 5 | 13 | Inicia la caceria avanzada con IA 0.88. |
+| LV8 | Caceria ignea II | 48 s | 138 | 17 | 4 | 6 | 14 | Aumenta lectura simultanea y rutas moviles. |
+| LV9 | Caceria ignea III | 46 s | 148 | 18 | 4 | 7 | Lleva la IA a 0.96 sin spawns sobre bordes. |
+| LV10 | Corazon del volcan | 44 s | 158 | 19 | 4 | 8 | Cierre con IA 1.00, doce plataformas y dieciseis peligros. |
+
+La auditoria exige diez niveles completos, aumento estricto de presion, enemigos y peligros, reduccion estricta de tiempo, progresion E3M3 1/2/4/5/6/7/8 desde LV4 y mayor presion/densidad que Bosque encantado en cada LV equivalente.
 
 ### Curva de progresion de Bosque encantado LV1-LV10
 
@@ -579,6 +608,7 @@ Reglas obligatorias de esta curva:
 - M3 muestra una alerta breve al detectar al jugador y su rango de persecucion escala aproximadamente de 1120 px en LV6 a 1280 px en LV10.
 - `LevelDefinition.m3Intelligence` escala de 0.55 en LV6 a 0.95 en LV10. Aumenta rango/recuerdo, anticipacion del ataque, frecuencia de embestida, correccion aerea y evaluacion de saltos; mantenerlo entre 0.35 y 1 y no reducirlo al avanzar de nivel.
 - E2M3 usa el mismo `LevelDefinition.m3Intelligence`: 0.50/0.65/0.80 en Bosque LV3-LV5 y 0.84/0.88/0.92/0.96/1.00 en LV6-LV10. Su identificador y arte son propios, pero no debe bifurcarse su logica de persecucion en `LevelScene`.
+- E3M3 es la variante visual volcanica futura de la misma clase. Conserva vida, dano, navegacion, persecucion y `m3Intelligence`; su martillo y efectos de lava representan los estados existentes, no crean una segunda IA.
 - M3 solo causa dano durante su estado `attack-lunge`; el contacto durante alerta, persecucion o recuperacion no debe herir al jugador.
 - Si M3 cae fuera del mundo por una plataforma movil o un salto limite, vuelve a su ultima superficie segura con la persecucion reiniciada, sin quedar activo debajo del escenario.
 - M3 debe consultar las superficies fisicas recibidas desde `LevelScene` antes de avanzar por un borde; solo inicia el salto de pozo si encuentra una plataforma alcanzable.
@@ -638,7 +668,7 @@ Reglas obligatorias de esta curva:
 - Los controles tactiles deben ocupar bordes inferiores y no tapar el centro del gameplay.
 - El suelo movil debe conservar su extension inferior continua para que los controles descansen visualmente sobre terreno y no sobre el heroe o las amenazas.
 - En Frontera Verde, los segmentos centrales de la base se repiten solo en horizontal mediante imagenes consecutivas y se estiran una unica vez en vertical. No usar `TileSprite` con la altura mobile extendida: repetiria la franja superior de pasto dentro de la base y produciria falsos pisos o parches horizontales.
-- En ambos comandos, el salto mobile pertenece a toda la pantalla libre. Botones, enlaces, el joystick u otros controles interactivos nunca deben activarlo por propagacion. Los botones amplian invisiblemente su alcance y conservan un halo exterior sin salto; el joystick resuelve su propio gesto y permite salto en su extremo superior o con un toque corto.
+- En ambos comandos, el salto mobile pertenece a toda la pantalla libre. Botones, enlaces, el joystick u otros controles interactivos nunca deben activarlo por propagacion. Los botones amplian invisiblemente su alcance y conservan un halo exterior sin salto; en Comando 2 el joystick solo controla movimiento horizontal y su halo cercano tampoco permite saltar.
 - Los ajustes de tamano, separacion, opacidad, posicion y modo zurdo se guardan en perfiles independientes para `Comando 1` y `Comando 2`, y deben afectar solo la presentacion activa de `MobileControls`. El modo zurdo intercambia los bloques completos y, para `Comando 2`, tambien el lado libre de salto, sin salir del input unificado. Los ajustes locales antiguos compartidos se migran copiandolos inicialmente a ambos perfiles.
 - La vibracion es mejora progresiva: debe fallar silenciosamente si `navigator.vibrate` no existe, y nunca sustituye feedback visual/sonoro.
 - Separar visualmente movimiento, acciones normales y poderes; usar superficies translucidas e iconos en lugar de bloques opacos con letras como contenido principal.
@@ -660,7 +690,7 @@ Ejecutar:
 npm run check
 ```
 
-`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 20 logros totales y exactamente cuatro logros medios por categoria. `audit:levels` valida los 23 niveles actuales entre tres regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. El build ejecuta ademas `audit:production`, que limita el chunk inicial, impide precargar Phaser y comprueba los encabezados de seguridad. Vitest cubre sesion, persistencia, normalizacion, estado de sincronizacion y estadisticas de intentos. Bosque encantado exige diez niveles y su curva completa; Volcan Activo exige exactamente LV1-LV3, progresion creciente y ausencia de M3. Las advertencias de cercania deben revisarse, no ignorarse automaticamente.
+`npm run check` ejecuta ESLint, TypeScript, Vitest, las tres auditorias de contenido y el build de produccion. `audit:achievements` valida IDs, objetivos, recompensas, los 21 logros totales, la conexion inicial de Desafio y exactamente cuatro logros medios por categoria. `audit:levels` valida los 30 niveles actuales entre tres regiones, IDs encadenados, presupuesto de ORO, cobertura de cada hueco mediante un pozo, suelo de aparicion de enemigos terrestres y corazones aislados entre el 60% y el 80% desde LV3. `audit:progression` protege el maximo LV80, el aumento estricto, la cobertura completa de la tabla y el objetivo de largo plazo. El build ejecuta ademas `audit:production`, que limita el chunk inicial, impide precargar Phaser y comprueba los encabezados de seguridad. Vitest cubre sesion, persistencia, normalizacion, estado de sincronizacion y estadisticas de intentos. Bosque encantado y Volcan Activo exigen diez niveles y sus curvas completas; Volcan protege ademas la introduccion E3M3 y una densidad superior a Bosque. Las advertencias de cercania deben revisarse, no ignorarse automaticamente.
 
 Cuando cambien migraciones, ejecutar ademas `npm run supabase:start`, `npm run supabase:reset`, `supabase db lint --local --fail-on error` y `npm run supabase:stop`. Estos comandos validan exclusivamente Docker local; no sustituirlos por operaciones `--linked` salvo peticion explicita.
 
@@ -678,7 +708,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - Iniciar partida.
 - Moverse.
 - Saltar tocando un area libre de la pantalla, tambien mientras se mantiene una direccion; confirmar que tocar cualquier boton no agrega un salto.
-- En `Comando 2`, arrastrar el joystick a ambos lados, saltar hacia arriba, probar avance + salto en diagonal y confirmar que un toque libre en la mitad del joystick tambien salta. Verificar por separado J central y K/Q/E alrededor.
+- En `Comando 2`, arrastrar el joystick a ambos lados y confirmar que tocarlo, soltarlo, arrastrarlo hacia arriba o tocar hasta 32 px alrededor nunca salta. Confirmar que el salto libre sigue funcionando fuera de ese halo, tambien mientras se mantiene movimiento, y verificar por separado J central y K/Q/E alrededor.
 - Atacar.
 - Ejecutar ataque giratorio.
 - Pausar.
@@ -687,6 +717,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - En nivel 6 o superior, comprobar que M3 corre lateralmente con cinco cuadros, gira al cambiar la posicion relativa del jugador y mantiene una escala cercana a la del heroe.
 - Golpear o disparar una vez a M3 y confirmar media barra; repetir y confirmar derrota. Verificar por separado que el poder letal lo elimina de inmediato.
 - Llevar a M3 hacia un pozo y confirmar que salta solo cuando existe una plataforma alcanzable, sin caminar directamente al vacio.
+- En Volcan Activo LV4-LV10, confirmar que E3M3 usa sus poses de martillo y efectos de lava, conserva dos impactos de vida y no cambia la IA compartida.
 - Recoger ORO.
 - Abrir Personaje, entrar con `Ver`, elegir un paquete, cancelar sin cambios y confirmar otra compra comprobando ORO y cargas.
 - Validar con un save nuevo que solo Dunel, Ruder y Sarix puedan elegirse inicialmente; luego comprobar bloqueo de los otros cuatro heroes, requisitos LV4/700, LV8/7000, LV12/70000, duplicacion posterior, cancelacion y desbloqueo persistente.
@@ -713,9 +744,12 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 5. Preparar loader para mapas Tiled.
 6. Recorrer manualmente LV6-LV10 completos para afinar velocidades, ventanas de alerta y saltos limite de M1/M3 sin volver a saturarlos con peligros secundarios.
 7. Probar manualmente Bosque encantado LV1-LV10 completos y ajustar saltos, lectura de piedra, densidad de arboles, M2, E2M3 y velocidad de presion.
-8. Agregar menu de configuracion y remapeo basico.
-9. Agregar Capacitor cuando la experiencia mobile web este comoda.
-10. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
+8. Probar manualmente Volcan Activo LV1-LV10 y afinar tiempos, plataformas, magma, M2 y E3M3 sin reducir la curva protegida por auditoria.
+9. Agregar menu de configuracion y remapeo basico.
+10. Agregar Capacitor cuando la experiencia mobile web este comoda.
+11. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
+12. Validar manualmente las cuatro camaras de Desafio y afinar sus tiempos sin romper la progresion protegida 100/123/152/188.
+13. Diseñar el cooperativo de Desafio con autoridad de sesion, IDs de participante y sincronizacion determinista; no acoplar transporte de red directamente a `PuzzleScene`.
 
 ## Advertencias actuales
 
@@ -723,6 +757,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 - No hay un paquete completo de assets finales; M3 ya usa cinco cuadros laterales propios, pero gran parte del resto del gameplay sigue siendo placeholder.
 - Los tests automatizados actuales cubren sesion, cola de guardado, normalizacion, aviso de sincronizacion y estadisticas del intento; gameplay, balance y layout visual siguen requiriendo recorridos manuales.
 - No hay empaquetado Android todavia.
+- El cooperativo de Desafio esta modelado en datos y visible como proxima fase, pero todavia no existe transporte de red ni segundo jugador controlable.
 - La arquitectura esta preparada, pero debe crecer gradualmente para no volver la demo dificil de entender.
 - La velocidad acumulada actual llega a 310 en LV15 y sigue dentro del rango previsto. Antes de agregar mejoras que lleven al jugador a 340 o mas, revisar manualmente saltos, atajos, persecuciones y ritmo de camara; 340 es el umbral de advertencia de balance, no un aumento aprobado automaticamente.
 
@@ -748,4 +783,4 @@ Al actualizarla:
 
 El historial de comprobaciones anteriores se conserva en `docs/verification-history.md`. Es solo evidencia historica: el estado vigente, las reglas obligatorias y los riesgos actuales permanecen en este archivo.
 
-Ultima revision documental: 2026-07-02. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.
+Ultima revision documental: 2026-07-05. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.

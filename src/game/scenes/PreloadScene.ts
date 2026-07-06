@@ -18,6 +18,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createM2Animations();
     this.createM3Animations();
     this.createEnchantedM3Animations();
+    this.createVolcanicM3Animations();
     this.createEnemyTexture();
     this.createM1Texture();
     this.createEnchantedM0Texture();
@@ -603,6 +604,51 @@ export class PreloadScene extends Phaser.Scene {
     this.anims.create({
       key: "enchanted-m3-defeat",
       frames: ["enchanted-m3-defeat-1", "enchanted-m3-defeat-2"].map((key) => ({ key })),
+      frameRate: 6,
+      repeat: 0,
+    });
+  }
+
+  private createVolcanicM3Animations(): void {
+    this.anims.create({
+      key: "volcanic-m3-idle",
+      frames: ["volcanic-m3-idle", "volcanic-m3-run-1"].map((key) => ({ key })),
+      frameRate: 3,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m3-alert",
+      frames: ["volcanic-m3-idle", "volcanic-m3-alert"].map((key) => ({ key })),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m3-run",
+      frames: ["volcanic-m3-run-1", "volcanic-m3-run-2"].map((key) => ({ key })),
+      frameRate: 8,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m3-attack-windup",
+      frames: ["volcanic-m3-alert", "volcanic-m3-attack-windup"].map((key) => ({ key })),
+      frameRate: 8,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m3-attack",
+      frames: ["volcanic-m3-attack-windup", "volcanic-m3-attack"].map((key) => ({ key })),
+      frameRate: 12,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "volcanic-m3-hurt",
+      frames: ["volcanic-m3-defeat", "volcanic-m3-idle"].map((key) => ({ key })),
+      frameRate: 12,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "volcanic-m3-defeat",
+      frames: ["volcanic-m3-attack", "volcanic-m3-defeat"].map((key) => ({ key })),
       frameRate: 6,
       repeat: 0,
     });

@@ -8,6 +8,7 @@ import type {
 } from "../../../game/systems/input/MobileGameplaySettings";
 import { mobileGameplaySettingsStore } from "../../../game/systems/input/MobileGameplaySettings";
 import { gameHaptics } from "../../../shared/haptics/GameHaptics";
+import { getActionWheelOrbitAngles } from "../../components/mobileControlsInput";
 import { useMobileGameplaySettings } from "../../hooks/useMobileGameplaySettings";
 
 const performanceModes: readonly {
@@ -134,7 +135,7 @@ export function MobileGameplaySettingsView() {
             />
             {settings.controlScheme === "command-2" && (
               <MobileSlider
-                label="Rotacion de la rueda"
+                label="Orbita de botones"
                 value={settings.actionWheelRotationDegrees}
                 min={-30}
                 max={30}
@@ -238,14 +239,23 @@ function ControlPreview({
   settings?: MobileGameplaySettings;
   compact?: boolean;
 }) {
+  const previewWidth = 915;
+  const gameplaySideInset = 14;
+  const toContainerWidth = (pixels: number) => `${(pixels / previewWidth) * 100}cqw`;
+  const wheelOrbitAngles = getActionWheelOrbitAngles(settings?.actionWheelRotationDegrees ?? 0);
   const style = settings ? {
     "--preview-opacity": settings.controlOpacityPercent / 100,
     "--preview-scale": settings.controlScalePercent / 100,
-    "--preview-gap": `${Math.round(settings.controlGap * 0.35)}px`,
-    "--preview-movement-inset": `${Math.round(settings.movementInset * 0.18)}px`,
-    "--preview-actions-inset": `${Math.round(settings.actionsInset * 0.18)}px`,
-    "--preview-wheel-rotation": `${settings.actionWheelRotationDegrees}deg`,
-    "--preview-wheel-counter-rotation": `${-settings.actionWheelRotationDegrees}deg`,
+    "--preview-gap": toContainerWidth(settings.controlGap),
+    "--preview-movement-inset": toContainerWidth(gameplaySideInset + settings.movementInset),
+    "--preview-actions-inset": toContainerWidth(gameplaySideInset + settings.actionsInset),
+    "--preview-wheel-orbit-radius": toContainerWidth(73 + settings.controlGap / 2),
+    "--preview-wheel-spin-angle": `${wheelOrbitAngles.spin}deg`,
+    "--preview-wheel-spin-counter-angle": `${-wheelOrbitAngles.spin}deg`,
+    "--preview-wheel-heal-angle": `${wheelOrbitAngles.heal}deg`,
+    "--preview-wheel-heal-counter-angle": `${-wheelOrbitAngles.heal}deg`,
+    "--preview-wheel-power-angle": `${wheelOrbitAngles.power}deg`,
+    "--preview-wheel-power-counter-angle": `${-wheelOrbitAngles.power}deg`,
   } as CSSProperties : undefined;
   const leftHanded = settings?.leftHanded ?? false;
 
@@ -260,24 +270,37 @@ function ControlPreview({
       style={style}
       aria-hidden="true"
     >
-      <span className="mobile-command-preview__jump-zone">SALTO: TODA LA PANTALLA</span>
-      {scheme === "command-1" ? (
-        <>
-          <span className="mobile-command-preview__movement">
-            <i>&lsaquo;</i><i>&rsaquo;</i>
-          </span>
-          <span className="mobile-command-preview__actions mobile-command-preview__actions--row">
-            <i>J</i><i>K</i><i>Q</i><i>E</i>
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="mobile-command-preview__joystick"><i /></span>
-          <span className={`mobile-command-preview__actions mobile-command-preview__actions--wheel mobile-command-preview__actions--prefer-${settings?.preferredRadialAction ?? "spin"}`}>
-            <i className="is-main">J</i><i className="is-top">K</i><i className="is-left">Q</i><i className="is-right">E</i>
-          </span>
-        </>
-      )}
+      <span className="mobile-command-preview__speaker" />
+      <span className="mobile-command-preview__camera" />
+      <span className="mobile-command-preview__screen">
+        <span className="mobile-command-preview__scene" />
+        <span className="mobile-command-preview__jump-zone">AREA LIBRE DE SALTO</span>
+        <span className="mobile-command-preview__pause">P</span>
+        {scheme === "command-1" ? (
+          <>
+            <span className="mobile-command-preview__movement">
+              <i>&lsaquo;</i><i>&rsaquo;</i>
+            </span>
+            <span className="mobile-command-preview__actions mobile-command-preview__actions--row">
+              <span className="mobile-command-preview__action-cluster mobile-command-preview__action-cluster--combat">
+                <i>J</i><i>K</i>
+              </span>
+              <span className="mobile-command-preview__action-cluster mobile-command-preview__action-cluster--abilities">
+                <i>Q</i><i>E</i>
+              </span>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="mobile-command-preview__joystick">
+              <b>&lsaquo;</b><b>&rsaquo;</b><i />
+            </span>
+            <span className={`mobile-command-preview__actions mobile-command-preview__actions--wheel mobile-command-preview__actions--prefer-${settings?.preferredRadialAction ?? "spin"}`}>
+              <i className="is-main">J</i><i className="is-top">K</i><i className="is-left">Q</i><i className="is-right">E</i>
+            </span>
+          </>
+        )}
+      </span>
     </div>
   );
 }

@@ -20,7 +20,9 @@ export class AchievementSystem {
     }
 
     const defeatedFamilies = new Set(
-      save.achievements.defeatedEnemyIds.map((id) => id === "e2m3" ? "m3" : id),
+      save.achievements.defeatedEnemyIds.map((id) =>
+        id === "e2m3" || id === "e3m3" ? "m3" : id,
+      ),
     );
     return [
       ...this.unlock(save, "first-monster"),
@@ -75,6 +77,10 @@ export class AchievementSystem {
         ? this.unlock(save, "three-day-treasure-streak")
         : []),
     ];
+  }
+
+  recordPuzzleCompleted(save: SaveData): AchievementId[] {
+    return this.unlock(save, "first-puzzle");
   }
 
   recordLevelCompleted(

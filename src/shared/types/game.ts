@@ -37,7 +37,8 @@ export type AchievementId =
   | "gold-collector-250"
   | "five-checkpoints"
   | "five-treasures"
-  | "three-day-treasure-streak";
+  | "three-day-treasure-streak"
+  | "first-puzzle";
 
 export interface DailyStreakProgress {
   count: number;
@@ -233,7 +234,7 @@ export interface LevelRewardBox {
   y: number;
 }
 
-export type LevelTheme = "verdant-frontier" | "enchanted-forest" | "active-volcano";
+export type LevelTheme = "verdant-frontier" | "enchanted-forest" | "active-volcano" | "ancient-trials";
 
 export interface LevelDefinition {
   id: string;

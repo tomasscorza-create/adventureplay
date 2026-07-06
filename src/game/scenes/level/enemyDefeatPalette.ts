@@ -5,6 +5,9 @@ export interface EnemyDefeatPalette {
 }
 
 export function getEnemyDefeatPalette(enemyId: string): EnemyDefeatPalette {
+  if (enemyId === "e3m3") {
+    return { core: 0xff8a35, ring: 0xbf321d, sparks: [0xffdf70, 0xff6b24, 0x5b1712] };
+  }
   if (enemyId === "e2m3") {
     return { core: 0x8dff78, ring: 0x2f9d62, sparks: [0xd4ff8c, 0x6dff91, 0x25684f] };
   }
