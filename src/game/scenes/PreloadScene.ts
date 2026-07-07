@@ -984,10 +984,10 @@ export class PreloadScene extends Phaser.Scene {
     const mechanismSource = "ancient-trials-mechanisms-source";
     this.createWhiteKeyedTexture("ancient-trials-crate", mechanismSource, {
       x: 238, y: 118, width: 170, height: 180,
-    });
+    }, true);
     this.createWhiteKeyedTexture("ancient-trials-plate", mechanismSource, {
       x: 8, y: 300, width: 225, height: 185,
-    });
+    }, true);
     this.createWhiteKeyedTexture("ancient-trials-lever", mechanismSource, {
       x: 765, y: 282, width: 125, height: 235,
     });
@@ -1006,6 +1006,7 @@ export class PreloadScene extends Phaser.Scene {
     textureKey: string,
     sourceKey: string,
     crop: { x: number; y: number; width: number; height: number },
+    trim: boolean = false,
   ): void {
     const sourceImage = this.textures.get(sourceKey).getSourceImage() as HTMLImageElement;
     const canvas = document.createElement("canvas");
@@ -1040,6 +1041,30 @@ export class PreloadScene extends Phaser.Scene {
       }
     }
     context.putImageData(imageData, 0, 0);
+
+    if (trim) {
+      const bounds = this.findCanvasVisibleBounds(context, crop.width, crop.height);
+      const trimmedCanvas = document.createElement("canvas");
+      trimmedCanvas.width = bounds.width;
+      trimmedCanvas.height = bounds.height;
+      const trimmedContext = trimmedCanvas.getContext("2d");
+      if (trimmedContext) {
+        trimmedContext.drawImage(
+          canvas,
+          bounds.x,
+          bounds.y,
+          bounds.width,
+          bounds.height,
+          0,
+          0,
+          bounds.width,
+          bounds.height,
+        );
+        this.textures.addCanvas(textureKey, trimmedCanvas);
+        return;
+      }
+    }
+
     this.textures.addCanvas(textureKey, canvas);
   }
 

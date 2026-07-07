@@ -343,13 +343,13 @@ export class PuzzleScene extends Phaser.Scene {
     this.plates = [];
     for (const plateDef of this.level.plates) {
       const rect = this.add
-        .rectangle(plateDef.x, plateDef.y, plateDef.width, 15, this.visualPalette.lowerFace)
+        .rectangle(plateDef.x, plateDef.y + 15, plateDef.width, 15, this.visualPalette.lowerFace)
         .setOrigin(0.5, 1)
         .setStrokeStyle(2, this.visualPalette.topEdge, 0.96)
         .setAlpha(0.94)
         .setDepth(8);
       const visual = this.add
-        .image(plateDef.x, plateDef.y + 2, "ancient-trials-plate")
+        .image(plateDef.x, plateDef.y + 15, "ancient-trials-plate")
         .setOrigin(0.5, 1)
         .setDisplaySize(plateDef.width + 18, 34)
         .setTint(this.visualPalette.objectTint)
@@ -423,12 +423,9 @@ export class PuzzleScene extends Phaser.Scene {
           gateDef.y,
           gateDef.width,
           gateDef.height,
-          this.visualPalette.lowerFace,
-          0.86,
         )
         .setOrigin(0, 0)
-        .setStrokeStyle(3, this.level.visualTheme.accentColor, 0.9)
-        .setDepth(11);
+        .setVisible(false);
       this.physics.add.existing(rect, true);
       const visual = this.add
         .image(
@@ -457,12 +454,9 @@ export class PuzzleScene extends Phaser.Scene {
           sealDefinition.y,
           sealDefinition.width,
           sealDefinition.height,
-          0x301d43,
-          0.78,
         )
         .setOrigin(0, 0)
-        .setStrokeStyle(3, 0xca8de1, 0.92)
-        .setDepth(11);
+        .setVisible(false);
       this.physics.add.existing(hitbox, true);
       const visual = this.add
         .image(
@@ -496,12 +490,9 @@ export class PuzzleScene extends Phaser.Scene {
         0,
         18,
         640,
-        this.visualPalette.lowerFace,
-        0.84,
       )
       .setOrigin(0, 0)
-      .setStrokeStyle(3, this.visualPalette.outline, 0.94)
-      .setDepth(11);
+      .setVisible(false);
     this.physics.add.existing(goalGateRect, true);
     const goalGateVisual = this.add
       .image(this.level.goal.x - 36, 320, "ancient-trials-barrier")
