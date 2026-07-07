@@ -283,10 +283,6 @@ export function MainMenuScreen({
                   </button>
                 </span>
               </div>
-              <h1 className="game-title">
-                <span>Adventure</span>
-                <span>Reigns</span>
-              </h1>
 
               <div className="menu-relics">
                 {mainActions.map((action) => (

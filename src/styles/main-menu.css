@@ -389,8 +389,9 @@
     width: min(820px, calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right)));
     height: min(490px, calc(100vh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
     aspect-ratio: auto;
+    background-image: url(../assets/menu/menu-background-mobile.webp) !important;
     background-size: cover;
-    background-position: center 58%;
+    background-position: center;
   }
 
   @supports (height: 100dvh) {
@@ -406,18 +407,30 @@
   .menu-stage--main .options-gear { width: 42px; }
 
   .menu-stage--main .game-title {
-    top: 20%;
+    top: calc(38% - 25px - 1.1em);
     left: 50%;
-    width: 58%;
-    font-size: clamp(1.9rem, 5.2vw, 3.35rem);
+    width: auto;
+    max-width: 90%;
+    font-size: clamp(1.4rem, 3.8vw, 2.5rem);
+    display: flex;
+    flex-direction: row;
+    gap: 0.3em;
+    justify-content: center;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  .menu-stage--main .game-title span {
+    display: inline;
+    width: auto;
   }
 
   .menu-stage--main .menu-relics {
-    top: 46%;
+    top: 38%;
     left: 50%;
-    width: min(66%, 540px);
+    width: min(72%, 580px);
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: clamp(6px, 1.8vh, 10px) clamp(8px, 1.6vw, 14px);
+    gap: clamp(6px, 1.8vh, 10px) clamp(18px, 4vw, 36px);
   }
 
   .menu-stage--main .menu-relic,
@@ -1478,71 +1491,15 @@
   }
 }
 
-.menu-stage--main .menu-relic--start::before {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 2;
-  width: 20px;
-  height: 7px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(109, 226, 201, 0.72), #fff7c8 72%, #ffffff);
-  box-shadow: 0 0 6px #fff2a6, 0 0 14px rgba(111, 231, 205, 0.82), 0 0 24px rgba(255, 212, 92, 0.46);
-  content: "";
-  pointer-events: none;
-  offset-anchor: center;
-  offset-path: inset(9% 3.5% round 28%);
-  offset-rotate: auto;
-  animation: menu-start-border-trace 4.2s linear infinite;
-}
-
-.menu-stage--main .menu-relic--start::after {
-  position: absolute;
-  inset: 7% 2.5%;
-  z-index: 1;
-  border: 1px solid rgba(255, 222, 123, 0.22);
-  border-radius: 24% / 42%;
-  background: transparent;
-  box-shadow: inset 0 0 10px rgba(107, 225, 202, 0.08), 0 0 10px rgba(255, 214, 103, 0.08);
-  content: "";
-  pointer-events: none;
-  animation: menu-start-outline-breathe 2.8s ease-in-out infinite;
-}
-
-@keyframes menu-start-border-trace {
-  0% { opacity: 0.2; offset-distance: 0%; }
-  10%, 88% { opacity: 1; }
-  100% { opacity: 0.2; offset-distance: 100%; }
-}
-
-@keyframes menu-start-outline-breathe {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.72; }
-}
-
-@supports not (offset-path: inset(1px)) {
-  .menu-stage--main .menu-relic--start::before {
-    display: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .menu-ambience__leaf,
-  .menu-ambience__glint,
-  .menu-stage--main .menu-relic--start::before,
-  .menu-stage--main .menu-relic--start::after {
-    animation: none;
-  }
-
-  .menu-ambience__leaf,
   .menu-ambience__glint {
+    animation: none;
     display: none;
   }
 }
 
-.app-shell--mobile-performance .menu-ambience,
-.app-shell--mobile-performance .menu-stage--main .menu-relic--start::before,
-.app-shell--mobile-performance .menu-stage--main .menu-relic--start::after {
+.app-shell--mobile-performance .menu-ambience {
   display: none;
 }
 
