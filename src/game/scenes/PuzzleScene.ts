@@ -26,6 +26,7 @@ import {
   getSourceBodyDimension,
   PUZZLE_CRATE_COLLISION_SIZE,
   PUZZLE_CRATE_DISPLAY_SIZE,
+  shouldCrateStaySolid,
 } from "../systems/puzzles/PuzzleGeometry";
 import {
   averageOpaqueColor,
@@ -155,6 +156,7 @@ export class PuzzleScene extends Phaser.Scene {
     const jumped = this.movement.update(this.player, input, delta);
     if (jumped) this.playSfx("jump");
     this.handleActions(input);
+    this.updateCrateSolidity();
     this.handleStackedCratesPhysics();
     this.updatePlateStates();
     this.updateObjectiveText();
@@ -1016,7 +1018,16 @@ export class PuzzleScene extends Phaser.Scene {
     if (charges.powerCharges <= 0 || !this.player.canUsePower(this.time.now)) return;
     charges.powerCharges -= 1;
     this.player.markUsingPower(this.time.now);
-    const projectile = new PowerProjectile(this, this.player.x, this.player.y - 12, this.player.facing);
+    // El proyectil emerge por delante del jugador (no en su centro) para que su
+    // cuerpo de 34px no se solape con una pared pegada a la espalda y se consuma
+    // al instante: disparar junto a un muro debe lanzar el tiro igualmente.
+    const direction = this.player.facing;
+    const projectile = new PowerProjectile(
+      this,
+      this.player.x + 34 * direction,
+      this.player.y - 12,
+      direction,
+    );
     this.projectiles.add(projectile);
     projectile.launch();
     this.playSfx("lethal-power");
@@ -1206,6 +1217,32 @@ export class PuzzleScene extends Phaser.Scene {
 
   private playSfx(cue: SfxCue): void {
     gameEvents.emit(EVENTS.SFX_REQUESTED, { cue });
+  }
+
+  private updateCrateSolidity(): void {
+    // Causa del bug de "atravesar la caja de arriba": las cajas son cuerpos
+    // empujables (necesario para los puzzles). Cuando el jugador —tambien
+    // empujable— cae sobre una caja, Arcade reparte la velocidad entre ambos y
+    // el jugador conserva parte de su caida, hundiendose a traves de la caja de
+    // arriba hasta la de abajo (que si tiene el piso rigido como tope). Sobre
+    // una sola caja no se nota porque el piso inmovil la frena en seco.
+    //
+    // Solucion: mientras el jugador esta encima de una caja, esa caja deja de
+    // ser empujable y actua como solida, asi el jugador aterriza sobre ella.
+    // Al costado sigue siendo empujable para poder resolver los puzzles.
+    const player = this.player.body as Phaser.Physics.Arcade.Body;
+    for (const crate of this.crates) {
+      const body = crate.body as Phaser.Physics.Arcade.Body;
+      body.pushable = !shouldCrateStaySolid(
+        {
+          left: player.left,
+          right: player.right,
+          centerY: player.center.y,
+          velocityY: player.velocity.y,
+        },
+        { left: body.left, right: body.right, top: body.top },
+      );
+    }
   }
 
   private handleStackedCratesPhysics(): void {
