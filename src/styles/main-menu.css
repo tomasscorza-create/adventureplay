@@ -1288,3 +1288,81 @@
     height: 38px;
   }
 }
+
+/* --- Reintroducción del fondo y diseño de botones (Fable overrides) --- */
+
+.menu-stage--main .home-monument {
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)),
+    url(../assets/menu/menu-background.webp) center / cover no-repeat !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.58) !important;
+  backdrop-filter: none !important;
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .menu-stage--main .home-monument {
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    max-height: none !important;
+    background:
+      linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)),
+      url(../assets/menu/menu-background-mobile.webp) center / cover no-repeat !important;
+    border-radius: 0 !important;
+  }
+}
+
+.menu-stage--main .menu-relic {
+  display: block !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  aspect-ratio: 866 / 189 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 7px 5px rgba(0, 0, 0, 0.34)) !important;
+}
+
+.menu-stage--main .menu-relic:hover {
+  filter: brightness(1.14) saturate(1.08) drop-shadow(0 9px 7px rgba(0, 0, 0, 0.42)) !important;
+  transform: translateY(-2px) scale(1.015) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.menu-stage--main .menu-relic--start {
+  background-image: url(../assets/menu/menu-start.webp) !important;
+}
+.menu-stage--main .menu-relic--character {
+  background-image: url(../assets/menu/menu-character.webp) !important;
+}
+.menu-stage--main .menu-relic--inventory {
+  background-image: url(../assets/menu/menu-inventory.webp) !important;
+}
+.menu-stage--main .menu-relic--achievements {
+  background-image: url(../assets/menu/menu-achievements.webp) !important;
+}
+
+.menu-stage--main .menu-relic__icon {
+  display: none !important;
+}
+
+.menu-stage--main .menu-relic__label {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}

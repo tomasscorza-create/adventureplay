@@ -1,0 +1,191 @@
+=========================================================
+  ADVENTURE PLAY — MODO DESAFÍO (Challenge)
+=========================================================
+
+▸ DESCRIPCIÓN GENERAL
+──────────────────────
+El modo Desafío es el segundo modo de juego de Adventure Play.
+A diferencia del modo Explorar (combate y plataformeo), el
+Desafío es un modo de puzzles y plataformas donde el jugador
+debe resolver acertijos ambientales utilizando mecanismos
+interactivos como cajas, placas de presión, palancas, puertas
+y barreras para avanzar por cada cámara.
+
+La escena es orquestada por PuzzleScene.ts, completamente
+separada de LevelScene.ts (modo Explorar), asegurando que
+los mecanismos de puzzle no se mezclen con los de exploración.
+
+
+▸ CICLO DE JUEGO
+────────────────
+1. Seleccionar el modo Desafío desde el menú principal.
+2. Entrar en una cámara de ingenio (puzzle chamber).
+3. Interactuar con los mecanismos del entorno: mover cajas,
+   activar placas de presión, accionar palancas.
+4. Activar todos los sellos (activadores) requeridos para
+   completar la cámara.
+5. Avanzar a la siguiente cámara con dificultad creciente.
+
+
+▸ CÁMARAS DE INGENIO (7 cámaras)
+─────────────────────────────────
+
+  ┌─ CÁMARA 1: LA PUERTA OLVIDADA ─────────────────────┐
+  │ • Dificultad: 1 │ Sellos: 1 │ Peligros: 0          │
+  │ • Introducción a los mecanismos básicos              │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─ CÁMARA 2: ECOS DEL PESO ──────────────────────────┐
+  │ • Dificultad: 2 │ Sellos: 2 │ Peligros: 1          │
+  │ • Placas de presión y activación coordinada          │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─ CÁMARA 3: ENGRANAJES DE PIEDRA ───────────────────┐
+  │ • Dificultad: 3 │ Sellos: 2 │ Peligros: 2          │
+  │ • Secuencias de palancas con timing                  │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─ CÁMARA 4: SALA DE LOS ESPEJOS ───────────────────┐
+  │ • Dificultad: 4 │ Sellos: 3 │ Peligros: 2          │
+  │ • Puzzles de simetría tipo espejo                    │
+  │ • Diseñada para 2 jugadores en futuro coop           │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─ CÁMARA 5: CORRIENTES CRUZADAS ───────────────────┐
+  │ • Dificultad: 5 │ Sellos: 3 │ Peligros: 3          │
+  │ • Caminos que se cruzan y barreras                   │
+  │ • Diseñada para 2 jugadores en futuro coop           │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─ CÁMARA 6: RELOJ DE ARENA ────────────────────────┐
+  │ • Dificultad: 6 │ Sellos: 4 │ Peligros: 3          │
+  │ • Resolución de puzzles con tiempo limitado          │
+  │ • Diseñada para 2 jugadores en futuro coop           │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─ CÁMARA 7: EL ÚLTIMO SELLO ───────────────────────┐
+  │ • Dificultad: 7 │ Sellos: 5 │ Peligros: 4          │
+  │ • Desafío definitivo combinando todos los mecanismos │
+  │ • Diseñada para 2 jugadores en futuro coop           │
+  └─────────────────────────────────────────────────────┘
+
+
+▸ MECANISMOS DE PUZZLE
+──────────────────────
+  Cajas (Boxes)       — Objetos que se pueden empujar/mover
+                        y colocar sobre placas de presión.
+  Placas de presión   — Interruptores de piso que se activan
+  (Pressure Plates)     al colocar objetos o pararse sobre ellos.
+  Palancas (Levers)   — Interruptores tipo toggle que activan
+                        o desactivan mecanismos conectados.
+  Puertas (Doors)     — Obstáculos que se abren cuando su
+                        activador conectado se dispara.
+  Plataformas         — Superficies móviles que transportan
+                        al jugador.
+  Barreras (Barriers) — Obstáculos que bloquean caminos hasta
+                        ser desactivados.
+
+
+▸ SISTEMA DE ACTIVACIÓN (PuzzleActivationSystem)
+────────────────────────────────────────────────
+  • Gestiona el estado de los activadores por participante.
+  • Tipos de activador:
+    - "press": toggle encendido/apagado.
+    - "hold": activo solo mientras se mantiene presionado.
+  • Cada activador tiene un estado booleano (active).
+  • La escena verifica si todos los activadores requeridos
+    están activos para completar la cámara.
+  • Diseñado para soportar múltiples participantes (coop futuro).
+
+
+▸ ESTILO VISUAL — PRUEBAS ANTIGUAS
+───────────────────────────────────
+  Tema: "Ancient Trials" (Pruebas Antiguas) con estética
+  mística y arqueológica.
+
+  • 6 fondos WebP progresivos: de noche oscura/misteriosa
+    hasta tesoro iluminado/brillante.
+    (challenge-bg-1.webp a challenge-bg-6.webp)
+  • 2 hojas de sprites de mecanismos (mechanisms-1.png,
+    mechanisms-2.png) con todos los elementos interactivos.
+  • PreloadScene extrae las piezas en runtime eliminando el
+    fondo blanco para crear texturas transparentes.
+
+  Sistema de paleta complementaria:
+  • Las plataformas calculan una paleta de colores complementaria
+    a partir del color promedio de cada fondo.
+  • Las capas de sombra, cara inferior, textura y borde son
+    puramente visuales y no crean cuerpos físicos adicionales.
+  • Esto crea una apariencia cohesiva y temática por cámara.
+
+
+▸ PLATAFORMAS EN DESAFÍO
+────────────────────────
+  Usa el mismo MovingPlatform.ts que el modo Explorar, pero
+  con comportamiento específico de puzzle:
+  • Habilitadas con físicas que transportan entidades.
+  • Siguen trayectorias definidas con velocidad configurable.
+  • Pueden ser activadas/controladas por mecanismos de puzzle
+    (palancas, placas).
+
+
+▸ DIFERENCIAS CON EL MODO EXPLORAR
+───────────────────────────────────
+  ┌───────────────┬──────────────────┬──────────────────┐
+  │   Aspecto     │    Explorar      │    Desafío       │
+  ├───────────────┼──────────────────┼──────────────────┤
+  │ Escena        │ LevelScene.ts    │ PuzzleScene.ts   │
+  │ Enfoque       │ Combate +        │ Resolución de    │
+  │               │ plataformeo      │ puzzles          │
+  │ Enemigos      │ M0, M1, M2, M3   │ Peligros         │
+  │               │ con IA de combate│ ambientales      │
+  │ Niveles       │ 30 niveles en    │ 7 cámaras de     │
+  │               │ 3 regiones       │ ingenio          │
+  │ Mecánicas     │ Correr, saltar,  │ Cajas, placas,   │
+  │               │ luchar, recoger  │ palancas, puertas│
+  │ Tema visual   │ Por región       │ Pruebas Antiguas │
+  │               │ (bosque, volcán) │ (noche a tesoro) │
+  └───────────────┴──────────────────┴──────────────────┘
+
+  Elementos compartidos entre ambos modos:
+  • Personaje jugable y sus estadísticas
+  • Sistema de input unificado
+  • Poderes (regeneración y poder letal)
+  • HUD durante gameplay
+  • Sistema de guardado (GameSaveStore)
+  • Inventario y progresión
+  • Estadísticas de rendimiento (tiempo, acciones)
+
+
+▸ LOGRO EXCLUSIVO DEL MODO DESAFÍO
+───────────────────────────────────
+  "Mente y acero" (Mind and Steel) — Es el logro número 21
+  del juego, exclusivo del modo Desafío. Es el logro inicial
+  propio de este modo.
+
+
+▸ FUTURO: MODO COOPERATIVO
+──────────────────────────
+  El sistema de puzzles está diseñado con cooperativo en mente:
+  • PuzzleActivationSystem rastrea activadores por participantId,
+    permitiendo múltiples jugadores.
+  • Las cámaras 4, 5, 6 y 7 definen coopMinPlayers: 2.
+  • La arquitectura soporta agregar coop en red sin
+    reestructurar la lógica de puzzles.
+  • Actualmente es solo para un jugador.
+
+
+▸ PROGRESIÓN Y GUARDADO
+───────────────────────
+  • Completar una cámara requiere activar todos los sellos.
+  • Se registran estadísticas de cada intento (tiempo, acciones).
+  • El esquema de guardado versión 17 incorpora IDs persistentes
+    del modo Desafío sin separar la progresión global.
+  • Esto significa que Desafío y Explorar comparten la misma
+    progresión del jugador (ORO, XP, nivel).
+
+
+=========================================================
+  Documento generado el 07/07/2026 por el equipo de
+  documentación de Adventure Play.
+=========================================================

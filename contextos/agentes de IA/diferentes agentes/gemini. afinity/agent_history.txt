@@ -33,11 +33,19 @@ HISTORIAL DE CAMBIOS SIMPLIFICADO:
    - Se eliminó por completo el código de animación remanente (`.menu-relic--start::before` y `.menu-relic--start::after`) en la parte inferior del archivo `src/styles/main-menu.css` que reapareció de forma automática durante una restauración de Git anterior.
 
 5. Remoción del Título "Adventure Reigns"
-   - Se eliminó del archivo `src/ui/screens/MainMenuScreen.tsx` el elemento `h1` que renderizaba el título del juego en la pantalla principal.
+   - Se eliminó del archivo `src/ui/screens/MainMenuScreen.tsx` el elemento `h1` que renderizaba el título del juego en la pantalla principal (Nota: Este elemento fue posteriormente reintroducido por una edición externa de Fable).
 
-6. Reemplazo de Fondo de Menú para Vista Móvil (Landscape)
-   - Conversión de imagen: Se convirtió el archivo `fondo.png` (de `Desktop\img1\fondomobile`) a WebP de alta calidad, optimizándolo como `menu-background-mobile.webp` en `src/assets/menu/`.
-   - Sobrescritura en CSS: Se actualizó la clase `.menu-stage--main .home-monument` dentro del media query landscape de `src/styles/main-menu.css` para forzar el uso del nuevo fondo móvil (`background-image: url(...) !important; background-position: center;`).
+6. Reestablecimiento de Fondo de Menú y Botones Gráficos sobre Ajustes de Fable
+   - Preservación estética: Se mantuvieron intactas las nuevas tipografías, colores, menús internos y lógica de juego introducidos por Fable.
+   - Procesamiento de imágenes: Se convirtieron a WebP de alta calidad los 5 nuevos archivos de `Desktop\img1\fondomobile`:
+     * fondo.png -> menu-background.webp y menu-background-mobile.webp
+     * 1er boton.png -> menu-start.webp
+     * 2do boton.png -> menu-character.webp
+     * 3er boton.png -> menu-inventory.webp
+     * 4to boton.png -> menu-achievements.webp
+   - Overrides CSS para el Menú Principal: Se agregaron estilos dirigidos específicamente a la vista principal `.menu-stage--main` al final de `src/styles/main-menu.css`:
+     * Reintroducción del fondo con la nueva imagen en `.home-monument` para desktop y mobile landscape (con `cover` para centrado automático sin bordes vacíos).
+     * Restauración del diseño de botones gráficos en `.menu-relic` adaptando el aspect-ratio a la proporción exacta de las imágenes (`866 / 189`) y ocultando los SVGs y las etiquetas de texto de manera visual (manteniéndolas accesibles para lectores de pantalla).
 
 -----------------------------------------
 REGRESIONES:

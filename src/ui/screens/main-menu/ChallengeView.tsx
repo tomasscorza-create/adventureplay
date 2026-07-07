@@ -24,7 +24,7 @@ export function ChallengeView({ save, onBack, onStartLevel }: ChallengeViewProps
           <span className="challenge-mode__eyebrow">Ingenio bajo presion</span>
           <h2>Las camaras antiguas</h2>
           <p>
-            Cuatro pruebas encadenadas. Cada camara aumenta aproximadamente un 23% su dificultad
+            {levels.length} pruebas encadenadas. Cada camara aumenta aproximadamente un 23% su dificultad
             mediante mas recorrido, sellos, peligros y decisiones bajo reloj.
           </p>
           <strong>{completedCount} / {levels.length} camaras completadas</strong>
@@ -71,7 +71,7 @@ export function ChallengeView({ save, onBack, onStartLevel }: ChallengeViewProps
           <h3>Cooperativo</h3>
           <strong>Activadores para varios heroes</strong>
           <p>
-            Las cuatro camaras declaran objetivos compartidos y compatibilidad cooperativa. La sesion
+            Las camaras declaran objetivos compartidos y compatibilidad cooperativa. La sesion
             de red, sincronizacion y segundo jugador se incorporaran sobre ese contrato.
           </p>
           <button type="button" disabled>Multijugador en preparacion</button>

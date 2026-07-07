@@ -22,8 +22,8 @@ export interface PuzzleLevelDefinition {
   platforms: PlatformDefinition[];
   coins: LevelCoinSpawn[];
   crates: Array<{ x: number; y: number }>;
-  plates: Array<{ id: string; x: number; y: number; width: number }>;
-  levers: Array<{ id: string; x: number; y: number }>;
+  plates: Array<{ id: string; x: number; y: number; width: number; hint?: string }>;
+  levers: Array<{ id: string; x: number; y: number; rangedOnly?: boolean; hint?: string }>;
   gates: Array<{ id: string; x: number; y: number; width: number; height: number; requiredActivations?: string[] }>;
   boxJumpZones?: Array<{ x: number; y: number; width: number }>;
   seals: PuzzleObstacleDefinition[];
@@ -53,6 +53,11 @@ export const puzzleLevelOrder = [
   "trialChamber4",
   "trialChamber5",
   "trialChamber6",
+  "trialChamber7",
+  "trialChamber8",
+  "trialChamber9",
+  "trialChamber10",
+  "trialChamber11",
 ] as const;
 
 export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
@@ -257,9 +262,12 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     playerStart: { x: 130, y: 560 },
     platforms: [
       { x: 0, y: 640, width: 4200, height: 80 },
-      { x: 1270, y: 410, width: 470, height: 24 },
-      { x: 1700, y: 500, width: 40, height: 140 }, // Pared del canal de disparo
-      { x: 1700, y: 420, width: 160, height: 24 }, // Techo del canal de disparo
+      { x: 1020, y: 510, width: 120, height: 24 },
+      { x: 1190, y: 440, width: 130, height: 24 },
+      { x: 1360, y: 380, width: 140, height: 24 },
+      { x: 1530, y: 300, width: 150, height: 24 },
+      { x: 1760, y: 390, width: 40, height: 110 }, // Pared del canal de disparo en caida
+      { x: 1760, y: 330, width: 180, height: 24 }, // Techo del canal de disparo
       { x: 2380, y: 480, width: 150, height: 24 },
       { x: 2740, y: 400, width: 180, height: 24 },
       { x: 3100, y: 480, width: 150, height: 24 },
@@ -283,10 +291,10 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     plates: [{ id: "crate-plate", x: 2160, y: 625, width: 74 }],
     levers: [
       { id: "upper-lever", x: 1590, y: 362 },
-      { id: "lever-dist", x: 1800, y: 500 }, // Palanca a distancia
+      { id: "lever-dist", x: 1860, y: 390, rangedOnly: true }, // Palanca a distancia en caida
     ],
     gates: [
-      { id: "gate-dist", x: 1910, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-dist", x: 1980, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
       { id: "main-gate", x: 2050, y: 0, width: 60, height: 640, requiredActivations: ["upper-lever"] },
     ],
     boxJumpZones: [{ x: 1215, y: 625, width: 68 }],
@@ -323,7 +331,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     boxJumpZone: { x: 1215, y: 625, width: 68 },
     plate: { x: 2160, y: 625, width: 74 },
     lever: { x: 1590, y: 362 },
-    gate: { x: 1990, y: 0, width: 60, height: 640 },
+    gate: { x: 2050, y: 0, width: 60, height: 640 },
   },
   trialChamber5: {
     id: "trialChamber5",
@@ -339,10 +347,13 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 0, y: 640, width: 4600, height: 80 },
       { x: 800, y: 450, width: 350, height: 24 },
       { x: 1500, y: 400, width: 400, height: 24 },
-      { x: 2300, y: 430, width: 400, height: 24 },
-      { x: 2500, y: 310, width: 40, height: 120 }, // Pared del canal de disparo
-      { x: 2500, y: 230, width: 160, height: 24 }, // Techo del canal de disparo
-      { x: 3100, y: 480, width: 350, height: 24 },
+      { x: 2200, y: 510, width: 120, height: 24 },
+      { x: 2360, y: 440, width: 120, height: 24 },
+      { x: 2520, y: 380, width: 130, height: 24 },
+      { x: 2680, y: 300, width: 150, height: 24 },
+      { x: 2900, y: 390, width: 40, height: 110 }, // Pared del canal de disparo en caida
+      { x: 2900, y: 330, width: 180, height: 24 }, // Techo del canal de disparo
+      { x: 3260, y: 480, width: 350, height: 24 },
     ],
     coins: [
       { itemId: "bronzeCoin", x: 400, y: 580, value: 5 },
@@ -362,12 +373,12 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     ],
     levers: [
       { id: "lever-1", x: 1800, y: 332 },
-      { id: "lever-dist", x: 2600, y: 310 }, // Palanca a distancia
+      { id: "lever-dist", x: 3000, y: 390, rangedOnly: true }, // Palanca a distancia en caida
     ],
     gates: [
       { id: "gate-1", x: 1400, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
       { id: "gate-2", x: 2100, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
-      { id: "gate-dist", x: 2700, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-dist", x: 3120, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
       { id: "gate-3", x: 3700, y: 0, width: 50, height: 640, requiredActivations: ["plate-2"] },
     ],
     seals: [
@@ -403,6 +414,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     id: "trialChamber6",
     name: "El templo de los contrapesos",
     stageNumber: 6,
+    nextLevelId: "trialChamber7",
     difficultyRating: 285,
     worldWidth: 5000,
     timeLimitSeconds: 200,
@@ -414,8 +426,11 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 700, y: 400, width: 300, height: 24 },
       { x: 1400, y: 450, width: 400, height: 24 },
       { x: 2200, y: 380, width: 450, height: 24 },
-      { x: 2900, y: 440, width: 40, height: 200 }, // Pared del canal, bajada para disparar desde la caja anterior
-      { x: 2900, y: 360, width: 160, height: 24 }, // Techo del canal de disparo
+      { x: 2200, y: 510, width: 120, height: 24 },
+      { x: 2360, y: 440, width: 120, height: 24 },
+      { x: 2680, y: 300, width: 150, height: 24 },
+      { x: 2900, y: 390, width: 40, height: 110 }, // Pared del canal, bajada para disparar durante la caida
+      { x: 2900, y: 330, width: 180, height: 24 }, // Techo del canal de disparo
       { x: 3200, y: 420, width: 400, height: 24 },
       { x: 4000, y: 460, width: 300, height: 24 },
     ],
@@ -439,7 +454,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     ],
     levers: [
       { id: "lever-1", x: 2350, y: 332 },
-      { id: "lever-dist", x: 3000, y: 440 }, // Palanca alineada con el canal accesible desde la caja
+      { id: "lever-dist", x: 3000, y: 390, rangedOnly: true }, // Palanca alineada con el canal de caida
     ],
     gates: [
       { id: "gate-1", x: 1300, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
@@ -455,7 +470,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     hazards: [
       { x: 950, y: 610, width: 120, height: 30, damage: 1 },
       { x: 1800, y: 610, width: 150, height: 30, damage: 1 },
-      { x: 2800, y: 610, width: 300, height: 30, damage: 1 },
+      { x: 3060, y: 610, width: 120, height: 30, damage: 1 },
     ],
     inventoryReward: {
       claimId: "trialChamber6:architect-scepter",
@@ -477,6 +492,552 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     plate: { x: 1100, y: 625, width: 80 },
     lever: { x: 2350, y: 332 },
     gate: { x: 1300, y: 0, width: 50, height: 640 },
+  },
+  trialChamber7: {
+    id: "trialChamber7",
+    name: "La sala del lente maestro",
+    stageNumber: 7,
+    nextLevelId: "trialChamber8",
+    difficultyRating: 350,
+    worldWidth: 5700,
+    timeLimitSeconds: 225,
+    experienceReward: 620,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 5700, height: 80 },
+      { x: 1500, y: 410, width: 430, height: 24 },
+      { x: 2200, y: 510, width: 120, height: 24 },
+      { x: 2360, y: 440, width: 120, height: 24 },
+      { x: 2520, y: 380, width: 130, height: 24 },
+      { x: 2680, y: 300, width: 150, height: 24 },
+      { x: 2900, y: 390, width: 40, height: 110 }, // Pared del canal, bajada para disparar durante la caida
+      { x: 2900, y: 330, width: 180, height: 24 }, // Techo del canal de disparo
+      { x: 3330, y: 480, width: 260, height: 24 },
+      { x: 4200, y: 430, width: 240, height: 24 },
+      { x: 5070, y: 500, width: 210, height: 24 },
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 500, y: 580, value: 5 },
+      { itemId: "bronzeCoin", x: 1650, y: 350, value: 6 },
+      { itemId: "bronzeCoin", x: 2450, y: 380, value: 6 },
+      { itemId: "bronzeCoin", x: 3420, y: 420, value: 6 },
+      { itemId: "bronzeCoin", x: 4300, y: 370, value: 6 },
+      { itemId: "bronzeCoin", x: 5200, y: 440, value: 7 },
+    ],
+    crates: [
+      { x: 700, y: 560 },
+      { x: 3350, y: 560 },
+      { x: 4550, y: 560 },
+    ],
+    plates: [
+      { id: "plate-1", x: 1120, y: 625, width: 80 },
+      { id: "plate-2", x: 3600, y: 625, width: 80 },
+      { id: "plate-3", x: 4850, y: 625, width: 80 },
+    ],
+    levers: [
+      { id: "lever-1", x: 1800, y: 362 },
+      { id: "lever-dist", x: 3000, y: 390, rangedOnly: true },
+    ],
+    gates: [
+      { id: "gate-1", x: 1320, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
+      { id: "gate-2", x: 2050, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      { id: "gate-dist", x: 3120, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-3", x: 3950, y: 0, width: 50, height: 640, requiredActivations: ["plate-2"] },
+      { id: "gate-4", x: 5050, y: 0, width: 50, height: 640, requiredActivations: ["plate-3"] },
+    ],
+    boxJumpZones: [{ x: 1450, y: 625, width: 72 }],
+    seals: [
+      { x: 5150, y: 500, width: 52, height: 140 },
+      { x: 5310, y: 500, width: 52, height: 140 },
+      { x: 5460, y: 500, width: 52, height: 140 },
+    ],
+    hazards: [
+      { x: 950, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 1900, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 2740, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 3260, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 4300, y: 610, width: 130, height: 30, damage: 1 },
+      { x: 5220, y: 610, width: 120, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber7:architect-lens",
+      itemId: "architectLens",
+      x: 5200,
+      y: 575,
+    },
+    goal: { x: 5620, y: 560 },
+    requiredActivations: ["plate-1", "lever-1", "lever-dist", "plate-2", "plate-3"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-6",
+      shadeAlpha: 0.03,
+      accentColor: 0xf2ce72,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 700, y: 560 },
+    boxJumpZone: { x: 1450, y: 625, width: 72 },
+    plate: { x: 1120, y: 625, width: 80 },
+    lever: { x: 1800, y: 362 },
+    gate: { x: 1320, y: 0, width: 50, height: 640 },
+  },
+  trialChamber8: {
+    id: "trialChamber8",
+    name: "El crisol del arquitecto",
+    stageNumber: 8,
+    nextLevelId: "trialChamber9",
+    difficultyRating: 430,
+    worldWidth: 6200,
+    timeLimitSeconds: 240,
+    experienceReward: 750,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 6200, height: 80 },
+      { x: 1650, y: 410, width: 380, height: 24 }, // Cornisa de la primera palanca (requiere caja)
+      { x: 2450, y: 510, width: 120, height: 24 }, // Escalera 1 hacia el canal de disparo
+      { x: 2610, y: 440, width: 120, height: 24 }, // Escalera 2
+      { x: 2770, y: 380, width: 130, height: 24 }, // Escalera 3
+      { x: 2930, y: 300, width: 150, height: 24 }, // Cornisa de caida para el disparo
+      { x: 3150, y: 390, width: 40, height: 110 }, // Pared del canal de disparo en caida
+      { x: 3150, y: 330, width: 180, height: 24 }, // Techo del canal de disparo
+      { x: 4900, y: 430, width: 240, height: 24 }, // Cornisa de la palanca final (requiere caja reutilizada)
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 520, y: 580, value: 6 },
+      { itemId: "bronzeCoin", x: 1840, y: 350, value: 6 },
+      { itemId: "bronzeCoin", x: 2990, y: 240, value: 6 },
+      { itemId: "bronzeCoin", x: 3600, y: 580, value: 6 },
+      { itemId: "bronzeCoin", x: 4980, y: 370, value: 7 },
+      { itemId: "bronzeCoin", x: 5060, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 5560, y: 580, value: 7 },
+    ],
+    crates: [
+      { x: 620, y: 560 },
+      { x: 3700, y: 560 },
+      { x: 4300, y: 560 },
+    ],
+    plates: [
+      { id: "plate-1", x: 1150, y: 625, width: 78 },
+      { id: "plate-2", x: 4000, y: 625, width: 76 },
+      { id: "plate-3", x: 4550, y: 625, width: 76 },
+    ],
+    levers: [
+      { id: "lever-1", x: 1830, y: 362 },
+      { id: "lever-dist", x: 3250, y: 390, rangedOnly: true }, // Palanca alineada con el canal de caida
+      { id: "lever-2", x: 5000, y: 382 },
+    ],
+    gates: [
+      { id: "gate-1", x: 1350, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
+      { id: "gate-2", x: 2050, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      { id: "gate-dist", x: 3370, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      // Puerta doble: exige ambas placas presionadas a la vez (una caja por placa)
+      { id: "gate-3", x: 4750, y: 0, width: 54, height: 640, requiredActivations: ["plate-2", "plate-3"] },
+      { id: "gate-4", x: 5180, y: 0, width: 50, height: 640, requiredActivations: ["lever-2"] },
+    ],
+    boxJumpZones: [
+      { x: 1600, y: 625, width: 70 },
+      { x: 4850, y: 625, width: 70 },
+    ],
+    seals: [
+      { x: 5300, y: 500, width: 52, height: 140 },
+      { x: 5470, y: 500, width: 52, height: 140 },
+      { x: 5640, y: 500, width: 52, height: 140 },
+      { x: 5810, y: 500, width: 52, height: 140 },
+    ],
+    hazards: [
+      { x: 880, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 1900, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 2300, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 3450, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 4150, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 5390, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 5730, y: 610, width: 110, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber8:architect-crown",
+      itemId: "architectCrown",
+      x: 5940,
+      y: 575,
+    },
+    goal: { x: 6080, y: 560 },
+    requiredActivations: ["plate-1", "lever-1", "lever-dist", "plate-2", "plate-3", "lever-2"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-6",
+      shadeAlpha: 0.02,
+      accentColor: 0xffdd85,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 620, y: 560 },
+    boxJumpZone: { x: 1600, y: 625, width: 70 },
+    plate: { x: 1150, y: 625, width: 78 },
+    lever: { x: 1830, y: 362 },
+    gate: { x: 1350, y: 0, width: 50, height: 640 },
+  },
+  trialChamber9: {
+    // Identidad: VERTICALIDAD. Los cinco sellos viven en lo alto de torres
+    // dispersas: hay que escalar cada una para romperlos. Meta elevada.
+    id: "trialChamber9",
+    name: "Las torres del vigia",
+    stageNumber: 9,
+    nextLevelId: "trialChamber10",
+    difficultyRating: 520,
+    worldWidth: 6500,
+    timeLimitSeconds: 250,
+    experienceReward: 900,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 6500, height: 80 },
+      { x: 820, y: 500, width: 120, height: 24 }, // Torre del primer sello, paso 1
+      { x: 970, y: 400, width: 170, height: 24 }, // Torre del primer sello, cima
+      { x: 1750, y: 520, width: 130, height: 24 }, // Galeria de tiro, paso 1
+      { x: 1930, y: 430, width: 130, height: 24 }, // Galeria de tiro, paso 2 (sello en el camino)
+      { x: 2110, y: 340, width: 150, height: 24 }, // Percha de tiro
+      { x: 2530, y: 340, width: 140, height: 24 }, // Pilar de la palanca a distancia
+      { x: 3320, y: 490, width: 120, height: 24 }, // Campanario, paso 1
+      { x: 3480, y: 390, width: 120, height: 24 }, // Campanario, paso 2
+      { x: 3550, y: 300, width: 150, height: 24 }, // Campanario, cima
+      { x: 4130, y: 490, width: 40, height: 150 }, // Muro izquierdo del foso
+      { x: 4430, y: 490, width: 40, height: 150 }, // Muro derecho del foso
+      { x: 4750, y: 520, width: 140, height: 24 }, // Gran torre, paso 1
+      { x: 4950, y: 430, width: 140, height: 24 }, // Gran torre, paso 2 (sello en el camino)
+      { x: 5150, y: 340, width: 150, height: 24 }, // Gran torre, paso 3
+      { x: 5380, y: 260, width: 170, height: 24 }, // Gran torre, cima (palanca final)
+      { x: 5650, y: 380, width: 140, height: 24 }, // Repisa del quinto sello
+      { x: 5950, y: 500, width: 220, height: 24 }, // Plataforma del portal elevado
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 350, y: 580, value: 6 },
+      { itemId: "bronzeCoin", x: 1005, y: 340, value: 6 },
+      { itemId: "bronzeCoin", x: 2170, y: 280, value: 6 },
+      { itemId: "bronzeCoin", x: 2280, y: 410, value: 7 },
+      { itemId: "bronzeCoin", x: 3560, y: 240, value: 7 },
+      { itemId: "bronzeCoin", x: 5210, y: 280, value: 7 },
+      { itemId: "bronzeCoin", x: 5620, y: 320, value: 7 },
+      { itemId: "bronzeCoin", x: 6060, y: 390, value: 7 },
+    ],
+    crates: [
+      { x: 520, y: 560 },
+      { x: 3000, y: 560 },
+      { x: 4230, y: 560 }, // Caja del foso: nace junto a su placa, imposible perderla
+      { x: 2280, y: 560 }, // Par pre-apilado opcional: escalera hacia la moneda alta
+      { x: 2280, y: 490 },
+    ],
+    plates: [
+      { id: "plate-1", x: 1180, y: 625, width: 78 },
+      { id: "plate-2", x: 3600, y: 625, width: 76 },
+      {
+        id: "plate-3",
+        x: 4360,
+        y: 625,
+        width: 76,
+        hint: "Salta dentro del foso y empuja la caja sobre la placa",
+      },
+    ],
+    levers: [
+      {
+        id: "lever-dist",
+        x: 2600,
+        y: 340,
+        rangedOnly: true,
+        hint: "Sube a la percha de tiro y dispara a la palanca del pilar",
+      },
+      {
+        id: "lever-2",
+        x: 5450,
+        y: 212,
+        hint: "Escala la gran torre y golpea la palanca de la cima",
+      },
+    ],
+    gates: [
+      { id: "gate-1", x: 1400, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
+      { id: "gate-dist", x: 2750, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-2", x: 4550, y: 0, width: 54, height: 640, requiredActivations: ["plate-2", "plate-3"] },
+    ],
+    seals: [
+      { x: 1040, y: 260, width: 52, height: 140 }, // En la cima de la primera torre
+      { x: 1980, y: 290, width: 52, height: 140 }, // Bloquea el ascenso a la percha
+      { x: 3600, y: 160, width: 52, height: 140 }, // En la cima del campanario
+      { x: 5010, y: 290, width: 52, height: 140 }, // Bloquea el ascenso de la gran torre
+      { x: 5700, y: 240, width: 52, height: 140 }, // En la repisa del descenso
+    ],
+    hazards: [
+      { x: 700, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 1650, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 2450, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 3750, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 4620, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 5570, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 5830, y: 610, width: 80, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber9:watcher-keystone",
+      itemId: "watcherKeystone",
+      x: 5750,
+      y: 575,
+    },
+    goal: { x: 6060, y: 450 },
+    requiredActivations: ["plate-1", "lever-dist", "plate-2", "plate-3", "lever-2"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-6",
+      shadeAlpha: 0.015,
+      accentColor: 0xffe9a0,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 520, y: 560 },
+    plate: { x: 1180, y: 625, width: 78 },
+    lever: { x: 5450, y: 212 },
+    gate: { x: 1400, y: 0, width: 50, height: 640 },
+  },
+  trialChamber10: {
+    // Identidad: IDA Y VUELTA. Las cajas quedan detras de las puertas que
+    // abres, un sello espera sobre el punto de partida y un puente en el
+    // cielo concentra tres sellos que ademas sirven de carril de disparo.
+    id: "trialChamber10",
+    name: "El pendulo del relojero",
+    stageNumber: 10,
+    nextLevelId: "trialChamber11",
+    difficultyRating: 630,
+    worldWidth: 6800,
+    timeLimitSeconds: 260,
+    experienceReward: 1100,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 6800, height: 80 },
+      { x: 250, y: 380, width: 180, height: 24 }, // Cornisa del sello del regreso (sobre el inicio)
+      { x: 480, y: 490, width: 120, height: 24 }, // Peldano de acceso a la cornisa
+      { x: 860, y: 500, width: 130, height: 24 }, // Torre del vigia, paso 1
+      { x: 1030, y: 410, width: 130, height: 24 }, // Torre del vigia, paso 2
+      { x: 1200, y: 320, width: 150, height: 24 }, // Torre del vigia, cima (palanca)
+      { x: 2500, y: 520, width: 130, height: 24 }, // Escalera al puente, paso 1
+      { x: 2680, y: 430, width: 130, height: 24 }, // Escalera al puente, paso 2
+      { x: 2860, y: 330, width: 700, height: 24 }, // Puente de los tres sellos
+      { x: 3700, y: 330, width: 120, height: 24 }, // Pilar de la palanca a distancia
+      { x: 4700, y: 500, width: 140, height: 24 }, // Pendulo, subida 1
+      { x: 4880, y: 410, width: 140, height: 24 }, // Pendulo, subida 2
+      { x: 5060, y: 320, width: 160, height: 24 }, // Pendulo, cuspide (sello)
+      { x: 5290, y: 410, width: 140, height: 24 }, // Pendulo, bajada 1
+      { x: 5470, y: 500, width: 140, height: 24 }, // Pendulo, bajada 2 (sello)
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 420, y: 320, value: 6 },
+      { itemId: "bronzeCoin", x: 900, y: 440, value: 6 },
+      { itemId: "bronzeCoin", x: 1260, y: 260, value: 7 },
+      { itemId: "bronzeCoin", x: 2990, y: 270, value: 7 },
+      { itemId: "bronzeCoin", x: 3080, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 3330, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 5000, y: 260, value: 7 },
+      { itemId: "bronzeCoin", x: 5560, y: 300, value: 7 },
+      { itemId: "bronzeCoin", x: 6300, y: 580, value: 7 },
+    ],
+    crates: [
+      { x: 700, y: 560 }, // Queda detras de la primera puerta: hay que volver por ella
+      { x: 3650, y: 560 }, // Bajo el final del puente: se recupera tras abrir la tercera puerta
+    ],
+    plates: [
+      {
+        id: "plate-1",
+        x: 2050,
+        y: 625,
+        width: 78,
+        hint: "La caja quedo atras: cruza la puerta abierta y traela hasta la placa",
+      },
+      {
+        id: "plate-2",
+        x: 4300,
+        y: 625,
+        width: 76,
+        hint: "Vuelve por la caja bajo el puente y empujala hasta la placa",
+      },
+    ],
+    levers: [
+      {
+        id: "lever-1",
+        x: 1290,
+        y: 272,
+        hint: "Escala la torre del vigia y golpea la palanca de la cima",
+      },
+      {
+        id: "lever-dist",
+        x: 3760,
+        y: 330,
+        rangedOnly: true,
+        hint: "Cruza el puente rompiendo sellos y dispara a la palanca desde el borde",
+      },
+    ],
+    gates: [
+      { id: "gate-1", x: 1550, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      { id: "gate-2", x: 2350, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
+      { id: "gate-3", x: 3900, y: 0, width: 50, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-4", x: 4550, y: 0, width: 50, height: 640, requiredActivations: ["plate-2"] },
+    ],
+    seals: [
+      { x: 300, y: 240, width: 52, height: 140 }, // Sobre el punto de partida: mirar atras
+      { x: 2950, y: 190, width: 52, height: 140 }, // Puente, primer guardian
+      { x: 3200, y: 190, width: 52, height: 140 }, // Puente, segundo guardian
+      { x: 3450, y: 190, width: 52, height: 140 }, // Puente, tercer guardian
+      { x: 5110, y: 180, width: 52, height: 140 }, // Cuspide del pendulo
+      { x: 5520, y: 360, width: 52, height: 140 }, // Bajada del pendulo
+    ],
+    hazards: [
+      { x: 600, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 1400, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 2880, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 3130, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 3380, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 4750, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 5250, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 6100, y: 610, width: 100, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber10:pendulum-relic",
+      itemId: "pendulumRelic",
+      x: 5800,
+      y: 575,
+    },
+    goal: { x: 6650, y: 560 },
+    requiredActivations: ["lever-1", "plate-1", "lever-dist", "plate-2"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-6",
+      shadeAlpha: 0.01,
+      accentColor: 0xfff3c2,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 700, y: 560 },
+    plate: { x: 2050, y: 625, width: 78 },
+    lever: { x: 1290, y: 272 },
+    gate: { x: 1550, y: 0, width: 50, height: 640 },
+  },
+  trialChamber11: {
+    // Identidad: PATIO DE JUEGOS. Tres agujas con retos paralelos (escalar,
+    // francotirar, foso), una travesia por un arco en el vacio y un santuario
+    // final con sellos a todas las alturas alrededor del portal elevado.
+    id: "trialChamber11",
+    name: "El corazon del crisol",
+    stageNumber: 11,
+    difficultyRating: 760,
+    worldWidth: 6900,
+    timeLimitSeconds: 280,
+    experienceReward: 1350,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 6900, height: 80 },
+      { x: 600, y: 510, width: 120, height: 24 }, // Aguja 1, paso 1
+      { x: 760, y: 420, width: 120, height: 24 }, // Aguja 1, paso 2
+      { x: 920, y: 330, width: 140, height: 24 }, // Aguja 1, cima (palanca y punto de tiro)
+      { x: 1450, y: 330, width: 120, height: 24 }, // Aguja 2: pilar aislado del sello francotirador
+      { x: 1800, y: 490, width: 40, height: 150 }, // Muro izquierdo del foso (aguja 3)
+      { x: 2080, y: 490, width: 40, height: 150 }, // Muro derecho del foso
+      { x: 2550, y: 500, width: 130, height: 24 }, // Arco del vacio, ascenso 1
+      { x: 2730, y: 410, width: 130, height: 24 }, // Arco del vacio, ascenso 2
+      { x: 2910, y: 330, width: 150, height: 24 }, // Arco, tramo alto 1 (sello)
+      { x: 3120, y: 330, width: 150, height: 24 }, // Arco, tramo alto 2
+      { x: 3330, y: 330, width: 150, height: 24 }, // Arco, tramo alto 3 (sello)
+      { x: 3540, y: 410, width: 150, height: 24 }, // Arco, descenso 1 (punto de tiro)
+      { x: 3750, y: 500, width: 150, height: 24 }, // Arco, descenso 2
+      { x: 4000, y: 380, width: 120, height: 24 }, // Pilar de la palanca a distancia
+      { x: 5150, y: 520, width: 140, height: 24 }, // Santuario, subida 1 (sello)
+      { x: 5340, y: 430, width: 140, height: 24 }, // Santuario, subida 2
+      { x: 5530, y: 340, width: 160, height: 24 }, // Santuario, cuspide (sello)
+      { x: 5800, y: 430, width: 150, height: 24 }, // Repisa derecha del santuario (sello)
+      { x: 6470, y: 500, width: 220, height: 24 }, // Plataforma del portal elevado
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 250, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 980, y: 270, value: 7 },
+      { itemId: "bronzeCoin", x: 2990, y: 270, value: 8 },
+      { itemId: "bronzeCoin", x: 3180, y: 580, value: 8 },
+      { itemId: "bronzeCoin", x: 3480, y: 580, value: 8 },
+      { itemId: "bronzeCoin", x: 5450, y: 370, value: 8 },
+      { itemId: "bronzeCoin", x: 5870, y: 230, value: 8 },
+      { itemId: "bronzeCoin", x: 6560, y: 440, value: 8 },
+    ],
+    crates: [
+      { x: 350, y: 560 },
+      { x: 1900, y: 560 }, // Caja del foso: nace junto a su placa
+      { x: 4450, y: 560 },
+    ],
+    plates: [
+      {
+        id: "plate-1",
+        x: 2010,
+        y: 625,
+        width: 76,
+        hint: "Salta al foso de la tercera aguja y asienta la caja en la placa",
+      },
+      {
+        id: "plate-2",
+        x: 1700,
+        y: 625,
+        width: 78,
+        hint: "Empuja la caja del inicio hasta la placa frente al foso",
+      },
+      { id: "plate-3", x: 4680, y: 625, width: 76 },
+    ],
+    levers: [
+      {
+        id: "lever-1",
+        x: 990,
+        y: 282,
+        hint: "Escala la primera aguja y golpea su palanca",
+      },
+      {
+        id: "lever-dist",
+        x: 4060,
+        y: 380,
+        rangedOnly: true,
+        hint: "Desde el tramo final del arco, dispara a la palanca del pilar",
+      },
+    ],
+    gates: [
+      // Puerta triple: exige las tres agujas resueltas
+      { id: "gate-1", x: 2300, y: 0, width: 54, height: 640, requiredActivations: ["lever-1", "plate-1", "plate-2"] },
+      { id: "gate-dist", x: 4250, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-2", x: 4830, y: 0, width: 50, height: 640, requiredActivations: ["plate-3"] },
+    ],
+    seals: [
+      { x: 1490, y: 190, width: 52, height: 140 }, // Aguja 2: solo se rompe disparando desde la aguja 1
+      { x: 2960, y: 190, width: 52, height: 140 }, // Arco del vacio, guardian 1
+      { x: 3380, y: 190, width: 52, height: 140 }, // Arco del vacio, guardian 2
+      { x: 5200, y: 380, width: 52, height: 140 }, // Santuario, subida
+      { x: 5580, y: 200, width: 52, height: 140 }, // Santuario, cuspide
+      { x: 5850, y: 290, width: 52, height: 140 }, // Santuario, repisa derecha
+      { x: 6220, y: 500, width: 52, height: 140 }, // Guardian terrestre ante el portal
+    ],
+    hazards: [
+      { x: 500, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 2180, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 2950, y: 610, width: 140, height: 30, damage: 1 },
+      { x: 3250, y: 610, width: 140, height: 30, damage: 1 },
+      { x: 3550, y: 610, width: 140, height: 30, damage: 1 },
+      { x: 5720, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 6040, y: 610, width: 90, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber11:crucible-heart",
+      itemId: "crucibleHeart",
+      x: 6370,
+      y: 575,
+    },
+    goal: { x: 6590, y: 450 },
+    requiredActivations: ["lever-1", "plate-1", "plate-2", "lever-dist", "plate-3"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-6",
+      shadeAlpha: 0.005,
+      accentColor: 0xfff8dc,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 350, y: 560 },
+    plate: { x: 2010, y: 625, width: 76 },
+    lever: { x: 990, y: 282 },
+    gate: { x: 2300, y: 0, width: 54, height: 640 },
   },
 };
 

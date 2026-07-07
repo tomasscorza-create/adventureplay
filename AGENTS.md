@@ -139,7 +139,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/scenes/preload/loadSceneAssets.ts`: registra las rutas y claves de assets; `PreloadScene` conserva la generacion de texturas y animaciones.
 - `src/game/scenes/level/LevelRunTracker.ts`: cuenta tiempo/acciones del intento y aplica estadisticas una sola vez; `LevelScene` conserva la orquestacion jugable.
 - `src/game/scenes/PuzzleScene.ts`: orquesta el gameplay del modo Desafio sin mezclar sus mecanismos con `LevelScene`; reutiliza personaje, input, poderes, HUD, guardado, inventario, progresion y estadisticas.
-- `src/game/data/puzzleLevels.ts`: contrato orientado a datos para cuatro camaras de ingenio encadenadas, activadores requeridos, dificultad cuantificada y compatibilidad cooperativa futura.
+- `src/game/data/puzzleLevels.ts`: contrato orientado a datos para siete camaras de ingenio encadenadas, activadores requeridos, dificultad cuantificada y compatibilidad cooperativa futura.
 - `src/game/systems/puzzles/PuzzleActivationSystem.ts`: estado puro de activadores por participante; `PuzzleScene` lo usa para resolver objetivos y un futuro transporte cooperativo debe alimentarlo sin acoplar red a Phaser.
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
@@ -159,7 +159,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `MainMenuScene`: fondo del menu y escucha `START_GAME`.
 - `WorldMapScene`: creada como placeholder para futuro mapa.
 - `LevelScene`: escena jugable principal.
-- `PuzzleScene`: escena del modo Desafio; consume datos de seis camaras y admite cantidades variables de sellos y peligros sin duplicar escenas.
+- `PuzzleScene`: escena del modo Desafio; consume datos de siete camaras y admite cantidades variables de sellos y peligros sin duplicar escenas.
 - `BattleScene`: creada como placeholder para futuros combates especiales.
 - `UIScene`: placeholder Phaser para UI interna si hiciera falta, pero la UI actual vive en React.
 - `GameOverScene`: escena de resultado que comunica derrota o victoria a React.
@@ -196,17 +196,18 @@ La demo actual permite:
 - Reiniciar todo el progreso desde Opciones con confirmacion destructiva, conservando la cuenta de autenticacion pero restaurando el save inicial.
 - Abrir seleccion de modo Explorar desde Iniciar juego.
 - Ver el modo Explorar presentado con arte propio de aventura en su tarjeta `Campana del continente`; Arena conserva su presentacion bloqueada.
-- Abrir Desafio y jugar seis camaras encadenadas: `La camara de los dos sellos`, `El corredor del contrapeso`, `La galeria de las tres rupturas`, `El reloj del arquitecto`, `La camara del laberinto` y `El templo de los contrapesos`. Los niveles iniciales imponen la secuencia fisica caja-cornisa-palanca-puerta-placa-sellos-portal; las camaras avanzadas incorporan multiples cajas, apilamiento con friccion inercial (el empuje moderado < 110 px/s permite transportarlas apiladas, mientras que el empuje brusco o carrera las desliza y cae) y una jaula metalica final que bloquea fisicamente la meta hasta resolver todas las condiciones del nivel.
+- Abrir Desafio y jugar siete camaras encadenadas: `La camara de los dos sellos`, `El corredor del contrapeso`, `La galeria de las tres rupturas`, `El reloj del arquitecto`, `La camara del laberinto`, `El templo de los contrapesos` y `La sala del lente maestro`. Los niveles iniciales imponen la secuencia fisica caja-cornisa-palanca-puerta-placa-sellos-portal; las camaras avanzadas incorporan multiples cajas, apilamiento con friccion inercial (el empuje moderado < 110 px/s permite transportarlas apiladas, mientras que el empuje brusco o carrera las desliza y cae), disparos durante caida para palancas inaccesibles desde el piso y una jaula metalica final que bloquea fisicamente la meta hasta resolver todas las condiciones del nivel.
 - En Desafio, cada proyectil se consume en el primer impacto contra plataformas o paredes, cajas, puertas, palancas, sellos, peligros, la jaula final o el portal. Impactar una palanca la activa exactamente igual que un golpe cuerpo a cuerpo. Phaser puede invertir los dos argumentos cuando enfrenta un grupo con un objeto individual: resolver siempre cual es el `PowerProjectile` entre ambos, usar el punto unico de consumo de la entidad y no reintroducir separacion fisica ni relanzamiento automatico al quedar con velocidad cero.
-- La progresion visual de las seis camaras usa un fondo propio por nivel: noche profunda, noche azul, amanecer, ruina verde diurna, armeria iluminada y tesoro final. Cada fondo queda fijo a camara para evitar costuras en mundos largos, mientras plataformas y mecanismos conservan su colision orientada a datos por encima del arte.
+- La progresion visual de Desafio usa seis fondos WebP: noche profunda, noche azul, amanecer, ruina verde diurna, armeria iluminada y tesoro final. La septima camara reutiliza el tesoro final hasta que exista un fondo propio. Cada fondo queda fijo a camara para evitar costuras en mundos largos, mientras plataformas y mecanismos conservan su colision orientada a datos por encima del arte.
 - El arte recortado de Desafio nunca funciona como unica fuente de lectura: plataformas, placas, palancas, puertas, sellos, jaula, marcadores y peligros conservan una base procedural Phaser opaca con contorno y contraste. Las texturas IA se superponen como detalle; no volver a dejar hitboxes indispensables invisibles o dependientes de transparencia imperfecta, y no mover esta capa al CSS porque pertenece al mundo/camara Phaser.
 - Las cajas ilustradas de Desafio se muestran a 82x82 pero deben conservar un cuerpo Arcade real de 70x70, igual al placeholder original. `PuzzleGeometry` convierte el tamano de mundo a dimensiones fuente antes de `Body.setSize`; no pasar `70` directamente sobre una imagen escalada porque Phaser volveria a escalarlo y rompería todos los saltos asistidos por caja.
-- En la sexta camara de Desafio, el canal de la segunda palanca queda entre `y=384` y `y=440`, con la palanca en `y=440`; esta altura permite alinear el disparo durante un salto desde la caja anterior sin convertirlo en un tiro directo desde el suelo. `puzzleLevels.test.ts` protege esa ventana usando la geometria real de salto, caja, cuerpo y proyectil.
+- Las placas de suelo de Desafio sincronizan una fila fija de llaves en el margen izquierdo de `PuzzleScene`: una llave por placa, azul cuando la placa esta presionada por una caja y gris cuando esta libre. Este indicador debe leer `PuzzleActivationSystem` con los IDs reales de `plates`, no mantener un contador paralelo.
+- Desde la cuarta camara de Desafio, cada palanca `rangedOnly` debe quedar inaccesible desde un salto de piso y resolverse trepando escalones altos, dejandose caer y disparando durante la caida. `puzzleLevels.test.ts` protege esa ventana usando la geometria real de salto, cuerpo y proyectil.
 - La secuencia final de la sexta camara asigna una puerta visible a cada palanca: `lever-1` abre la puerta intermedia de `x=2700`, `lever-dist` abre la de `x=3100` y la tercera placa abre la puerta final de `x=3900`. Hay una caja de apoyo antes del canal (`x=2800`) y otra utilizable despues (`x=3300`) para que la caja empleada al superar el canal no sea tambien la unica disponible para la placa final.
-- Ver una dificultad cuantificada 100, 123, 152, 188, 231 y 285: cada camara aumenta entre 20% y 25% respecto de la anterior mediante recorrido, sellos, peligros, plataformas y presion temporal, no mediante inflar dano arbitrariamente.
+- Ver una dificultad cuantificada 100, 123, 152, 188, 231, 285 y 350: cada camara aumenta entre 20% y 25% respecto de la anterior mediante recorrido, sellos, peligros, plataformas y presion temporal, no mediante inflar dano arbitrariamente.
 - No agregar plataformas auxiliares antes de la puerta que permitan alcanzar la cornisa sin caja, ni reducir la puerta por debajo del alto jugable. `puzzleLevels.test.ts` protege ambas condiciones contra atajos accidentales en las camaras 1-4.
 - Compartir entre Explorar y Desafio el heroe seleccionado, salud maxima, controles, poderes y cargas por personaje, ORO, XP/LV, inventario, logros, HUD, pausa, tienda de cargas, guardado remoto y estadisticas acumuladas.
-- Recoger en Desafio ORO persistente y una pieza unica por camara: `Mecanismo antiguo`, `Contrapeso runico`, `Prisma de eco`, `Nucleo del arquitecto`, `Engranaje antiguo` y `Cetro del arquitecto`. Las recompensas de finalizacion escalan a 180, 220, 270, 330, 420 y 500 XP; la primera camara puede desbloquear `Mente y acero` una sola vez.
+- Recoger en Desafio ORO persistente y una pieza unica por camara: `Mecanismo antiguo`, `Contrapeso runico`, `Prisma de eco`, `Nucleo del arquitecto`, `Engranaje antiguo`, `Cetro del arquitecto` y `Lente del arquitecto`. Las recompensas de finalizacion escalan a 180, 220, 270, 330, 420, 500 y 620 XP; la primera camara puede desbloquear `Mente y acero` una sola vez.
 - Ver la opcion Cooperativo dentro de Desafio marcada como proxima fase. `PuzzleLevelDefinition` ya declara activadores requeridos y `supportsCooperative`, pero la sesion de red, autoridad, sincronizacion y segundo jugador aun no estan implementados; no presentar esa opcion como jugable.
 - En el explorador, el mapa de regiones izquierdo se escala completo al espacio disponible y no tiene scroll; la lista de niveles derecha conserva cabecera fija y scroll independiente. El contenedor general no debe capturar el desplazamiento de niveles.
 - La iluminacion del mapa usa una unica `explore-map__highlight` como hermana de los botones y toma el alfa detallado del WebP regional. Los `clip-path` poligonales se conservan solo como hitboxes invisibles: no volver a introducir la imagen regional dentro del boton, porque el poligono recortaria arboles, puentes y relieves visibles.
@@ -756,7 +757,7 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 9. Agregar menu de configuracion y remapeo basico.
 10. Agregar Capacitor cuando la experiencia mobile web este comoda.
 11. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
-12. Validar manualmente las seis camaras de Desafio y afinar sus tiempos sin romper la progresion protegida 100/123/152/188/231/285.
+12. Validar manualmente las siete camaras de Desafio y afinar sus tiempos sin romper la progresion protegida 100/123/152/188/231/285/350.
 13. Diseñar el cooperativo de Desafio con autoridad de sesion, IDs de participante y sincronizacion determinista; no acoplar transporte de red directamente a `PuzzleScene`.
 
 ## Advertencias actuales
@@ -807,9 +808,20 @@ Al actualizarla:
 
 El historial de comprobaciones anteriores se conserva en `docs/verification-history.md`. Es solo evidencia historica: el estado vigente, las reglas obligatorias y los riesgos actuales permanecen en este archivo.
 
-Ultima revision documental: 2026-07-06. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.
+Ultima revision documental: 2026-07-07. Esta fecha indica revision del contenido; la validacion ejecutada durante el cierre se registra en el README y en el commit correspondiente.
 
 ## Historial de modificaciones por agentes de IA
+
+### Sesión: 2026-07-07 (Septima camara de Desafio)
+- **Agente**: Codex
+- **Archivos Modificados**:
+  - [items.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/data/items.ts): Registro de la recompensa `architectLens`.
+  - [puzzleLevels.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/data/puzzleLevels.ts): Creacion de `trialChamber7`, encadenada desde `trialChamber6`, con dificultad 350, activadores secuenciales, cajas de apoyo y palanca `rangedOnly` por caida.
+  - [puzzleLevels.test.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/data/puzzleLevels.test.ts): Cobertura de siete camaras, progresion visual, geometria de disparo en caida y disponibilidad de cajas por placa.
+  - [PuzzleScene.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/scenes/PuzzleScene.ts): Indicador fijo de llaves sincronizado con las placas de suelo.
+  - [SaveDefaults.test.ts](file:///c:/Users/usuario/Desktop/adventureplay/src/game/systems/save/SaveDefaults.test.ts): Normalizacion de progreso y recompensa de la septima camara.
+  - [ChallengeView.tsx](file:///c:/Users/usuario/Desktop/adventureplay/src/ui/screens/main-menu/ChallengeView.tsx): Copia dinamica del total de camaras.
+- **Estado de validacion**: `npm run check` completado con exito (lint, tipos, tests, auditorias y build).
 
 ### Sesión: 2026-07-06 (Mejoras, Ampliación de Desafío y Puzles de Disparo)
 - **Agente**: Antigravity (Gemini 3.5 Flash)

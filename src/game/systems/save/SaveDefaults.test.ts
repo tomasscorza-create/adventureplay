@@ -184,9 +184,9 @@ describe("normalizeSaveData", () => {
       ...defaults,
       player: {
         ...defaults.player,
-        inventory: ["ancientMechanism", "runicCounterweight", "echoPrism", "architectCore", "ancientGear", "architectScepter"],
+        inventory: ["ancientMechanism", "runicCounterweight", "echoPrism", "architectCore", "ancientGear", "architectScepter", "architectLens"],
       },
-      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4", "trialChamber5", "trialChamber6"],
+      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4", "trialChamber5", "trialChamber6", "trialChamber7"],
       claimedRewardBoxes: [
         "trialChamber1:mechanism",
         "trialChamber2:counterweight",
@@ -194,6 +194,7 @@ describe("normalizeSaveData", () => {
         "trialChamber4:architect-core",
         "trialChamber5:ancient-gear",
         "trialChamber6:architect-scepter",
+        "trialChamber7:architect-lens",
       ],
       achievements: {
         ...defaults.achievements,
@@ -208,6 +209,7 @@ describe("normalizeSaveData", () => {
       "trialChamber4",
       "trialChamber5",
       "trialChamber6",
+      "trialChamber7",
     ]);
     expect(normalized.unlockedLevels).toEqual(expect.arrayContaining([
       "trialChamber1",
@@ -216,8 +218,9 @@ describe("normalizeSaveData", () => {
       "trialChamber4",
       "trialChamber5",
       "trialChamber6",
+      "trialChamber7",
     ]));
-    expect(normalized.claimedRewardBoxes).toHaveLength(6);
+    expect(normalized.claimedRewardBoxes).toHaveLength(7);
     expect(normalized.player.inventory).toEqual([
       "ancientMechanism",
       "runicCounterweight",
@@ -225,8 +228,53 @@ describe("normalizeSaveData", () => {
       "architectCore",
       "ancientGear",
       "architectScepter",
+      "architectLens",
     ]);
     expect(normalized.achievements.unlockedIds).toContain("first-puzzle");
+  });
+
+  it("unlocks the seventh challenge chamber from existing sixth chamber completion", () => {
+    const normalized = normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4", "trialChamber5", "trialChamber6"],
+    });
+
+    expect(normalized.unlockedLevels).toContain("trialChamber7");
+  });
+
+  it("unlocks the eighth challenge chamber from existing seventh chamber completion", () => {
+    const normalized = normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: ["trialChamber1", "trialChamber2", "trialChamber3", "trialChamber4", "trialChamber5", "trialChamber6", "trialChamber7"],
+    });
+
+    expect(normalized.unlockedLevels).toContain("trialChamber8");
+  });
+
+  it("unlocks the playground chambers as each previous chamber is completed", () => {
+    const firstEight = [
+      "trialChamber1",
+      "trialChamber2",
+      "trialChamber3",
+      "trialChamber4",
+      "trialChamber5",
+      "trialChamber6",
+      "trialChamber7",
+      "trialChamber8",
+    ];
+
+    expect(normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: firstEight,
+    }).unlockedLevels).toContain("trialChamber9");
+    expect(normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: [...firstEight, "trialChamber9"],
+    }).unlockedLevels).toContain("trialChamber10");
+    expect(normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: [...firstEight, "trialChamber9", "trialChamber10"],
+    }).unlockedLevels).toContain("trialChamber11");
   });
 
   it("unlocks the expanded volcanic sequence from existing completed progress", () => {

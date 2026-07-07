@@ -6,3 +6,4 @@ vite.config.d.ts
 .env.local
 .env.*.local
 /diseños png/
+tmp/

@@ -44,7 +44,7 @@ export class PuzzleScene extends Phaser.Scene {
     id: string;
     rect: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Image;
-    definition: { id: string; x: number; y: number; width: number };
+    definition: { id: string; x: number; y: number; width: number; hint?: string };
   }> = [];
   private boxJumpMarkers: Phaser.GameObjects.Rectangle[] = [];
   private levers: Array<{
@@ -52,7 +52,7 @@ export class PuzzleScene extends Phaser.Scene {
     rect: Phaser.GameObjects.Rectangle;
     knob: Phaser.GameObjects.Arc;
     visual: Phaser.GameObjects.Image;
-    definition: { id: string; x: number; y: number };
+    definition: { id: string; x: number; y: number; rangedOnly?: boolean; hint?: string };
   }> = [];
   private gates: Array<{
     id: string;
@@ -81,6 +81,13 @@ export class PuzzleScene extends Phaser.Scene {
   private unlockedAchievements: AchievementId[] = [];
   private damageCooldownUntil = 0;
   private objectiveText?: Phaser.GameObjects.Text;
+  private plateKeyPanel?: Phaser.GameObjects.Container;
+  private plateKeyIndicators: Array<{
+    plateId: string;
+    icon: Phaser.GameObjects.Graphics;
+    glow: Phaser.GameObjects.Arc;
+    active: boolean;
+  }> = [];
   private unbindResume?: () => void;
   private unbindPowerShop?: () => void;
   private unbindRestart?: () => void;
@@ -524,6 +531,78 @@ export class PuzzleScene extends Phaser.Scene {
       .setStrokeStyle(2, this.visualPalette.topEdge, 0.78)
       .setScrollFactor(0)
       .setDepth(39);
+
+    this.createPlateKeyInterface();
+  }
+
+  private createPlateKeyInterface(): void {
+    this.plateKeyPanel?.destroy(true);
+    this.plateKeyIndicators = [];
+    if (this.plates.length === 0) return;
+
+    const spacing = 32;
+    const panelWidth = 20 + (this.plates.length - 1) * spacing + 28;
+    const panel = this.add
+      .container(24, 138)
+      .setScrollFactor(0)
+      .setDepth(42);
+    const background = this.add
+      .rectangle(0, 0, panelWidth, 38, 0x07111d, 0.74)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, this.visualPalette.outline, 0.62);
+    panel.add(background);
+
+    this.plates.forEach((plate, index) => {
+      const x = 20 + index * spacing;
+      const glow = this.add
+        .circle(x, 19, 15, 0x67e8ff, 0.16)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const icon = this.add.graphics({ x, y: 19 });
+      panel.add([glow, icon]);
+      this.plateKeyIndicators.push({
+        plateId: plate.id,
+        icon,
+        glow,
+        active: false,
+      });
+    });
+
+    this.plateKeyPanel = panel;
+    this.updatePlateKeyInterface(true);
+  }
+
+  private updatePlateKeyInterface(force = false): void {
+    for (const indicator of this.plateKeyIndicators) {
+      const active = this.activations.isActive(indicator.plateId);
+      if (!force && active === indicator.active) continue;
+
+      indicator.active = active;
+      indicator.glow
+        .setFillStyle(active ? 0x67e8ff : 0x4f5866, active ? 0.24 : 0.08)
+        .setScale(active ? 1.1 : 0.92);
+      this.drawPlateKeyIcon(indicator.icon, active);
+    }
+  }
+
+  private drawPlateKeyIcon(graphics: Phaser.GameObjects.Graphics, active: boolean): void {
+    const fill = active ? 0x6ee7ff : 0x6b7280;
+    const stroke = active ? 0xd7fbff : 0x252b35;
+    const alpha = active ? 1 : 0.68;
+
+    graphics.clear();
+    graphics.lineStyle(2, stroke, active ? 0.96 : 0.76);
+    graphics.fillStyle(fill, alpha);
+    graphics.fillCircle(-7, -1, 6);
+    graphics.strokeCircle(-7, -1, 6);
+    graphics.fillStyle(0x07111d, active ? 0.78 : 0.62);
+    graphics.fillCircle(-7, -1, 2.3);
+    graphics.fillStyle(fill, alpha);
+    graphics.fillRect(-1, -3, 18, 6);
+    graphics.strokeRect(-1, -3, 18, 6);
+    graphics.fillRect(10, 2, 5, 7);
+    graphics.fillRect(16, 2, 4, 5);
+    graphics.lineStyle(1, active ? 0xffffff : 0x9ca3af, active ? 0.62 : 0.24);
+    graphics.lineBetween(1, -1, 16, -1);
   }
 
   private createCollectibles(): void {
@@ -717,7 +796,7 @@ export class PuzzleScene extends Phaser.Scene {
     rect: Phaser.GameObjects.Rectangle;
     knob: Phaser.GameObjects.Arc;
     visual: Phaser.GameObjects.Image;
-    definition: { id: string; x: number; y: number };
+    definition: { id: string; x: number; y: number; rangedOnly?: boolean };
   }): void {
     if (this.activations.isActive(leverObj.id)) return;
     this.activations.setParticipantActive(leverObj.id, "player-1", true);
@@ -737,6 +816,7 @@ export class PuzzleScene extends Phaser.Scene {
   private tryActivateLever(): void {
     for (const leverObj of this.levers) {
       if (this.activations.isActive(leverObj.id)) continue;
+      if (leverObj.definition.rangedOnly) continue;
 
       const dist = Phaser.Math.Distance.Between(
         this.player.x,
@@ -813,6 +893,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     if (stateChanged) {
+      this.updatePlateKeyInterface();
       this.updateGates();
     }
   }
@@ -895,11 +976,19 @@ export class PuzzleScene extends Phaser.Scene {
     if (pendingActivations.length > 0) {
       const nextAct = pendingActivations[0];
       if (nextAct.includes("lever")) {
-        nextText = boxInAnyJumpZone
-          ? "Sube a la caja, salta y golpea la palanca"
-          : "Mueve la caja cerca de la cornisa para alcanzar la palanca";
+        const pendingLever = this.levers.find((lever) => lever.id === nextAct);
+        nextText = pendingLever?.definition.hint
+          ?? (pendingLever?.definition.rangedOnly
+            ? "Sube los escalones, dejate caer y dispara a la palanca"
+            : (
+              boxInAnyJumpZone
+                ? "Sube a la caja, salta y golpea la palanca"
+                : "Mueve la caja cerca de la cornisa para alcanzar la palanca"
+            ));
       } else if (nextAct.includes("plate")) {
-        nextText = "Empuja una caja sobre la placa de presion para abrir la puerta";
+        const pendingPlate = this.plates.find((plate) => plate.id === nextAct);
+        nextText = pendingPlate?.definition.hint
+          ?? "Empuja una caja sobre la placa de presion para abrir la puerta";
       } else {
         nextText = `Resuelve el siguiente paso: activa ${nextAct}`;
       }
