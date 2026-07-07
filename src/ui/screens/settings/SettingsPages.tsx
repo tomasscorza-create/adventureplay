@@ -1,9 +1,30 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { gameMusic } from "../../../shared/music/GameMusic";
 import { gameSfx } from "../../../shared/sfx/GameSfx";
 import { KeyboardBindingsView } from "../main-menu/KeyboardBindingsView";
 import { MenuHeading, SettingToggle, VolumeControl } from "../main-menu/MenuPrimitives";
 import { MobileGameplaySettingsView } from "../main-menu/MobileGameplaySettingsView";
+
+const audioEntryIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M15.6 4.4v11.2a2.9 2.9 0 1 1-1.8-2.7V7.2L9 8.4v9.2a2.9 2.9 0 1 1-1.8-2.7V6.6l8.4-2.2Z" />
+  </svg>
+);
+
+const keyboardEntryIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="3" y="7" width="18" height="11" rx="2.2" />
+    <path d="M6.4 10.4h.2m3.4 0h.2m3.4 0h.2m3.4 0h.2M6.4 14.6h.2m3 0h4.8m3.2 0h.2" />
+  </svg>
+);
+
+const touchEntryIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3.4v4.2m0 8.8v4.2M3.4 12h4.2m8.8 0h4.2" />
+    <path d="m12 3.4-1.9 2h3.8Zm0 17.2-1.9-2h3.8ZM3.4 12l2-1.9v3.8Zm17.2 0-2-1.9v3.8Z" />
+    <circle cx="12" cy="12" r="2.4" />
+  </svg>
+);
 
 export function SettingsNavigationEntries({
   showDesktopCommandSettings,
@@ -17,13 +38,13 @@ export function SettingsNavigationEntries({
   return (
     <>
       <SettingsEntryButton
-        icon="♪"
+        icon={audioEntryIcon}
         title="Sonido y musica"
         description="Volumen, musica y efectos del juego."
         onClick={onOpenAudio}
       />
       <SettingsEntryButton
-        icon={showDesktopCommandSettings ? "⌨" : "✥"}
+        icon={showDesktopCommandSettings ? keyboardEntryIcon : touchEntryIcon}
         title={showDesktopCommandSettings ? "Comandos" : "Controles moviles"}
         description={showDesktopCommandSettings
           ? "Personaliza teclas primarias y secundarias."
@@ -125,7 +146,7 @@ function SettingsEntryButton({
   description,
   onClick,
 }: {
-  icon: string;
+  icon: ReactElement;
   title: string;
   description: string;
   onClick: () => void;

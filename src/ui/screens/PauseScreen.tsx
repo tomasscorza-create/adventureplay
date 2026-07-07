@@ -1,5 +1,4 @@
-import { useState, type CSSProperties } from "react";
-import menuGearUrl from "../../assets/menu/menu-gear.webp";
+import { useState } from "react";
 import { MenuHeading } from "./main-menu/MenuPrimitives";
 import {
   AudioSettingsPage,
@@ -57,9 +56,13 @@ export function PauseScreen({
             className="pause-settings-gear"
             type="button"
             aria-label="Abrir ajustes"
-            style={{ "--pause-gear-image": `url(${menuGearUrl})` } as CSSProperties}
             onClick={() => setView("settings")}
-          />
+          >
+            <svg className="pause-settings-gear__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3.4" />
+              <path d="M12 2.8v3.1M12 18.1v3.1M2.8 12h3.1M18.1 12h3.1M5.5 5.5l2.2 2.2M16.3 16.3l2.2 2.2M18.5 5.5l-2.2 2.2M7.7 16.3l-2.2 2.2" />
+            </svg>
+          </button>
           <span className="panel__eyebrow">Sendero detenido</span>
           <h2>Pausa</h2>
           <p>La niebla queda suspendida hasta que vuelvas al camino.</p>

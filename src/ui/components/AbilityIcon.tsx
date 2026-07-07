@@ -6,16 +6,16 @@ export function AbilityIcon({ type }: AbilityIconProps) {
   if (type === "heal") {
     return (
       <svg className="ability-icon" viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M16 27S5 21 5 12.5C5 7.2 11.6 5 16 10c4.4-5 11-2.8 11 2.5C27 21 16 27 16 27Z" />
-        <path className="ability-icon__detail" d="M16 11v10M11 16h10" />
+        <path d="M16 27.2c-.4 0-.8-.1-1.1-.4C10 23.2 4.6 19.1 4.6 13.2c0-3.8 2.9-6.7 6.6-6.7 1.9 0 3.6.8 4.8 2.2 1.2-1.4 2.9-2.2 4.8-2.2 3.7 0 6.6 2.9 6.6 6.7 0 5.9-5.4 10-10.3 13.6-.3.3-.7.4-1.1.4Z" />
+        <path className="ability-icon__detail" d="M16 11.8v8.6M11.7 16.1h8.6" />
       </svg>
     );
   }
 
   return (
     <svg className="ability-icon" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="m4 23 8-14 4 8 12-8-9 16-5-7-10 5Z" />
-      <path className="ability-icon__detail" d="m7 27 8-5M3 18l7-4" />
+      <path d="M19.2 3.9 8.1 16.4c-.6.7-.1 1.7.8 1.7h5.2l-2.9 9.1c-.3 1 1 1.7 1.7.9l11-12.5c.6-.7.1-1.7-.8-1.7h-5.2l2.9-9.1c.4-1-.9-1.7-1.6-.9Z" />
+      <path className="ability-icon__detail" d="M17.4 8.4 12 14.6h4.6l-1.8 5.6" />
     </svg>
   );
 }

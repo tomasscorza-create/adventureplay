@@ -1,11 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, WheelEvent } from "react";
-import menuBackgroundUrl from "../../assets/menu/menu-background.webp";
-import menuAchievementsButtonUrl from "../../assets/menu/menu-achievements.webp";
-import menuCharacterButtonUrl from "../../assets/menu/menu-character.webp";
-import menuGearUrl from "../../assets/menu/menu-gear.webp";
-import menuInventoryButtonUrl from "../../assets/menu/menu-inventory.webp";
-import menuStartButtonUrl from "../../assets/menu/menu-start.webp";
+import type { FormEvent, KeyboardEvent, PointerEvent, ReactElement, WheelEvent } from "react";
 import modeExploreUrl from "../../assets/menu/mode-explore.webp";
 import { achievementDefinitions } from "../../game/data/achievements";
 import {
@@ -56,11 +50,58 @@ interface MainMenuScreenProps {
     cost: number,
   ) => boolean;
 }
-const mainActions = [
-  { id: "start", label: "Iniciar juego", view: "modes" as const, imageUrl: menuStartButtonUrl },
-  { id: "character", label: "Personaje", view: "characters" as const, imageUrl: menuCharacterButtonUrl },
-  { id: "inventory", label: "Inventario", view: "inventory" as const, imageUrl: menuInventoryButtonUrl },
-  { id: "achievements", label: "Logros", view: "achievements" as const, imageUrl: menuAchievementsButtonUrl },
+interface MainAction {
+  id: string;
+  label: string;
+  view: MenuView;
+  icon: ReactElement;
+}
+
+const mainActions: MainAction[] = [
+  {
+    id: "start",
+    label: "Iniciar juego",
+    view: "modes",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2.6 14 7l4.6.5-3.4 3.1.9 4.6L12 12.9l-4.1 2.3.9-4.6L5.4 7.5 10 7Z" />
+        <path d="M12 15.6v5.8M8.6 21.4h6.8" />
+      </svg>
+    ),
+  },
+  {
+    id: "character",
+    label: "Personaje",
+    view: "characters",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.4c3.3 0 5.6 2.3 5.6 5.5v2.4H6.4V8.9c0-3.2 2.3-5.5 5.6-5.5Z" />
+        <path d="M6.4 11.3 5 14.6h4.4l.9-3.3M17.6 11.3l1.4 3.3h-4.4l-.9-3.3M12 11.3v5.1M9.4 20.6c.5-2.2 1.4-3.3 2.6-3.3s2.1 1.1 2.6 3.3" />
+      </svg>
+    ),
+  },
+  {
+    id: "inventory",
+    label: "Inventario",
+    view: "inventory",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.4 9.4h15.2v10H4.4Zm1.2-4.8h12.8l1.2 4.8H4.4Z" />
+        <path d="M9.8 9.4v3.4h4.4V9.4M11 15.6h2" />
+      </svg>
+    ),
+  },
+  {
+    id: "achievements",
+    label: "Logros",
+    view: "achievements",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8.2 3.6h7.6v4.6c0 3.8-1.9 6.6-3.8 6.6s-3.8-2.8-3.8-6.6Z" />
+        <path d="M8.2 5.4H4.6v1.8c0 2.8 1.8 4.6 4.4 4.8M15.8 5.4h3.6v1.8c0 2.8-1.8 4.6-4.4 4.8M12 14.8v3.4M8.4 20.6h7.2" />
+      </svg>
+    ),
+  },
 ];
 
 export function MainMenuScreen({
@@ -225,22 +266,14 @@ export function MainMenuScreen({
   return (
     <section className="overlay overlay--menu">
       <div className={`menu-stage menu-stage--${view}`}>
-        <span className="menu-stage__arch menu-stage__arch--left" aria-hidden="true" />
-        <span className="menu-stage__arch menu-stage__arch--right" aria-hidden="true" />
-        <span className="menu-stage__vista menu-stage__vista--left" aria-hidden="true" />
-        <span className="menu-stage__vista menu-stage__vista--right" aria-hidden="true" />
         <div className="menu-shell">
           {view === "main" && (
-            <div
-              className="home-monument"
-              aria-label="Menu principal"
-              style={{ "--menu-background-image": `url(${menuBackgroundUrl})` } as CSSProperties}
-            >
+            <div className="home-monument" aria-label="Menu principal">
               <div className="menu-ambience" aria-hidden="true">
                 <span className="menu-ambience__glint menu-ambience__glint--one" />
                 <span className="menu-ambience__glint menu-ambience__glint--two" />
                 {Array.from({ length: 6 }, (_, index) => (
-                  <span className={`menu-ambience__leaf menu-ambience__leaf--${index + 1}`} key={index} />
+                  <span className={`menu-ambience__mote menu-ambience__mote--${index + 1}`} key={index} />
                 ))}
               </div>
               <div className="home-monument__topline">
@@ -263,8 +296,9 @@ export function MainMenuScreen({
                     </span>
                     <span className="menu-player-stat" aria-label={`${save.player.coins.toLocaleString("es-AR")} ORO`}>
                       <svg className="menu-player-stat__icon menu-player-stat__icon--gold" viewBox="0 0 24 24" aria-hidden="true">
-                        <ellipse cx="12" cy="12" rx="8" ry="9" />
-                        <path d="M9 8h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5M12 6v12" />
+                        <circle cx="12" cy="12" r="8.4" />
+                        <circle cx="12" cy="12" r="4.9" />
+                        <path d="M12 9.7 13.9 12 12 14.3 10.1 12 12 9.7Z" />
                       </svg>
                       <strong>{formatCompactAmount(save.player.coins)}</strong>
                     </span>
@@ -273,7 +307,6 @@ export function MainMenuScreen({
                     className="options-gear"
                     type="button"
                     aria-label="Opciones"
-                    style={{ "--menu-gear-image": `url(${menuGearUrl})` } as CSSProperties}
                     onClick={() => runMenuAction(() => setView("options"))}
                   >
                     <svg className="options-gear__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -284,18 +317,20 @@ export function MainMenuScreen({
                 </span>
               </div>
 
+              <h1 className="game-title">
+                <span>Adventure</span>
+                <span>Reigns</span>
+              </h1>
+
               <div className="menu-relics">
                 {mainActions.map((action) => (
                   <button
                     className={`menu-relic menu-relic--${action.id}`}
                     type="button"
                     key={action.id}
-                    aria-label={action.label}
-                    title={action.label}
-                    style={{ "--menu-button-image": `url(${action.imageUrl})` } as CSSProperties}
                     onClick={() => runMenuAction(() => setView(action.view))}
                   >
-                    <span className="menu-relic__icon" aria-hidden="true" />
+                    <span className="menu-relic__icon" aria-hidden="true">{action.icon}</span>
                     <span className="menu-relic__label">{action.label}</span>
                   </button>
                 ))}

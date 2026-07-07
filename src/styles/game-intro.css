@@ -7,7 +7,7 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #020604;
+  background: #030609;
   isolation: isolate;
 }
 
@@ -22,13 +22,13 @@
 .game-intro::before {
   z-index: 1;
   background:
-    radial-gradient(circle at center, transparent 45%, rgba(0, 5, 3, 0.24) 100%),
+    radial-gradient(circle at center, transparent 45%, rgba(1, 4, 8, 0.24) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 22% 74%, rgba(0, 0, 0, 0.34));
 }
 
 .game-intro::after {
   z-index: 3;
-  background: #030806;
+  background: #04070c;
   opacity: 0;
 }
 
@@ -38,7 +38,7 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  background: #020604;
+  background: #030609;
   transform: scale(1.002);
 }
 
@@ -51,15 +51,15 @@
   gap: 10px;
   align-items: center;
   padding: 12px 18px;
-  border: 1px solid rgba(242, 196, 95, 0.58);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  color: #fff3cf;
-  background: rgba(5, 12, 8, 0.76);
+  color: var(--ink-strong);
+  background: rgba(6, 11, 19, 0.76);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
   transform: translate(-50%, -50%);
@@ -68,13 +68,13 @@
 
 .game-intro__start:hover,
 .game-intro__start:focus-visible {
-  border-color: rgba(255, 226, 154, 0.92);
-  background: rgba(16, 34, 23, 0.9);
+  border-color: var(--cyan);
+  background: rgba(14, 28, 44, 0.9);
   outline: none;
 }
 
 .game-intro__start-icon {
-  color: #f2c45f;
+  color: var(--cyan);
   font-size: 0.72rem;
 }
 
@@ -86,9 +86,9 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  color: rgba(247, 234, 208, 0.74);
+  color: rgba(233, 241, 250, 0.74);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -97,8 +97,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #e7bd60;
-  box-shadow: 0 0 12px rgba(231, 189, 96, 0.78);
+  background: var(--cyan);
+  box-shadow: 0 0 12px rgba(127, 216, 242, 0.78);
   animation: game-intro-loading-pulse 900ms ease-in-out infinite alternate;
 }
 

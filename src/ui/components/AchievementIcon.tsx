@@ -7,17 +7,17 @@ interface AchievementIconProps {
 export function AchievementIcon({ icon }: AchievementIconProps) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      {icon === "flag" && <path d="M5 21V4m1 1h11l-2.8 3L17 11H6" />}
-      {icon === "shield" && <path d="M12 3 5 6v5c0 4.8 2.7 8.2 7 10 4.3-1.8 7-5.2 7-10V6l-7-3Zm-3 9 2 2 4-5" />}
-      {icon === "swords" && <path d="m5 4 6 6m8-6-6 6M4 19l5-5m11 5-5-5M3 3l3 8 3-3-6-5Zm18 0-3 8-3-3 6-5Z" />}
-      {icon === "claw" && <path d="M7 4c2 3 2 6 0 9m5-10c2 4 2 7 0 11m5-9c1 4 0 7-2 10M5 20c3-4 7-5 12-3" />}
-      {icon === "coin" && <><ellipse cx="12" cy="12" rx="8" ry="9" /><path d="M9 8h4.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h5M12 6v12" /></>}
-      {icon === "checkpoint" && <path d="M5 21V4m1 1h11l-2 3 2 3H6m3 10h6" />}
-      {icon === "chest" && <path d="M4 9h16v11H4V9Zm1-5h14l1 5H4l1-5Zm5 5v4h4V9m-3 7h2" />}
+      {icon === "flag" && <path d="M5.5 21V3.6m0 1.2h11.4l-2.7 3.1 2.7 3.1H5.5" />}
+      {icon === "shield" && <path d="M12 2.8 5.2 5.7v5.2c0 4.7 2.7 8.1 6.8 9.8 4.1-1.7 6.8-5.1 6.8-9.8V5.7L12 2.8Zm-3.1 8.9 2.2 2.2 4-4.7" />}
+      {icon === "swords" && <path d="m5.2 4.3 5.9 5.9M18.8 4.3l-5.9 5.9M4.2 19.8l5.1-5.1m10.5 5.1-5.1-5.1M3.2 3.2l2.8 7.4 2.8-2.8-5.6-4.6Zm17.6 0-2.8 7.4-2.8-2.8 5.6-4.6ZM6.3 16.6l1.1 1.1m10.3-1.1-1.1 1.1" />}
+      {icon === "claw" && <path d="M7.2 4.2c1.9 2.9 1.9 5.9 0 8.8m5-9.8c1.9 3.8 1.9 7.1 0 10.8m5-8.8c1 3.8.3 6.9-1.9 9.8M5.2 19.8c3-3.9 7-4.9 12-3" />}
+      {icon === "coin" && <><circle cx="12" cy="12" r="8.4" /><circle cx="12" cy="12" r="4.9" /><path d="M12 9.7 13.9 12 12 14.3 10.1 12 12 9.7Z" /></>}
+      {icon === "checkpoint" && <path d="M5.5 21V3.6m0 1.2h11.4l-2.1 3.1 2.1 3.1H5.5m3.2 10h6.2" />}
+      {icon === "chest" && <path d="M4.4 9.4h15.2v10H4.4Zm1.2-4.8h12.8l1.2 4.8H4.4Zm4.2 4.8v3.4h4.4V9.4m-2.8 6.4h1.2" />}
       {icon === "map" && <path d="m4 5 5-2 6 2 5-2v16l-5 2-6-2-5 2V5Zm5-2v16m6-14v16" />}
       {icon === "check" && <path d="m5 12 4 4L19 6" />}
-      {icon === "lock" && <path d="M6 10h12v10H6V10Zm3 0V7a3 3 0 0 1 6 0v3m-3 4v3" />}
-      {icon === "trophy" && <path d="M8 4h8v4c0 4-2 7-4 7s-4-3-4-7V4Zm0 2H4v2c0 3 2 5 5 5m7-7h4v2c0 3-2 5-5 5m-3 2v4m-4 1h8" />}
+      {icon === "lock" && <path d="M6.2 10.2h11.6V20H6.2Zm2.8 0V7.1a3 3 0 0 1 6 0v3.1M12 13.6v3" />}
+      {icon === "trophy" && <path d="M8.4 3.8h7.2v4.4c0 3.7-1.6 6.5-3.6 6.5s-3.6-2.8-3.6-6.5Zm0 1.7H4.8v1.7c0 2.7 1.8 4.4 4.2 4.6m6.6-6.3h3.6v1.7c0 2.7-1.8 4.4-4.2 4.6M12 14.7v3.2m-3.5 2.3h7" />}
     </svg>
   );
 }
