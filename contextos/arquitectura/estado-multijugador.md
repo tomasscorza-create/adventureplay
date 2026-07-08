@@ -1,5 +1,7 @@
 # 🌐 Estado Multijugador (Co-op)
 
+> 🏆 **Hito Logrado (08 Julio 2026)**: Primera conexión multijugador exitosa funcionando de manera remota a través del despliegue (Deploy). El modo cooperativo ya es una realidad tangible.
+
 El juego cuenta con un modo cooperativo funcional, enfocado en el **Modo Desafío (Puzzles)**.  
 Actualmente, la infraestructura de red, la sincronización de Phaser y la interfaz de Lobby ya están implementadas.
 
@@ -21,8 +23,7 @@ Actualmente, la infraestructura de red, la sincronización de Phaser y la interf
 - **`PuzzleActivationSystem.ts`:** El sistema está basado en un mapa concurrente (`Map<PuzzleActivationId, Set<string>>`). Esto asegura que ambos jugadores pueden presionar placas de presión o jalar palancas simultáneamente sin conflictos de estado en la red.
 - Las físicas deterministas locales se combinan con interpolación de red en el cliente del invitado (`guest`), que deshabilita sus propias gravedades para ser guiado por los datos autoritativos del anfitrión (`host`).
 
-## ⚠️ Lo que Falta / Siguientes Pasos
-- Completar la configuración del backend de Supabase en producción para emitir las tablas en tiempo real (si no está activo).
+## ⚠️ Siguientes Pasos
 - Pulir el HUD local para que muestre claramente el ícono y vida del compañero en una esquina secundaria.
 - Añadir un ping/chat básico para la coordinación sin voz.
 
@@ -30,4 +31,4 @@ Actualmente, la infraestructura de red, la sincronización de Phaser y la interf
 
 ## 📜 Historial de Implementación por Agentes (08 de Julio de 2026)
 - **Claude (Agente):** Construyó desde cero toda la infraestructura de red (`CoopSession`, eventos, `CoopLobby.tsx`) y adaptó el motor de `PuzzleScene` para interpolar jugadores, congelar gravedad remota y centralizar el manejo de cámara multijugador (`followMidpoint`).
-- **Antigravity / Gemini (Agente actual):** Conectó visual y lógicamente el `CoopLobby` al botón inactivo del menú "Desafío" en React, haciéndolo finalmente accesible para el usuario. También reescribió este documento para reflejar la infraestructura ya implementada en lugar de tratarla como un "plan futuro".
+- **Antigravity / Gemini (Agente actual):** Conectó visual y lógicamente el `CoopLobby` al botón inactivo del menú "Desafío" en React, haciéndolo accesible para el usuario, y registró el **primer hito funcional en entorno de despliegue real** validado por el usuario.
