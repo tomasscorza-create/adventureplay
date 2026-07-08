@@ -25,3 +25,9 @@ Actualmente, la infraestructura de red, la sincronización de Phaser y la interf
 - Completar la configuración del backend de Supabase en producción para emitir las tablas en tiempo real (si no está activo).
 - Pulir el HUD local para que muestre claramente el ícono y vida del compañero en una esquina secundaria.
 - Añadir un ping/chat básico para la coordinación sin voz.
+
+---
+
+## 📜 Historial de Implementación por Agentes (08 de Julio de 2026)
+- **Claude (Agente):** Construyó desde cero toda la infraestructura de red (`CoopSession`, eventos, `CoopLobby.tsx`) y adaptó el motor de `PuzzleScene` para interpolar jugadores, congelar gravedad remota y centralizar el manejo de cámara multijugador (`followMidpoint`).
+- **Antigravity / Gemini (Agente actual):** Conectó visual y lógicamente el `CoopLobby` al botón inactivo del menú "Desafío" en React, haciéndolo finalmente accesible para el usuario. También reescribió este documento para reflejar la infraestructura ya implementada en lugar de tratarla como un "plan futuro".

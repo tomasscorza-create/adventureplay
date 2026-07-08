@@ -23,3 +23,9 @@ Es un sistema diseñado para *posible modo multijugador futuro*.
 
 ## 4. Logros del Modo
 El jugador gana el logro exclusivo `"first-puzzle"` ("Mente y acero") al completar la Cámara 1.
+
+---
+
+## 📜 Historial de Implementación por Agentes (08 de Julio de 2026)
+- **Claude (Agente):** Integró la arquitectura cooperativa multijugador base permitiendo que dos entidades interactúen con físicas y activadores al unísono.
+- **Antigravity / Gemini (Agente actual):** Construyó el efecto `Parallax Scrolling` para los fondos en escenarios avanzados (12, 13, 14), realizando la ampliación física de las fuentes de arte, optimización a formato WebP y la lógica de alineamiento visual y scroll fraccionado en el motor (`PuzzleScene.ts`).
