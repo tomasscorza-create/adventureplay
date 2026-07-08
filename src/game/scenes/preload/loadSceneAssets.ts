@@ -52,7 +52,10 @@ import ancientChamber3Url from "../../../assets/scenery/ancient-trials/chamber-3
 import ancientChamber4Url from "../../../assets/scenery/ancient-trials/chamber-4-daylight.webp";
 import ancientChamber5Url from "../../../assets/scenery/ancient-trials/chamber-5-armory.webp";
 import ancientChamber6Url from "../../../assets/scenery/ancient-trials/chamber-6-treasure.webp";
+import ancientChamber7Url from "../../../assets/scenery/ancient-trials/chamber-7.webp";
+import ancientChamber8Url from "../../../assets/scenery/ancient-trials/chamber-8.webp";
 import ancientMechanismsSourceUrl from "../../../assets/scenery/ancient-trials/mechanisms-source.webp";
+import ancientSpikesUrl from "../../../assets/scenery/ancient-trials/spikes.webp";
 import floorStripUrl from "../../../assets/scenery/forest-floor-strip.png";
 import lanternPostUrl from "../../../assets/scenery/lantern-post.png";
 import moonUrl from "../../../assets/scenery/moon-new-game.png";
@@ -139,6 +142,7 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
     scene.load.image("volcanic-midground", volcanicMidgroundUrl);
     scene.load.image("ancient-trials-barrier-source", ancientBarrierSourceUrl);
     scene.load.image("ancient-trials-mechanisms-source", ancientMechanismsSourceUrl);
+    scene.load.image("ancient-trials-spikes", ancientSpikesUrl);
     [
       ancientChamber1Url,
       ancientChamber2Url,
@@ -146,6 +150,8 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
       ancientChamber4Url,
       ancientChamber5Url,
       ancientChamber6Url,
+      ancientChamber7Url,
+      ancientChamber8Url,
     ].forEach((url, index) => {
       scene.load.image(`ancient-trials-chamber-${index + 1}`, url);
     });

@@ -59,6 +59,7 @@ export class PuzzleScene extends Phaser.Scene {
     id: string;
     rect: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Image;
+    sparkles?: Phaser.GameObjects.Image[];
     definition: { id: string; x: number; y: number; width: number; height: number; requiredActivations?: string[] };
     opened: boolean;
   }> = [];
@@ -66,6 +67,7 @@ export class PuzzleScene extends Phaser.Scene {
   private goalGate!: {
     rect: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Image;
+    sparkles?: Phaser.GameObjects.Image[];
     opened: boolean;
   };
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
@@ -192,6 +194,8 @@ export class PuzzleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(-39);
 
+    this.createAmbientParticles();
+
     this.platforms = this.physics.add.staticGroup();
     for (const platform of this.level.platforms) {
       const isGround = platform.y >= 630;
@@ -278,6 +282,51 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.cameras.main.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
     this.unbindCameraZoom = this.cameraSystem.bindResponsiveZoom(this, this.level.worldWidth);
+  }
+
+  private createAmbientParticles(): void {
+    if (!this.textures.exists("ambient-sparkle")) {
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(3, 3, 3);
+      g.generateTexture("ambient-sparkle", 6, 6);
+      g.clear();
+      g.fillStyle(0xa5d29a, 1);
+      g.fillPoints([{x: 0, y: 2}, {x: 3, y: 0}, {x: 6, y: 2}, {x: 3, y: 6}], true, true);
+      g.generateTexture("ambient-leaf", 6, 6);
+      g.destroy();
+    }
+
+    const widthRatio = Math.max(1, this.level.worldWidth / 1280);
+
+    const sparkles = this.add.particles(0, 0, "ambient-sparkle", {
+      x: { min: 0, max: this.level.worldWidth },
+      y: { min: 0, max: GAME_HEIGHT },
+      lifespan: { min: 3000, max: 6000 },
+      scale: { start: 0.1, end: 0.7 },
+      alpha: { start: 0.4, end: 0 },
+      speedY: { min: -5, max: -20 },
+      speedX: { min: -5, max: 5 },
+      quantity: 1,
+      frequency: Math.max(10, 150 / widthRatio),
+      blendMode: "ADD",
+    });
+    sparkles.setDepth(-38);
+
+    const leaves = this.add.particles(0, 0, "ambient-leaf", {
+      x: { min: -100, max: this.level.worldWidth },
+      y: { min: -100, max: GAME_HEIGHT },
+      lifespan: { min: 5000, max: 9000 },
+      scale: { start: 0.4, end: 1.0 },
+      alpha: { start: 0.35, end: 0 },
+      speedX: { min: 30, max: 80 },
+      speedY: { min: 15, max: 40 },
+      rotate: { start: 0, end: 360 },
+      gravityY: 10,
+      quantity: 1,
+      frequency: Math.max(20, 250 / widthRatio),
+    });
+    leaves.setDepth(-38);
   }
 
   private sampleBackdropColor(textureKey: string): number {
@@ -437,10 +486,46 @@ export class PuzzleScene extends Phaser.Scene {
         .setTint(this.visualPalette.objectTint)
         .setAlpha(0.9)
         .setDepth(11);
+
+      const sparkles: Phaser.GameObjects.Image[] = [];
+      for (let i = 0; i < 8; i++) {
+        const sp = this.add.image(
+          gateDef.x + Math.random() * gateDef.width,
+          gateDef.y + Math.random() * gateDef.height,
+          "ambient-sparkle"
+        )
+        .setAlpha(0.7)
+        .setDepth(11.1)
+        .setScale(Math.random() * 0.4 + 0.3);
+        
+        this.tweens.add({
+          targets: sp,
+          y: gateDef.y + Math.random() * gateDef.height,
+          duration: 1500 + Math.random() * 2500,
+          ease: "Sine.easeInOut",
+          yoyo: true,
+          repeat: -1,
+          hold: Math.random() * 800,
+          repeatDelay: Math.random() * 800,
+        });
+
+        this.tweens.add({
+          targets: sp,
+          x: sp.x + (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 5),
+          duration: 1200 + Math.random() * 1500,
+          ease: "Quad.easeInOut",
+          yoyo: true,
+          repeat: -1,
+        });
+        
+        sparkles.push(sp);
+      }
+
       this.gates.push({
         id: gateDef.id,
         rect,
         visual,
+        sparkles,
         definition: gateDef,
         opened: false,
       });
@@ -500,9 +585,45 @@ export class PuzzleScene extends Phaser.Scene {
       .setTint(this.visualPalette.objectTint)
       .setAlpha(0.94)
       .setDepth(12);
+
+    const goalSparkles: Phaser.GameObjects.Image[] = [];
+    for (let i = 0; i < 24; i++) {
+      const sp = this.add.image(
+        this.level.goal.x - 46 + Math.random() * 20,
+        Math.random() * 640,
+        "ambient-sparkle"
+      )
+      .setAlpha(0.7)
+      .setDepth(12.1)
+      .setScale(Math.random() * 0.4 + 0.3);
+      
+      this.tweens.add({
+        targets: sp,
+        y: Math.random() * 640,
+        duration: 1500 + Math.random() * 2500,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1,
+        hold: Math.random() * 800,
+        repeatDelay: Math.random() * 800,
+      });
+
+      this.tweens.add({
+        targets: sp,
+        x: sp.x + (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 5),
+        duration: 1200 + Math.random() * 1500,
+        ease: "Quad.easeInOut",
+        yoyo: true,
+        repeat: -1,
+      });
+      
+      goalSparkles.push(sp);
+    }
+
     this.goalGate = {
       rect: goalGateRect,
       visual: goalGateVisual,
+      sparkles: goalSparkles,
       opened: false,
     };
 
@@ -685,36 +806,24 @@ export class PuzzleScene extends Phaser.Scene {
           hazardDefinition.y,
           hazardDefinition.width,
           hazardDefinition.height,
-          0xa43a45,
         )
         .setOrigin(0, 0)
-        .setDepth(9);
+        .setVisible(false);
       this.physics.add.existing(hazard, true);
-      hazard.setFillStyle(0x481522, 0.96).setStrokeStyle(2, 0xff6b61, 0.9);
-      const hazardDetails = this.add.graphics().setDepth(9.2);
-      hazardDetails.fillStyle(0xff7358, 0.88);
-      const spikeWidth = 18;
-      for (
-        let spikeX = hazardDefinition.x + 2;
-        spikeX < hazardDefinition.x + hazardDefinition.width - 4;
-        spikeX += spikeWidth
-      ) {
-        hazardDetails.fillTriangle(
-          spikeX,
-          hazardDefinition.y + 4,
-          spikeX + spikeWidth / 2,
-          hazardDefinition.y - 12,
-          spikeX + spikeWidth,
-          hazardDefinition.y + 4,
-        );
-      }
-      hazardDetails.fillStyle(0xffb36b, 0.48);
-      hazardDetails.fillRect(
-        hazardDefinition.x + 3,
-        hazardDefinition.y + 8,
-        Math.max(0, hazardDefinition.width - 6),
-        4,
-      );
+      
+      const scale = 30 / 129;
+      const visual = this.add
+        .tileSprite(
+          hazardDefinition.x,
+          hazardDefinition.y + hazardDefinition.height + 6,
+          hazardDefinition.width / scale,
+          129,
+          "ancient-trials-spikes"
+        )
+        .setOrigin(0, 1)
+        .setScale(scale)
+        .setDepth(9);
+
       this.physics.add.overlap(this.player, hazard, () => this.damagePlayer(hazardDefinition.damage));
       this.physics.add.overlap(this.projectiles, hazard, (first, second) => {
         this.handleProjectileImpact(first, second);
@@ -914,6 +1023,16 @@ export class PuzzleScene extends Phaser.Scene {
           alpha: 0.06,
           duration: 720,
         });
+        if (gateObj.sparkles) {
+          for (const sp of gateObj.sparkles) {
+            this.tweens.add({
+              targets: sp,
+              alpha: 0,
+              scale: sp.scale * (Math.random() > 0.5 ? 2.5 : 1.2),
+              duration: 150,
+            });
+          }
+        }
         this.playSfx("progress");
       }
     }
@@ -930,6 +1049,16 @@ export class PuzzleScene extends Phaser.Scene {
         alpha: 0.12,
         duration: 850,
       });
+      if (this.goalGate.sparkles) {
+        for (const sp of this.goalGate.sparkles) {
+          this.tweens.add({
+            targets: sp,
+            alpha: 0,
+            scale: sp.scale * (Math.random() > 0.5 ? 2.5 : 1.2),
+            duration: 150,
+          });
+        }
+      }
       this.tweens.add({
         targets: this.goalGate.rect,
         y: this.goalGate.rect.y - 640,
