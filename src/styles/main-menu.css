@@ -908,6 +908,12 @@
   clip-path: polygon(59% 49%, 77% 45%, 92% 50%, 100% 64%, 98% 87%, 88% 98%, 71% 100%, 56% 95%, 48% 81%, 49% 65%);
 }
 
+.explore-map__region--locked {
+  filter: grayscale(1) opacity(0.5);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .menu-chamber--map .level-column--active-volcano {
   border-color: rgba(255, 132, 82, 0.5);
   background:
@@ -940,6 +946,39 @@
   max-width: 26ch;
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.level-list__locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100%;
+  padding: 32px 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.level-list__locked svg {
+  width: 32px;
+  height: 32px;
+  color: var(--steel-bright);
+  opacity: 0.8;
+}
+
+.level-list__locked strong {
+  color: var(--steel-bright);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.level-list__locked span {
+  max-width: 28ch;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .menu-chamber--map .level-list:focus-visible {

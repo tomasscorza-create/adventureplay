@@ -24,6 +24,7 @@ interface RegionDefinition {
   status: string;
   mapImageUrl: string;
   levels: LevelSlot[];
+  unlockRequirement?: { levelId: string; description: string };
 }
 
 const regions: RegionDefinition[] = [
@@ -50,6 +51,7 @@ const regions: RegionDefinition[] = [
     name: "Bosque Encantado",
     status: "10 niveles",
     mapImageUrl: enchantedForestMapUrl,
+    unlockRequirement: { levelId: "meadowOutpost4", description: "Llega al Nivel 4 de Frontera Verde para desbloquear" },
     levels: [
       { number: 1, levelId: "enchantedGrove1", name: "Umbral encantado" },
       { number: 2, levelId: "enchantedGrove2", name: "Raices despiertas" },
@@ -72,6 +74,7 @@ const regions: RegionDefinition[] = [
     name: "Volcán Activo",
     status: "10 niveles",
     mapImageUrl: activeVolcanoMapUrl,
+    unlockRequirement: { levelId: "enchantedGrove4", description: "Llega al Nivel 4 de Bosque Encantado para desbloquear" },
     levels: [
       { number: 1, levelId: "activeVolcano1", name: "Umbral de ceniza" },
       { number: 2, levelId: "activeVolcano2", name: "Ríos de magma" },
@@ -116,6 +119,12 @@ export function ExploreView({
     return save.unlockedLevels.includes(slot.levelId) && !save.completedLevels.includes(slot.levelId);
   })?.levelId, [activeLevelSlots, save.completedLevels, save.unlockedLevels]);
 
+  const isRegionLocked = (region: RegionDefinition) => {
+    if (!region.unlockRequirement) return false;
+    return !save.unlockedLevels.includes(region.unlockRequirement.levelId);
+  };
+  const activeRegionLocked = isRegionLocked(activeRegion);
+
   return (
     <div className="menu-chamber menu-chamber--map">
       <MenuHeading title="Explorar" variant="explore" onBack={onBack} backLabel="Modos" />
@@ -132,20 +141,25 @@ export function ExploreView({
                 aria-hidden="true"
                 key={activeRegion.id}
               />
-              {regions.map((region) => (
-                <button
-                  className={`explore-map__region explore-map__region--${region.id}${region.id === activeRegion.id ? " explore-map__region--active" : ""}`}
-                  type="button"
-                  key={region.id}
-                  onClick={() => onActiveRegionChange(region.id)}
-                  onPointerEnter={() => onPreviewRegionChange(region.id)}
-                  onPointerLeave={() => onPreviewRegionChange()}
-                  onFocus={() => onPreviewRegionChange(region.id)}
-                  onBlur={() => onPreviewRegionChange()}
-                  aria-label={`${region.name}. ${region.status}`}
-                  aria-pressed={region.id === selectedRegion.id}
-                />
-              ))}
+              {regions.map((region) => {
+                const locked = isRegionLocked(region);
+                return (
+                  <button
+                    className={`explore-map__region explore-map__region--${region.id}${region.id === activeRegion.id ? " explore-map__region--active" : ""}${locked ? " explore-map__region--locked" : ""}`}
+                    type="button"
+                    key={region.id}
+                    onClick={() => {
+                      if (!locked) onActiveRegionChange(region.id);
+                    }}
+                    onPointerEnter={() => onPreviewRegionChange(region.id)}
+                    onPointerLeave={() => onPreviewRegionChange()}
+                    onFocus={() => onPreviewRegionChange(region.id)}
+                    onBlur={() => onPreviewRegionChange()}
+                    aria-label={`${region.name}. ${locked ? "Bloqueado" : region.status}`}
+                    aria-pressed={region.id === selectedRegion.id}
+                  />
+                );
+              })}
             </div>
           </div>
         </section>
@@ -155,27 +169,36 @@ export function ExploreView({
             <strong>{activeLevelSlots.length > 0 ? `${activeLevelSlots.length} ${activeLevelSlots.length === 1 ? "nivel" : "niveles"}` : activeRegion.status}</strong>
           </div>
           <div className="level-list" role="region" aria-label={`Desplazar niveles de ${activeRegion.name}`} tabIndex={0}>
-            {activeLevelSlots.length === 0 && <div className="level-list__empty"><strong>Próximamente</strong><span>Esta región será un escenario jugable en una próxima expansión.</span></div>}
-            {activeLevelSlots.map((slot) => {
-              const levelExists = Boolean(slot.levelId && levelDefinitions[slot.levelId]);
-              const isUnlocked = Boolean(slot.levelId && save.unlockedLevels.includes(slot.levelId));
-              const isCompleted = Boolean(slot.levelId && save.completedLevels.includes(slot.levelId));
-              const canPlay = levelExists && isUnlocked;
-              const status = getLevelStatus({ levelExists, isCompleted, isCurrent: slot.levelId === nextPlayableLevelId, isUnlocked });
-              return (
-                <button
-                  className={`level-card level-card--${status.kind}`}
-                  type="button"
-                  key={slot.number}
-                  disabled={!canPlay}
-                  onClick={() => { if (slot.levelId) onStartLevel(slot.levelId); }}
-                >
-                  <span className="level-card__number">LV {slot.number}</span>
-                  <span className="level-card__name">{slot.name}</span>
-                  <span className="level-card__status">{status.label}</span>
-                </button>
-              );
-            })}
+            {activeRegionLocked && activeRegion.unlockRequirement ? (
+              <div className="level-list__locked">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <strong>Región Bloqueada</strong>
+                <span>{activeRegion.unlockRequirement.description}</span>
+              </div>
+            ) : activeLevelSlots.length === 0 ? (
+              <div className="level-list__empty"><strong>Próximamente</strong><span>Esta región será un escenario jugable en una próxima expansión.</span></div>
+            ) : (
+              activeLevelSlots.map((slot) => {
+                const levelExists = Boolean(slot.levelId && levelDefinitions[slot.levelId]);
+                const isUnlocked = Boolean(slot.levelId && save.unlockedLevels.includes(slot.levelId));
+                const isCompleted = Boolean(slot.levelId && save.completedLevels.includes(slot.levelId));
+                const canPlay = levelExists && isUnlocked;
+                const status = getLevelStatus({ levelExists, isCompleted, isCurrent: slot.levelId === nextPlayableLevelId, isUnlocked });
+                return (
+                  <button
+                    className={`level-card level-card--${status.kind}`}
+                    type="button"
+                    key={slot.number}
+                    disabled={!canPlay}
+                    onClick={() => { if (slot.levelId) onStartLevel(slot.levelId); }}
+                  >
+                    <span className="level-card__number">LV {slot.number}</span>
+                    <span className="level-card__name">{slot.name}</span>
+                    <span className="level-card__status">{status.label}</span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </section>
       </div>

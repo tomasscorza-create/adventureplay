@@ -107,9 +107,9 @@ describe("puzzle level campaign", () => {
       "ancient-trials-chamber-7",
       "ancient-trials-chamber-7",
       "ancient-trials-chamber-8",
-      "ancient-trials-chamber-8",
-      "ancient-trials-chamber-8",
-      "ancient-trials-chamber-8",
+      "ancient-trials-chamber-9",
+      "ancient-trials-chamber-9",
+      "ancient-trials-chamber-10",
     ]);
   });
 
