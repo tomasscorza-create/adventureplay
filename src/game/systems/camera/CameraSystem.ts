@@ -107,25 +107,4 @@ export class CameraSystem {
     this.setBounds(scene, worldWidth);
     scene.cameras.main.startFollow(target, true, 0.08, 0.08);
   }
-
-  // Co-op: la camara sigue un punto medio movil entre ambos jugadores. Se
-  // conserva el zoom responsivo y los bordes de mundo; la escena crea un objeto
-  // intermedio (invisible) que actualiza cada frame con updateMidpoint().
-  followMidpoint(
-    scene: Phaser.Scene,
-    midpoint: Phaser.GameObjects.GameObject,
-    followX: number,
-    followY: number,
-  ): void {
-    scene.cameras.main.startFollow(midpoint, true, 0.09, 0.09, followX, followY);
-  }
-
-  updateMidpoint(
-    midpoint: Phaser.GameObjects.Components.Transform,
-    a: Phaser.GameObjects.Components.Transform,
-    b: Phaser.GameObjects.Components.Transform,
-  ): void {
-    midpoint.x = (a.x + b.x) / 2;
-    midpoint.y = (a.y + b.y) / 2;
-  }
 }

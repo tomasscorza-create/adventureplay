@@ -163,7 +163,6 @@ export class PuzzleScene extends Phaser.Scene {
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
   // Host: throttle de snapshots.
   private lastSnapshotAt = 0;
-  private midpoint?: Phaser.GameObjects.Zone;
   private readonly coopUnbinds: Array<() => void> = [];
 
   constructor() {
@@ -270,9 +269,6 @@ export class PuzzleScene extends Phaser.Scene {
       });
     }
 
-    if (this.midpoint && this.player2) {
-      this.cameraSystem.updateMidpoint(this.midpoint, this.player, this.player2);
-    }
 
     if (this.isHost) this.maybeSendSnapshot(time);
 
@@ -518,11 +514,13 @@ export class PuzzleScene extends Phaser.Scene {
         this.freezePuppet(this.player);
         this.freezePuppet(this.player2);
       }
-      this.midpoint = this.add.zone(start.x - 35, start.y, 1, 1);
-      this.cameras.main.startFollow(this.midpoint, true, 0.09, 0.09, -180, 40);
-    } else {
-      this.cameras.main.startFollow(this.player, true, 0.08, 0.08, -180, 40);
     }
+
+    // Camara independiente por dispositivo: cada pantalla ancla a su propio
+    // personaje local (host/single -> player, guest -> player2), sin punto medio
+    // compartido, para que cada quien explore el mapa libremente.
+    const cameraTarget = this.isGuest && this.player2 ? this.player2 : this.player;
+    this.cameras.main.startFollow(cameraTarget, true, 0.08, 0.08, -180, 40);
   }
 
   // El guest no simula la fisica de los cuerpos autoritativos: deshabilita su
@@ -1857,9 +1855,6 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.latestSnapshot) {
       this.applySnapshot(this.latestSnapshot);
       this.remainingTimeMs = this.latestSnapshot.timeMs;
-    }
-    if (this.midpoint && this.player2) {
-      this.cameraSystem.updateMidpoint(this.midpoint, this.player, this.player2);
     }
     this.updatePlateKeyInterface();
     this.updateObjectiveText();
