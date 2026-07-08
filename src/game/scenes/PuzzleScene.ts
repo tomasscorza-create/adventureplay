@@ -12,6 +12,11 @@ import {
 import { Coin } from "../entities/items/Coin";
 import { Player } from "../entities/player/Player";
 import { PowerProjectile } from "../entities/projectiles/PowerProjectile";
+import { BaseEnemy } from "../entities/enemies/BaseEnemy";
+import { BasicEnemy } from "../entities/enemies/BasicEnemy";
+import { M1Enemy } from "../entities/enemies/M1Enemy";
+import { CombatSystem } from "../systems/combat/CombatSystem";
+import { getEnemyDefeatPalette } from "./level/enemyDefeatPalette";
 import { gameEvents } from "../events/EventBus";
 import { AchievementSystem } from "../systems/achievements/AchievementSystem";
 import { CameraSystem } from "../systems/camera/CameraSystem";
@@ -37,6 +42,8 @@ import { gameSaveStore } from "../systems/save/GameSaveStore";
 import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
 
 export class PuzzleScene extends Phaser.Scene {
+  private readonly _id = "PuzzleScene";
+  private readonly combat = new CombatSystem();
   private level!: PuzzleLevelDefinition;
   private save!: SaveData;
   private player!: Player;
@@ -71,6 +78,7 @@ export class PuzzleScene extends Phaser.Scene {
     opened: boolean;
   };
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private enemies!: Phaser.GameObjects.Group;
   private visualPalette!: PuzzleVisualPalette;
   private coins!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
@@ -162,6 +170,13 @@ export class PuzzleScene extends Phaser.Scene {
     this.handleStackedCratesPhysics();
     this.updatePlateStates();
     this.updateObjectiveText();
+
+    if (this.enemies) {
+      this.enemies.children.each((enemy) => {
+        (enemy as BaseEnemy).update(this.player);
+        return true;
+      });
+    }
 
     const hudSecond = Math.ceil(this.remainingTimeMs / 1000);
     const spinStep = Math.ceil(this.player.getSpinCooldownRemaining(this.time.now) / 100);
@@ -286,7 +301,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   private createAmbientParticles(): void {
     if (!this.textures.exists("ambient-sparkle")) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      const g = this.make.graphics({ x: 0, y: 0 }, false);
       g.fillStyle(0xffffff, 1);
       g.fillCircle(3, 3, 3);
       g.generateTexture("ambient-sparkle", 6, 6);
@@ -646,6 +661,36 @@ export class PuzzleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(39);
 
+    this.enemies = this.physics.add.group();
+    if (this.level.enemies) {
+      const walkableSurfaces = this.platforms.getChildren() as Phaser.GameObjects.Rectangle[];
+      for (const enemyDef of this.level.enemies) {
+        let enemyInstance;
+        if (enemyDef.type === "m0") {
+          enemyInstance = new BasicEnemy(
+            this,
+            enemyDef.x,
+            enemyDef.y,
+            "m0",
+            enemyDef.patrolDistance,
+            "enemy-ancient-m0"
+          );
+        } else if (enemyDef.type === "m1") {
+          enemyInstance = new M1Enemy(
+            this,
+            enemyDef.x,
+            enemyDef.y,
+            enemyDef.patrolDistance,
+            walkableSurfaces,
+            "enemy-ancient-m1"
+          );
+        }
+        if (enemyInstance) {
+          this.enemies.add(enemyInstance);
+        }
+      }
+    }
+
     this.createPlateKeyInterface();
   }
 
@@ -737,6 +782,19 @@ export class PuzzleScene extends Phaser.Scene {
     this.physics.add.collider(this.crates, this.platforms);
     this.physics.add.collider(this.player, this.crates);
     this.physics.add.collider(this.crates, this.crates); // Apilamiento de cajas!
+    this.physics.add.collider(this.enemies, this.platforms);
+    this.physics.add.collider(this.enemies, this.crates);
+    this.physics.add.overlap(this.player, this.enemies, (first, second) => {
+      const enemy = (first === this.player ? second : first) as BaseEnemy;
+      if (this.tryStompEnemy(enemy)) return;
+      this.damagePlayer(enemy.definition.damage);
+    });
+    this.physics.add.overlap(this.projectiles, this.enemies, (first, second) => {
+      this.handleProjectileImpact(first, second, () => {
+        const enemy = (first instanceof PowerProjectile ? second : first) as BaseEnemy;
+        this.handleEnemyDefeated(enemy);
+      });
+    });
 
     // El proyectil desaparece al primer contacto. Los overlaps evitan que Arcade
     // separe los cuerpos, detenga el disparo o transfiera velocidad a las cajas.
@@ -812,7 +870,7 @@ export class PuzzleScene extends Phaser.Scene {
       this.physics.add.existing(hazard, true);
       
       const scale = 30 / 129;
-      const visual = this.add
+      this.add
         .tileSprite(
           hazardDefinition.x,
           hazardDefinition.y + hazardDefinition.height + 6,
@@ -870,27 +928,124 @@ export class PuzzleScene extends Phaser.Scene {
       return;
     }
     if (input.meleeJustPressed && this.player.canMelee(this.time.now)) {
-      this.player.markAttacking(this.time.now);
       this.playSfx("sword-swing");
+      this.combat.meleeAttack(this, this.player, this.enemies, (enemy) => {
+        this.handleEnemyDefeated(enemy);
+      });
       this.tryActivateLever();
       this.tryBreakSealWithMelee();
     }
     if (input.spinJustPressed && this.player.canSpin(this.time.now)) {
-      this.player.markSpinning(this.time.now);
       this.playSfx("sword-swing");
-      for (const seal of [...this.seals]) {
-        if (Phaser.Math.Distance.Between(
-          this.player.x,
-          this.player.y,
-          seal.visual.x,
-          seal.visual.y,
-        ) < 145) {
-          this.breakSeal(seal);
+      const didSpin = this.combat.spinAttack(this, this.player, this.enemies, (enemy) => {
+        this.handleEnemyDefeated(enemy);
+      });
+      if (didSpin) {
+        for (const seal of [...this.seals]) {
+          if (Phaser.Math.Distance.Between(
+            this.player.x,
+            this.player.y,
+            seal.visual.x,
+            seal.visual.y,
+          ) < 145) {
+            this.breakSeal(seal);
+          }
         }
       }
     }
     if (input.healJustPressed) this.useHealingPower();
     if (input.powerJustPressed) this.useLethalPower();
+  }
+
+  private tryStompEnemy(enemy: BaseEnemy): boolean {
+    if (enemy.getData("stompable") !== true) {
+      return false;
+    }
+
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const enemyBody = enemy.body as Phaser.Physics.Arcade.Body;
+    const isFallingOntoEnemy = playerBody.velocity.y > 90 && playerBody.bottom <= enemyBody.top + 18;
+
+    if (!isFallingOntoEnemy) {
+      return false;
+    }
+
+    const defeated = enemy.takeDamage(this.player.stats.meleeDamage);
+    this.player.setVelocityY(-310);
+
+    if (defeated) {
+      this.handleEnemyDefeated(enemy);
+    } else {
+      this.playSfx("enemy-hit");
+    }
+
+    return true;
+  }
+
+  private handleEnemyDefeated(enemy: BaseEnemy): void {
+    const coinReward = enemy.definition.coinReward;
+    if (coinReward) {
+      const amount = Phaser.Math.Between(coinReward.min, coinReward.max);
+      const previousGold = this.save.player.coins;
+      this.inventory.collect(this.save.player, "bronzeCoin", amount);
+      const collectedGold = this.save.player.coins - previousGold;
+      this.goldCollected += collectedGold;
+      this.announceAchievements(
+        this.achievements.recordGoldCollected(this.save, collectedGold),
+      );
+      this.createCoinGainEffect(enemy.x, enemy.y - 12, amount);
+      gameSaveStore.save(this.save);
+      this.emitHud();
+    }
+    this.createEnemyDefeatEffect(enemy);
+    enemy.destroy();
+    this.playSfx("enemy-defeat");
+  }
+
+  private createEnemyDefeatEffect(enemy: BaseEnemy): void {
+    const x = enemy.x;
+    const y = enemy.y;
+    const palette = getEnemyDefeatPalette(enemy.definition.id);
+    const flash = this.add.circle(x, y, 18, palette.core, 0.72).setDepth(31);
+    const ring = this.add.circle(x, y, 12, palette.ring, 0).setStrokeStyle(4, palette.ring, 0.88).setDepth(30);
+
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 1.8,
+      duration: 150,
+      ease: "Quad.easeOut",
+      onComplete: () => flash.destroy(),
+    });
+
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 3.2,
+      duration: 280,
+      ease: "Cubic.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+
+    for (let index = 0; index < 12; index += 1) {
+      const angle = (Math.PI * 2 * index) / 12 + Phaser.Math.FloatBetween(-0.18, 0.18);
+      const distance = Phaser.Math.Between(24, 58);
+      const spark = this.add
+        .rectangle(x, y, Phaser.Math.Between(5, 8), Phaser.Math.Between(3, 5), palette.sparks[index % palette.sparks.length], 0.9)
+        .setDepth(32)
+        .setRotation(angle);
+
+      this.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.1,
+        duration: Phaser.Math.Between(350, 520),
+        ease: "Cubic.easeOut",
+        onComplete: () => spark.destroy(),
+      });
+    }
   }
 
   private activateLever(leverObj: {

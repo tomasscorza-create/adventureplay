@@ -22,6 +22,7 @@ export interface PuzzleLevelDefinition {
   platforms: PlatformDefinition[];
   coins: LevelCoinSpawn[];
   crates: Array<{ x: number; y: number }>;
+  enemies?: Array<{ type: "m0" | "m1"; x: number; y: number; patrolDistance: number }>;
   plates: Array<{ id: string; x: number; y: number; width: number; hint?: string }>;
   levers: Array<{ id: string; x: number; y: number; rangedOnly?: boolean; hint?: string }>;
   gates: Array<{ id: string; x: number; y: number; width: number; height: number; requiredActivations?: string[] }>;
@@ -84,6 +85,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { itemId: "bronzeCoin", x: 2050, y: 460, value: 4 },
     ],
     crates: [{ x: 520, y: 560 }],
+    enemies: [{ type: "m0", x: 900, y: 600, patrolDistance: 150 }],
     plates: [{ id: "crate-plate", x: 1730, y: 625, width: 92 }],
     levers: [{ id: "upper-lever", x: 1190, y: 362 }],
     gates: [
@@ -139,6 +141,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { itemId: "bronzeCoin", x: 2550, y: 390, value: 3 },
     ],
     crates: [{ x: 470, y: 560 }],
+    enemies: [{ type: "m0", x: 600, y: 600, patrolDistance: 150 }, { type: "m0", x: 1300, y: 600, patrolDistance: 150 }],
     plates: [{ id: "crate-plate", x: 1900, y: 625, width: 82 }],
     levers: [{ id: "upper-lever", x: 1430, y: 362 }],
     gates: [
@@ -207,6 +210,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 520, y: 560 },
       { x: 1400, y: 350 },
     ],
+    enemies: [{ type: "m0", x: 700, y: 600, patrolDistance: 180 }, { type: "m0", x: 1400, y: 400, patrolDistance: 120 }],
     plates: [{ id: "crate-plate", x: 2030, y: 625, width: 78 }],
     levers: [
       { id: "upper-lever", x: 1510, y: 362 },
@@ -288,6 +292,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 500, y: 560 },
       { x: 2400, y: 420 },
     ],
+    enemies: [{ type: "m1", x: 1000, y: 600, patrolDistance: 200 }, { type: "m0", x: 1600, y: 600, patrolDistance: 150 }],
     plates: [{ id: "crate-plate", x: 2160, y: 625, width: 74 }],
     levers: [
       { id: "upper-lever", x: 1590, y: 362 },
@@ -367,6 +372,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 1600, y: 320 },
       { x: 3200, y: 400 },
     ],
+    enemies: [{ type: "m1", x: 800, y: 600, patrolDistance: 250 }, { type: "m0", x: 1700, y: 400, patrolDistance: 150 }],
     plates: [
       { id: "plate-1", x: 1200, y: 625, width: 80 },
       { id: "plate-2", x: 2800, y: 625, width: 80 },
@@ -447,6 +453,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 2800, y: 560 },
       { x: 3300, y: 560 },
     ],
+    enemies: [{ type: "m1", x: 900, y: 600, patrolDistance: 200 }, { type: "m1", x: 1800, y: 400, patrolDistance: 200 }],
     plates: [
       { id: "plate-1", x: 1100, y: 625, width: 80 },
       { id: "plate-2", x: 2000, y: 625, width: 80 },
@@ -529,6 +536,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 3350, y: 560 },
       { x: 4550, y: 560 },
     ],
+    enemies: [{ type: "m0", x: 850, y: 600, patrolDistance: 100 }, { type: "m1", x: 1900, y: 300, patrolDistance: 150 }],
     plates: [
       { id: "plate-1", x: 1120, y: 625, width: 80 },
       { id: "plate-2", x: 3600, y: 625, width: 80 },
@@ -616,6 +624,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 3700, y: 560 },
       { x: 4300, y: 560 },
     ],
+    enemies: [{ type: "m1", x: 1200, y: 600, patrolDistance: 250 }, { type: "m1", x: 2300, y: 400, patrolDistance: 150 }],
     plates: [
       { id: "plate-1", x: 1150, y: 625, width: 78 },
       { id: "plate-2", x: 4000, y: 625, width: 76 },
@@ -724,6 +733,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 2280, y: 560 }, // Par pre-apilado opcional: escalera hacia la moneda alta
       { x: 2280, y: 490 },
     ],
+    enemies: [{ type: "m1", x: 1100, y: 600, patrolDistance: 200 }, { type: "m1", x: 2100, y: 600, patrolDistance: 200 }, { type: "m0", x: 2600, y: 500, patrolDistance: 100 }],
     plates: [
       { id: "plate-1", x: 1180, y: 625, width: 78 },
       { id: "plate-2", x: 3600, y: 625, width: 76 },
@@ -837,6 +847,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 700, y: 560 }, // Queda detras de la primera puerta: hay que volver por ella
       { x: 3650, y: 560 }, // Bajo el final del puente: se recupera tras abrir la tercera puerta
     ],
+    enemies: [{ type: "m1", x: 1300, y: 600, patrolDistance: 250 }, { type: "m1", x: 1900, y: 500, patrolDistance: 200 }, { type: "m1", x: 2900, y: 400, patrolDistance: 150 }],
     plates: [
       {
         id: "plate-1",
@@ -962,6 +973,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 1900, y: 560 }, // Caja del foso: nace junto a su placa
       { x: 4450, y: 560 },
     ],
+    enemies: [{ type: "m1", x: 900, y: 600, patrolDistance: 250 }, { type: "m1", x: 1600, y: 400, patrolDistance: 250 }, { type: "m1", x: 2300, y: 500, patrolDistance: 200 }, { type: "m1", x: 3100, y: 600, patrolDistance: 250 }],
     plates: [
       {
         id: "plate-1",

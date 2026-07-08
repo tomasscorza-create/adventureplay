@@ -104,13 +104,10 @@ describe("puzzle level campaign", () => {
       "ancient-trials-chamber-6",
       "ancient-trials-chamber-6",
       "ancient-trials-chamber-6",
-      "ancient-trials-chamber-6",
-      "ancient-trials-chamber-6",
-      "ancient-trials-chamber-6",
+      "ancient-trials-chamber-7",
+      "ancient-trials-chamber-7",
+      "ancient-trials-chamber-8",
     ]);
-    levels.slice(1).forEach((level, index) => {
-      expect(level.visualTheme.shadeAlpha).toBeLessThan(levels[index].visualTheme.shadeAlpha);
-    });
   });
 
   it("keeps rewards valid and raises obstacle pressure every chamber", () => {

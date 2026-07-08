@@ -25,6 +25,8 @@ export class PreloadScene extends Phaser.Scene {
     this.createEnchantedM1Texture();
     this.createVolcanicM0Texture();
     this.createVolcanicM1Texture();
+    this.createAncientM0Texture();
+    this.createAncientM1Texture();
     this.createPowerProjectileTexture();
     this.createCoinTexture();
     this.createInventoryPieceTexture();
@@ -702,6 +704,56 @@ export class PreloadScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x0b1913, 1);
     graphics.strokeRoundedRect(6, 12, 34, 29, 9);
     graphics.generateTexture("enemy-m1", 46, 50);
+    graphics.destroy();
+  }
+
+  private createAncientM0Texture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x000000, 0.4);
+    graphics.fillEllipse(21, 38, 30, 8);
+    graphics.fillStyle(0x1e293b, 1);
+    graphics.fillRoundedRect(5, 9, 32, 27, 10);
+    graphics.fillStyle(0x334155, 1);
+    graphics.fillRoundedRect(9, 12, 24, 20, 8);
+    graphics.fillStyle(0xeab308, 1);
+    graphics.fillTriangle(9, 10, 14, 1, 19, 12);
+    graphics.fillTriangle(25, 10, 31, 1, 34, 13);
+    graphics.fillStyle(0x6ee7b7, 1);
+    graphics.fillCircle(16, 21, 2.4);
+    graphics.fillCircle(27, 21, 2.4);
+    graphics.fillStyle(0x022c22, 1);
+    graphics.fillCircle(16, 21, 1);
+    graphics.fillCircle(27, 21, 1);
+    graphics.fillStyle(0xeab308, 0.72);
+    graphics.fillCircle(21, 31, 4);
+    graphics.lineStyle(2, 0x0f172a, 1);
+    graphics.strokeRoundedRect(5, 9, 32, 27, 10);
+    graphics.generateTexture("enemy-ancient-m0", 42, 42);
+    graphics.destroy();
+  }
+
+  private createAncientM1Texture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x000000, 0.4);
+    graphics.fillEllipse(23, 43, 36, 9);
+    graphics.fillStyle(0x111827, 1);
+    graphics.fillRoundedRect(6, 12, 34, 29, 9);
+    graphics.fillStyle(0x1f2937, 1);
+    graphics.fillRoundedRect(10, 10, 26, 25, 8);
+    graphics.fillStyle(0x22d3ee, 1);
+    graphics.fillCircle(17, 21, 3);
+    graphics.fillCircle(29, 21, 3);
+    graphics.fillStyle(0x083344, 1);
+    graphics.fillCircle(18, 21, 1.2);
+    graphics.fillCircle(30, 21, 1.2);
+    graphics.fillStyle(0xd97706, 1);
+    graphics.fillTriangle(12, 10, 17, 1, 22, 12);
+    graphics.fillTriangle(26, 10, 32, 1, 36, 13);
+    graphics.fillStyle(0xfde047, 0.78);
+    graphics.fillRoundedRect(17, 30, 12, 3, 2);
+    graphics.lineStyle(2, 0x030712, 1);
+    graphics.strokeRoundedRect(6, 12, 34, 29, 9);
+    graphics.generateTexture("enemy-ancient-m1", 46, 50);
     graphics.destroy();
   }
 
