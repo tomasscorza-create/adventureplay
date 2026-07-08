@@ -183,6 +183,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.playAnimation("dead");
   }
 
+  // Co-op (lado guest): aplica el estado autoritativo recibido por red a este
+  // titere, sin simular fisica. Solo actualiza direccion y animacion visibles.
+  renderNetState(state: PlayerState, facing: -1 | 1): void {
+    this.setFacing(facing);
+    if (state !== this.state) {
+      this.state = state;
+      this.playAnimation(state);
+    }
+  }
+
   private playAnimation(state: PlayerState): void {
     const animationKeyByState: Partial<Record<PlayerState, string>> = {
       idle: `${this.animationPrefix}-idle`,

@@ -1165,7 +1165,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     requiredActivations: ["lever-1", "plate-1", "plate-2", "lever-dist"],
     supportsCooperative: true,
     visualTheme: {
-      backgroundTextureKey: "ancient-trials-chamber-8",
+      backgroundTextureKey: "ancient-trials-chamber-9",
       shadeAlpha: 0.45,
       accentColor: 0xffe8b0,
     },
@@ -1289,7 +1289,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     requiredActivations: ["lever-1", "plate-1", "lever-dist", "lever-2"],
     supportsCooperative: true,
     visualTheme: {
-      backgroundTextureKey: "ancient-trials-chamber-8",
+      backgroundTextureKey: "ancient-trials-chamber-9",
       shadeAlpha: 0.45,
       accentColor: 0xffedc0,
     },
@@ -1422,7 +1422,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     requiredActivations: ["lever-1", "plate-1", "plate-2", "lever-dist", "lever-2"],
     supportsCooperative: true,
     visualTheme: {
-      backgroundTextureKey: "ancient-trials-chamber-8",
+      backgroundTextureKey: "ancient-trials-chamber-10",
       shadeAlpha: 0.45,
       accentColor: 0xfff4d0,
     },

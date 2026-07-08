@@ -11,6 +11,7 @@ import { playableCharacters } from "../../game/data/characters";
 import { levelDefinitions } from "../../game/data/levels";
 import { getProfileIconDefinition, profileIconDefinitions } from "../../game/data/profileIcons";
 import type { CharacterId, ProfileIconId, SaveData } from "../../shared/types/game";
+import type { CoopSessionInfo } from "../../game/events/EventBus";
 import { AchievementIcon } from "../components/AchievementIcon";
 import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
@@ -38,7 +39,7 @@ interface MainMenuScreenProps {
   onSignOut: () => void;
   showDesktopCommandSettings: boolean;
   onResetProgress: () => Promise<void>;
-  onStartLevel: (levelId: string) => void;
+  onStartLevel: (levelId: string, coop?: CoopSessionInfo) => void;
   onUpdatePlayerName: (displayName: string) => boolean;
   onUpdatePlayerIcon: (profileIconId: ProfileIconId) => void;
   onSelectCharacter: (characterId: CharacterId) => void;

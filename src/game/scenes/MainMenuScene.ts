@@ -18,7 +18,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.unbindStart = gameEvents.on(EVENTS.START_GAME, (payload) => {
       this.scene.start(
         puzzleLevelDefinitions[payload.levelId] ? "PuzzleScene" : "LevelScene",
-        { levelId: payload.levelId },
+        { levelId: payload.levelId, coop: payload.coop },
       );
     });
 

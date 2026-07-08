@@ -1,7 +1,17 @@
 import Phaser from "phaser";
 import { EVENTS } from "../../shared/constants/events";
 import { GAME_HEIGHT, GAME_WIDTH } from "../../shared/constants/game";
-import type { AchievementId, HudState, SaveData } from "../../shared/types/game";
+import type {
+  AchievementId,
+  CharacterId,
+  HudState,
+  PlayerStats,
+  SaveData,
+} from "../../shared/types/game";
+import {
+  emptyGameplayInputState,
+  type GameplayInputFrame,
+} from "../../shared/types/input";
 import { getAchievementDefinition } from "../data/achievements";
 import { getCharacterDefinition } from "../data/characters";
 import type { SfxCue } from "../data/sfx";
@@ -40,6 +50,16 @@ import {
 } from "../systems/puzzles/PuzzleVisualPalette";
 import { gameSaveStore } from "../systems/save/GameSaveStore";
 import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
+import { coopSession } from "../systems/net/CoopSession";
+import type { CoopSessionInfo } from "../events/EventBus";
+import {
+  COOP_INPUT_RATE_HZ,
+  COOP_SNAPSHOT_RATE_HZ,
+  packInputState,
+  unpackInputState,
+  type NetPlayerState,
+  type WorldSnapshot,
+} from "../systems/net/coopMessages";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -115,13 +135,42 @@ export class PuzzleScene extends Phaser.Scene {
   private seals: Array<{
     hitbox: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Image;
+    index: number;
   }> = [];
+  private snapshotSeq = 0;
+
+  // --- Estado de co-op online (activo solo cuando llega `coop` en create) ---
+  private coop?: CoopSessionInfo;
+  private isHost = false;
+  private isGuest = false;
+  private coopEnded = false;
+  private player2?: Player;
+  private readonly movement2 = new MovementSystem();
+  // Host: ultimo input recibido del guest y su frame reconstruido.
+  private remoteHeld = { ...emptyGameplayInputState };
+  private remotePrevHeld = { ...emptyGameplayInputState };
+  private lastRemoteSeq = -1;
+  // Host: cargas vivas del jugador 2 (sembradas desde el hello del guest).
+  private p2Charges = { healingCharges: 0, powerCharges: 0 };
+  private damageCooldownUntil2 = 0;
+  // Guest: envio de input y buffer de snapshots para interpolar.
+  private lastInputSentAt = 0;
+  private lastInputBits = -1;
+  private inputSeq = 0;
+  private latestSnapshot?: WorldSnapshot;
+  private prevSnapshot?: WorldSnapshot;
+  private snapshotRecvAt = 0;
+  private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
+  // Host: throttle de snapshots.
+  private lastSnapshotAt = 0;
+  private midpoint?: Phaser.GameObjects.Zone;
+  private readonly coopUnbinds: Array<() => void> = [];
 
   constructor() {
     super("PuzzleScene");
   }
 
-  create(data: { levelId?: string }): void {
+  create(data: { levelId?: string; coop?: CoopSessionInfo }): void {
     this.level = puzzleLevelDefinitions[data.levelId ?? "trialChamber1"]
       ?? puzzleLevelDefinitions.trialChamber1;
     this.save = gameSaveStore.load();
@@ -135,8 +184,32 @@ export class PuzzleScene extends Phaser.Scene {
     this.runTracker.reset();
     this.activations.reset(this.level.requiredActivations);
     this.movement.reset();
+    this.movement2.reset();
     touchInputStore.reset();
     gameSaveStore.save(this.save);
+
+    // Modo co-op: solo se activa cuando la sesion sigue viva. Si perdimos la
+    // conexion (por ejemplo el peer cerro), degradamos a un jugador.
+    this.coop = data.coop && coopSession.isActive ? data.coop : undefined;
+    this.isHost = this.coop?.role === "host";
+    this.isGuest = this.coop?.role === "guest";
+    this.coopEnded = false;
+    this.player2 = undefined;
+    this.remoteHeld = { ...emptyGameplayInputState };
+    this.remotePrevHeld = { ...emptyGameplayInputState };
+    this.lastRemoteSeq = -1;
+    this.latestSnapshot = undefined;
+    this.prevSnapshot = undefined;
+    this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
+    this.lastInputBits = -1;
+    this.inputSeq = 0;
+    if (this.isHost) {
+      const guestCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
+      this.p2Charges = {
+        healingCharges: guestCharges?.healingCharges ?? 0,
+        powerCharges: guestCharges?.powerCharges ?? 0,
+      };
+    }
 
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.inputSystem = new GameplayInputSystem(this);
@@ -146,13 +219,20 @@ export class PuzzleScene extends Phaser.Scene {
     this.createCollectibles();
     this.createCollisions();
     this.bindSceneEvents();
+    if (this.coop) this.bindCoopNet();
     this.scene.launch("UIScene");
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "playing");
     this.emitHud();
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.levelFinished) return;
+
+    // El guest no simula: envia su input y renderiza los snapshots del host.
+    if (this.isGuest) {
+      this.updateGuest(time, delta);
+      return;
+    }
 
     this.runTracker.advance(delta);
     this.remainingTimeMs = Math.max(0, this.remainingTimeMs - delta);
@@ -163,9 +243,21 @@ export class PuzzleScene extends Phaser.Scene {
 
     const input = this.inputSystem.readFrame();
     this.runTracker.trackInput(input);
+    if (input.pauseJustPressed) {
+      this.handlePausePressed();
+      return;
+    }
     const jumped = this.movement.update(this.player, input, delta);
     if (jumped) this.playSfx("jump");
-    this.handleActions(input);
+    this.handleActionsFor(this.player, input, "player-1");
+
+    if (this.isHost && this.player2) {
+      const remoteFrame = this.consumeRemoteInputFrame();
+      const jumped2 = this.movement2.update(this.player2, remoteFrame, delta);
+      if (jumped2) this.playSfx("jump");
+      this.handleActionsFor(this.player2, remoteFrame, "player-2");
+    }
+
     this.updateCrateSolidity();
     this.handleStackedCratesPhysics();
     this.updatePlateStates();
@@ -173,10 +265,16 @@ export class PuzzleScene extends Phaser.Scene {
 
     if (this.enemies) {
       this.enemies.children.each((enemy) => {
-        (enemy as BaseEnemy).update(this.player);
+        (enemy as BaseEnemy).update(this.nearestPlayerTo(enemy as BaseEnemy));
         return true;
       });
     }
+
+    if (this.midpoint && this.player2) {
+      this.cameraSystem.updateMidpoint(this.midpoint, this.player, this.player2);
+    }
+
+    if (this.isHost) this.maybeSendSnapshot(time);
 
     const hudSecond = Math.ceil(this.remainingTimeMs / 1000);
     const spinStep = Math.ceil(this.player.getSpinCooldownRemaining(this.time.now) / 100);
@@ -185,21 +283,52 @@ export class PuzzleScene extends Phaser.Scene {
     }
   }
 
+  private handlePausePressed(): void {
+    this.playSfx("ui-click");
+    if (this.coop) {
+      // Pausar desincronizaria la sesion: en co-op salir termina la partida.
+      this.leaveCoop();
+      return;
+    }
+    gameEvents.emit(EVENTS.SCREEN_CHANGED, "paused");
+    this.scene.pause();
+  }
+
+  private nearestPlayerTo(target: BaseEnemy): Player {
+    if (!this.player2) return this.player;
+    const toA = Phaser.Math.Distance.Between(target.x, target.y, this.player.x, this.player.y);
+    const toB = Phaser.Math.Distance.Between(target.x, target.y, this.player2.x, this.player2.y);
+    return toB < toA ? this.player2 : this.player;
+  }
+
   private createWorld(): void {
     this.cameras.main.setBackgroundColor("#111828");
     this.physics.world.setBounds(0, 0, this.level.worldWidth, GAME_HEIGHT);
     const backdrop = this.add
       .image(0, 0, this.level.visualTheme.backgroundTextureKey)
       .setOrigin(0)
-      .setScrollFactor(0)
       .setDepth(-40);
-    const backdropScale = Math.max(GAME_WIDTH / backdrop.width, GAME_HEIGHT / backdrop.height);
+      
+    let backdropScale = Math.max(GAME_WIDTH / backdrop.width, GAME_HEIGHT / backdrop.height);
+    let scrollFactorX = 0;
+    let posX = (GAME_WIDTH - (backdrop.width * backdropScale)) / 2;
+    const posY = (GAME_HEIGHT - (backdrop.height * backdropScale)) / 2;
+
+    if (this.level.id === "trialChamber13") {
+      backdropScale *= 1.2; // Forza un 20% extra de ancho respecto a la pantalla
+      const maxCameraScrollX = this.level.worldWidth - GAME_WIDTH;
+      const extraBackgroundWidth = (backdrop.width * backdropScale) - GAME_WIDTH;
+      
+      if (maxCameraScrollX > 0 && extraBackgroundWidth > 0) {
+        scrollFactorX = extraBackgroundWidth / maxCameraScrollX;
+      }
+      posX = 0; // Alineado al margen izquierdo
+    }
+
     backdrop
       .setScale(backdropScale)
-      .setPosition(
-        (GAME_WIDTH - backdrop.displayWidth) / 2,
-        (GAME_HEIGHT - backdrop.displayHeight) / 2,
-      );
+      .setPosition(posX, posY)
+      .setScrollFactor(scrollFactorX, 0);
     this.visualPalette = derivePuzzleVisualPalette(
       this.sampleBackdropColor(this.level.visualTheme.backgroundTextureKey),
     );
@@ -360,14 +489,54 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private createPlayer(): void {
+    const start = this.level.playerStart;
+    // Slot A = personaje del host; Slot B = personaje del guest. `this.player`
+    // es siempre el slot A y `this.player2` el slot B, sin importar quien soy.
+    const localChar = this.save.selectedCharacterId;
+    const peerChar = (coopSession.peerCharacterId as CharacterId | null) ?? localChar;
+    const slotAChar = this.isGuest ? peerChar : localChar;
+    const slotBChar = this.isHost ? peerChar : localChar;
+
     this.player = new Player(
       this,
-      this.level.playerStart.x,
-      this.level.playerStart.y,
+      start.x,
+      start.y,
       this.save.player,
-      getCharacterDefinition(this.save.selectedCharacterId),
+      getCharacterDefinition(slotAChar),
     );
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08, -180, 40);
+
+    if (this.coop) {
+      const stats2: PlayerStats = { ...this.save.player, health: this.save.player.maxHealth };
+      this.player2 = new Player(
+        this,
+        start.x - 70,
+        start.y,
+        stats2,
+        getCharacterDefinition(slotBChar),
+      );
+      if (this.isGuest) {
+        this.freezePuppet(this.player);
+        this.freezePuppet(this.player2);
+      }
+      this.midpoint = this.add.zone(start.x - 35, start.y, 1, 1);
+      this.cameras.main.startFollow(this.midpoint, true, 0.09, 0.09, -180, 40);
+    } else {
+      this.cameras.main.startFollow(this.player, true, 0.08, 0.08, -180, 40);
+    }
+  }
+
+  // El guest no simula la fisica de los cuerpos autoritativos: deshabilita su
+  // cuerpo Arcade para que no lo muevan gravedad ni colisiones, y solo reposiciona
+  // el sprite desde los snapshots del host.
+  private freezePuppet(target: Phaser.GameObjects.GameObject): void {
+    const body = target.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.enable = false;
+  }
+
+  private forEachPlayer(callback: (player: Player, slot: 0 | 1) => void): void {
+    callback(this.player, 0);
+    if (this.player2) callback(this.player2, 1);
   }
 
   private createPuzzleObjects(): void {
@@ -400,6 +569,7 @@ export class PuzzleScene extends Phaser.Scene {
         .setDragX(520)
         .setMaxVelocity(180, 700)
         .setBounce(0, 0);
+      if (this.isGuest) this.freezePuppet(crate);
       this.crates.push(crate);
     }
 
@@ -547,7 +717,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     // 6. Sellos mágicos (Seals)
-    this.seals = this.level.seals.map((sealDefinition) => {
+    this.seals = this.level.seals.map((sealDefinition, index) => {
       const hitbox = this.add
         .rectangle(
           sealDefinition.x,
@@ -567,7 +737,7 @@ export class PuzzleScene extends Phaser.Scene {
         .setDisplaySize(sealDefinition.width + 28, sealDefinition.height + 8)
         .setTint(0xbda2df)
         .setDepth(11);
-      return { hitbox, visual };
+      return { hitbox, visual, index };
     });
 
     // 7. Portal Meta (Goal)
@@ -664,7 +834,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.enemies = this.physics.add.group();
     if (this.level.enemies) {
       const walkableSurfaces = this.platforms.getChildren() as Phaser.GameObjects.Rectangle[];
-      for (const enemyDef of this.level.enemies) {
+      this.level.enemies.forEach((enemyDef, index) => {
         let enemyInstance;
         if (enemyDef.type === "m0") {
           enemyInstance = new BasicEnemy(
@@ -686,9 +856,12 @@ export class PuzzleScene extends Phaser.Scene {
           );
         }
         if (enemyInstance) {
+          // netId estable para sincronizar posicion/derrota con el guest.
+          enemyInstance.setData("netId", index);
+          if (this.isGuest) this.freezePuppet(enemyInstance);
           this.enemies.add(enemyInstance);
         }
-      }
+      });
     }
 
     this.createPlateKeyInterface();
@@ -778,17 +951,55 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private createCollisions(): void {
-    this.physics.add.collider(this.player, this.platforms);
+    // Colisiones fisicas: se registran siempre. En el guest los cuerpos estan
+    // congelados, asi que estos colliders no hacen nada (el estado llega por red).
+    const applyEffects = !this.isGuest;
     this.physics.add.collider(this.crates, this.platforms);
-    this.physics.add.collider(this.player, this.crates);
     this.physics.add.collider(this.crates, this.crates); // Apilamiento de cajas!
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.collider(this.enemies, this.crates);
-    this.physics.add.overlap(this.player, this.enemies, (first, second) => {
-      const enemy = (first === this.player ? second : first) as BaseEnemy;
-      if (this.tryStompEnemy(enemy)) return;
-      this.damagePlayer(enemy.definition.damage);
+    if (this.player2) {
+      this.physics.add.collider(this.player, this.player2);
+    }
+    this.forEachPlayer((player) => {
+      this.physics.add.collider(player, this.platforms);
+      this.physics.add.collider(player, this.crates);
+      this.physics.add.collider(player, this.goalGate.rect);
+      for (const gateObj of this.gates) {
+        this.physics.add.collider(player, gateObj.rect);
+      }
+      for (const seal of this.seals) {
+        this.physics.add.collider(player, seal.hitbox);
+      }
     });
+    this.physics.add.collider(this.crates, this.goalGate.rect);
+    for (const gateObj of this.gates) {
+      this.physics.add.collider(this.crates, gateObj.rect);
+    }
+
+    // Efectos de gameplay (dano, recoleccion, activaciones, meta): solo el host o
+    // el modo un jugador los resuelven; el guest los ve reflejados en el snapshot.
+    this.forEachPlayer((player, slot) => {
+      this.physics.add.overlap(player, this.enemies, (first, second) => {
+        if (!applyEffects) return;
+        const enemy = (first === player ? second : first) as BaseEnemy;
+        if (this.tryStompEnemy(enemy, player)) return;
+        this.damagePlayerSlot(player, slot, enemy.definition.damage);
+      });
+      this.physics.add.overlap(player, this.coins, (_player, rawCoin) => {
+        if (!applyEffects) return;
+        this.collectCoin(rawCoin as Coin);
+      });
+      if (this.inventoryPickup) {
+        this.physics.add.overlap(player, this.inventoryPickup, () => {
+          if (applyEffects) this.collectInventoryReward();
+        });
+      }
+      this.physics.add.overlap(player, this.goal, () => {
+        if (applyEffects) this.completeLevel();
+      });
+    });
+
     this.physics.add.overlap(this.projectiles, this.enemies, (first, second) => {
       this.handleProjectileImpact(first, second, () => {
         const enemy = (first instanceof PowerProjectile ? second : first) as BaseEnemy;
@@ -806,15 +1017,11 @@ export class PuzzleScene extends Phaser.Scene {
     });
 
     for (const gateObj of this.gates) {
-      this.physics.add.collider(this.player, gateObj.rect);
-      this.physics.add.collider(this.crates, gateObj.rect);
       this.physics.add.overlap(this.projectiles, gateObj.rect, (first, second) => {
         this.handleProjectileImpact(first, second);
       });
     }
 
-    this.physics.add.collider(this.player, this.goalGate.rect);
-    this.physics.add.collider(this.crates, this.goalGate.rect);
     this.physics.add.overlap(this.projectiles, this.goalGate.rect, (first, second) => {
       this.handleProjectileImpact(first, second);
     });
@@ -825,36 +1032,15 @@ export class PuzzleScene extends Phaser.Scene {
     for (const leverObj of this.levers) {
       this.physics.add.overlap(this.projectiles, leverObj.rect, (first, second) => {
         this.handleProjectileImpact(first, second, () => {
-          if (!this.activations.isActive(leverObj.id)) this.activateLever(leverObj);
+          if (!this.activations.isActive(leverObj.id)) this.activateLever(leverObj, "player-1");
         });
       });
     }
 
     for (const seal of this.seals) {
-      this.physics.add.collider(this.player, seal.hitbox);
       this.physics.add.overlap(this.projectiles, seal.hitbox, (first, second) => {
         this.handleProjectileImpact(first, second, () => this.breakSeal(seal));
       });
-    }
-
-    this.physics.add.overlap(this.player, this.coins, (_player, rawCoin) => {
-      const coin = rawCoin as Coin;
-      const previousGold = this.save.player.coins;
-      this.inventory.collect(this.save.player, coin.itemId, coin.value);
-      const amount = this.save.player.coins - previousGold;
-      this.goldCollected += amount;
-      this.announceAchievements(this.achievements.recordGoldCollected(this.save, amount));
-      if (amount > 0) {
-        this.createCoinGainEffect(coin.x, coin.y, amount);
-      }
-      coin.disableBody(true, true);
-      this.playSfx("coin");
-      gameSaveStore.save(this.save);
-      this.emitHud();
-    });
-
-    if (this.inventoryPickup) {
-      this.physics.add.overlap(this.player, this.inventoryPickup, () => this.collectInventoryReward());
     }
 
     for (const hazardDefinition of this.level.hazards) {
@@ -868,7 +1054,7 @@ export class PuzzleScene extends Phaser.Scene {
         .setOrigin(0, 0)
         .setVisible(false);
       this.physics.add.existing(hazard, true);
-      
+
       const scale = 30 / 129;
       this.add
         .tileSprite(
@@ -882,13 +1068,30 @@ export class PuzzleScene extends Phaser.Scene {
         .setScale(scale)
         .setDepth(9);
 
-      this.physics.add.overlap(this.player, hazard, () => this.damagePlayer(hazardDefinition.damage));
+      this.forEachPlayer((player, slot) => {
+        this.physics.add.overlap(player, hazard, () => {
+          if (applyEffects) this.damagePlayerSlot(player, slot, hazardDefinition.damage);
+        });
+      });
       this.physics.add.overlap(this.projectiles, hazard, (first, second) => {
         this.handleProjectileImpact(first, second);
       });
     }
+  }
 
-    this.physics.add.overlap(this.player, this.goal, () => this.completeLevel());
+  private collectCoin(coin: Coin): void {
+    const previousGold = this.save.player.coins;
+    this.inventory.collect(this.save.player, coin.itemId, coin.value);
+    const amount = this.save.player.coins - previousGold;
+    this.goldCollected += amount;
+    this.announceAchievements(this.achievements.recordGoldCollected(this.save, amount));
+    if (amount > 0) {
+      this.createCoinGainEffect(coin.x, coin.y, amount);
+    }
+    coin.disableBody(true, true);
+    this.playSfx("coin");
+    gameSaveStore.save(this.save);
+    this.emitHud();
   }
 
   private handleProjectileImpact(
@@ -920,31 +1123,25 @@ export class PuzzleScene extends Phaser.Scene {
     return candidate instanceof Phaser.GameObjects.GameObject ? candidate : undefined;
   }
 
-  private handleActions(input: ReturnType<GameplayInputSystem["readFrame"]>): void {
-    if (input.pauseJustPressed) {
-      this.playSfx("ui-click");
-      gameEvents.emit(EVENTS.SCREEN_CHANGED, "paused");
-      this.scene.pause();
-      return;
-    }
-    if (input.meleeJustPressed && this.player.canMelee(this.time.now)) {
+  private handleActionsFor(player: Player, input: GameplayInputFrame, participant: string): void {
+    if (input.meleeJustPressed && player.canMelee(this.time.now)) {
       this.playSfx("sword-swing");
-      this.combat.meleeAttack(this, this.player, this.enemies, (enemy) => {
+      this.combat.meleeAttack(this, player, this.enemies, (enemy) => {
         this.handleEnemyDefeated(enemy);
       });
-      this.tryActivateLever();
-      this.tryBreakSealWithMelee();
+      this.tryActivateLever(player, participant);
+      this.tryBreakSealWithMelee(player);
     }
-    if (input.spinJustPressed && this.player.canSpin(this.time.now)) {
+    if (input.spinJustPressed && player.canSpin(this.time.now)) {
       this.playSfx("sword-swing");
-      const didSpin = this.combat.spinAttack(this, this.player, this.enemies, (enemy) => {
+      const didSpin = this.combat.spinAttack(this, player, this.enemies, (enemy) => {
         this.handleEnemyDefeated(enemy);
       });
       if (didSpin) {
         for (const seal of [...this.seals]) {
           if (Phaser.Math.Distance.Between(
-            this.player.x,
-            this.player.y,
+            player.x,
+            player.y,
             seal.visual.x,
             seal.visual.y,
           ) < 145) {
@@ -953,16 +1150,16 @@ export class PuzzleScene extends Phaser.Scene {
         }
       }
     }
-    if (input.healJustPressed) this.useHealingPower();
-    if (input.powerJustPressed) this.useLethalPower();
+    if (input.healJustPressed) this.useHealingPowerFor(player, participant);
+    if (input.powerJustPressed) this.useLethalPowerFor(player, participant);
   }
 
-  private tryStompEnemy(enemy: BaseEnemy): boolean {
+  private tryStompEnemy(enemy: BaseEnemy, player: Player): boolean {
     if (enemy.getData("stompable") !== true) {
       return false;
     }
 
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const playerBody = player.body as Phaser.Physics.Arcade.Body;
     const enemyBody = enemy.body as Phaser.Physics.Arcade.Body;
     const isFallingOntoEnemy = playerBody.velocity.y > 90 && playerBody.bottom <= enemyBody.top + 18;
 
@@ -970,8 +1167,8 @@ export class PuzzleScene extends Phaser.Scene {
       return false;
     }
 
-    const defeated = enemy.takeDamage(this.player.stats.meleeDamage);
-    this.player.setVelocityY(-310);
+    const defeated = enemy.takeDamage(player.stats.meleeDamage);
+    player.setVelocityY(-310);
 
     if (defeated) {
       this.handleEnemyDefeated(enemy);
@@ -1054,9 +1251,9 @@ export class PuzzleScene extends Phaser.Scene {
     knob: Phaser.GameObjects.Arc;
     visual: Phaser.GameObjects.Image;
     definition: { id: string; x: number; y: number; rangedOnly?: boolean };
-  }): void {
+  }, participant: string): void {
     if (this.activations.isActive(leverObj.id)) return;
-    this.activations.setParticipantActive(leverObj.id, "player-1", true);
+    this.activations.setParticipantActive(leverObj.id, participant, true);
     leverObj.rect.setAngle(18).setFillStyle(0x3d765d);
     leverObj.visual.setAngle(18).setTint(0x9ff0c5);
     this.tweens.add({
@@ -1070,27 +1267,27 @@ export class PuzzleScene extends Phaser.Scene {
     this.updateGates();
   }
 
-  private tryActivateLever(): void {
+  private tryActivateLever(player: Player, participant: string): void {
     for (const leverObj of this.levers) {
       if (this.activations.isActive(leverObj.id)) continue;
       if (leverObj.definition.rangedOnly) continue;
 
       const dist = Phaser.Math.Distance.Between(
-        this.player.x,
-        this.player.y,
+        player.x,
+        player.y,
         leverObj.rect.x,
         leverObj.rect.y - 30
       );
 
       if (dist <= 105) {
-        this.activateLever(leverObj);
+        this.activateLever(leverObj, participant);
       }
     }
   }
 
-  private tryBreakSealWithMelee(): void {
+  private tryBreakSealWithMelee(player: Player): void {
     const seal = this.seals.find((candidate) => Phaser.Geom.Intersects.RectangleToRectangle(
-      this.player.getMeleeHitbox(),
+      player.getMeleeHitbox(),
       candidate.hitbox.getBounds(),
     ));
     if (seal) this.breakSeal(seal);
@@ -1158,70 +1355,74 @@ export class PuzzleScene extends Phaser.Scene {
   private updateGates(): void {
     for (const gateObj of this.gates) {
       if (gateObj.opened) continue;
-
       const reqs = gateObj.definition.requiredActivations ?? [];
       if (reqs.length === 0) continue;
-
-      const allMet = reqs.every((actId: string) => this.activations.isActive(actId));
-      if (allMet) {
-        gateObj.opened = true;
-        (gateObj.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
-        this.tweens.add({
-          targets: gateObj.visual,
-          y: gateObj.visual.y - gateObj.definition.height,
-          alpha: 0.12,
-          duration: 720,
-        });
-        this.tweens.add({
-          targets: gateObj.rect,
-          y: gateObj.rect.y - gateObj.definition.height,
-          alpha: 0.06,
-          duration: 720,
-        });
-        if (gateObj.sparkles) {
-          for (const sp of gateObj.sparkles) {
-            this.tweens.add({
-              targets: sp,
-              alpha: 0,
-              scale: sp.scale * (Math.random() > 0.5 ? 2.5 : 1.2),
-              duration: 150,
-            });
-          }
-        }
-        this.playSfx("progress");
+      if (reqs.every((actId: string) => this.activations.isActive(actId))) {
+        this.openGate(gateObj);
       }
     }
 
     const portalReady = this.activations.isComplete() && this.seals.length === 0;
     this.goal.setFillStyle(0x66dbc0, portalReady ? 0.34 : 0.12);
+    if (portalReady) this.openGoalGate();
+  }
 
-    if (portalReady && !this.goalGate.opened) {
-      this.goalGate.opened = true;
-      (this.goalGate.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
-      this.tweens.add({
-        targets: this.goalGate.visual,
-        y: this.goalGate.visual.y - 640,
-        alpha: 0.12,
-        duration: 850,
-      });
-      if (this.goalGate.sparkles) {
-        for (const sp of this.goalGate.sparkles) {
-          this.tweens.add({
-            targets: sp,
-            alpha: 0,
-            scale: sp.scale * (Math.random() > 0.5 ? 2.5 : 1.2),
-            duration: 150,
-          });
-        }
+  private openGate(gateObj: (typeof this.gates)[number]): void {
+    if (gateObj.opened) return;
+    gateObj.opened = true;
+    (gateObj.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    this.tweens.add({
+      targets: gateObj.visual,
+      y: gateObj.visual.y - gateObj.definition.height,
+      alpha: 0.12,
+      duration: 720,
+    });
+    this.tweens.add({
+      targets: gateObj.rect,
+      y: gateObj.rect.y - gateObj.definition.height,
+      alpha: 0.06,
+      duration: 720,
+    });
+    if (gateObj.sparkles) {
+      for (const sp of gateObj.sparkles) {
+        this.tweens.add({
+          targets: sp,
+          alpha: 0,
+          scale: sp.scale * (Math.random() > 0.5 ? 2.5 : 1.2),
+          duration: 150,
+        });
       }
-      this.tweens.add({
-        targets: this.goalGate.rect,
-        y: this.goalGate.rect.y - 640,
-        alpha: 0.06,
-        duration: 850,
-      });
-      this.playSfx("progress");
     }
+    this.playSfx("progress");
+  }
+
+  private openGoalGate(): void {
+    if (this.goalGate.opened) return;
+    this.goalGate.opened = true;
+    (this.goalGate.rect.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    this.tweens.add({
+      targets: this.goalGate.visual,
+      y: this.goalGate.visual.y - 640,
+      alpha: 0.12,
+      duration: 850,
+    });
+    if (this.goalGate.sparkles) {
+      for (const sp of this.goalGate.sparkles) {
+        this.tweens.add({
+          targets: sp,
+          alpha: 0,
+          scale: sp.scale * (Math.random() > 0.5 ? 2.5 : 1.2),
+          duration: 150,
+        });
+      }
+    }
+    this.tweens.add({
+      targets: this.goalGate.rect,
+      y: this.goalGate.rect.y - 640,
+      alpha: 0.06,
+      duration: 850,
+    });
+    this.playSfx("progress");
   }
 
   private updateObjectiveText(): void {
@@ -1278,35 +1479,41 @@ export class PuzzleScene extends Phaser.Scene {
     this.objectiveText.setText(nextText);
   }
 
-  private useHealingPower(): void {
-    const charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    if (charges.healingCharges <= 0 || this.save.player.health >= this.save.player.maxHealth) return;
+  private chargesForParticipant(participant: string): { healingCharges: number; powerCharges: number } {
+    return participant === "player-1"
+      ? this.save.characterPowerCharges[this.save.selectedCharacterId]
+      : this.p2Charges;
+  }
+
+  private useHealingPowerFor(player: Player, participant: string): void {
+    const charges = this.chargesForParticipant(participant);
+    if (charges.healingCharges <= 0 || player.stats.health >= player.stats.maxHealth) return;
     charges.healingCharges -= 1;
-    this.save.player.health = this.save.player.maxHealth;
+    player.stats.health = player.stats.maxHealth;
     this.playSfx("heal");
-    gameSaveStore.save(this.save);
+    if (participant === "player-1") gameSaveStore.save(this.save);
     this.emitHud();
   }
 
-  private useLethalPower(): void {
-    const charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    if (charges.powerCharges <= 0 || !this.player.canUsePower(this.time.now)) return;
+  private useLethalPowerFor(player: Player, participant: string): void {
+    const charges = this.chargesForParticipant(participant);
+    if (charges.powerCharges <= 0 || !player.canUsePower(this.time.now)) return;
     charges.powerCharges -= 1;
-    this.player.markUsingPower(this.time.now);
+    player.markUsingPower(this.time.now);
     // El proyectil emerge por delante del jugador (no en su centro) para que su
     // cuerpo de 34px no se solape con una pared pegada a la espalda y se consuma
     // al instante: disparar junto a un muro debe lanzar el tiro igualmente.
-    const direction = this.player.facing;
+    const direction = player.facing;
     const projectile = new PowerProjectile(
       this,
-      this.player.x + 34 * direction,
-      this.player.y - 12,
+      player.x + 34 * direction,
+      player.y - 12,
       direction,
     );
     this.projectiles.add(projectile);
     projectile.launch();
     this.playSfx("lethal-power");
-    gameSaveStore.save(this.save);
+    if (participant === "player-1") gameSaveStore.save(this.save);
     this.emitHud();
   }
 
@@ -1321,28 +1528,37 @@ export class PuzzleScene extends Phaser.Scene {
     gameSaveStore.save(this.save);
   }
 
-  private damagePlayer(amount: number): void {
-    if (this.time.now < this.damageCooldownUntil) return;
-    const previousHealth = this.save.player.health;
-    const defeated = this.player.takeDamage(amount);
-    if (this.save.player.health === previousHealth) return;
-    this.damageCooldownUntil = this.time.now + 900;
+  private damagePlayerSlot(player: Player, slot: 0 | 1, amount: number): void {
+    if (slot === 0) {
+      if (this.time.now < this.damageCooldownUntil) return;
+    } else if (this.time.now < this.damageCooldownUntil2) {
+      return;
+    }
+    const previousHealth = player.stats.health;
+    const defeated = player.takeDamage(amount);
+    if (player.stats.health === previousHealth) return;
+    if (slot === 0) {
+      this.damageCooldownUntil = this.time.now + 900;
+    } else {
+      this.damageCooldownUntil2 = this.time.now + 900;
+    }
     this.playSfx("player-hit");
-    gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount: previousHealth - this.save.player.health });
-    gameSaveStore.save(this.save);
+    // El destello rojo es un efecto local del cliente: en host/single solo el
+    // slot A es "mi" personaje. El guest lo dispara al detectar su propia baja.
+    if (slot === 0) {
+      gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount: previousHealth - player.stats.health });
+      gameSaveStore.save(this.save);
+    }
     this.emitHud();
     if (defeated) this.finishWithDefeat();
   }
 
-  private completeLevel(): void {
-    if (
-      this.levelFinished
-      || !this.activations.isComplete()
-      || this.seals.length > 0
-    ) return;
-    this.levelFinished = true;
-    const isNewCompletion = !this.save.completedLevels.includes(this.level.id);
-    if (isNewCompletion) this.save.completedLevels.push(this.level.id);
+  // Cierre de nivel completado, compartido entre host/single y el guest (que lo
+  // ejecuta al recibir end("won") del host). No emite SCREEN_CHANGED.
+  private finalizeCompletion(): void {
+    if (!this.save.completedLevels.includes(this.level.id)) {
+      this.save.completedLevels.push(this.level.id);
+    }
     if (this.level.nextLevelId && !this.save.unlockedLevels.includes(this.level.nextLevelId)) {
       this.save.unlockedLevels.push(this.level.nextLevelId);
     }
@@ -1369,6 +1585,20 @@ export class PuzzleScene extends Phaser.Scene {
         ? puzzleLevelDefinitions[this.level.nextLevelId]?.stageNumber
         : undefined,
     });
+  }
+
+  private completeLevel(): void {
+    if (
+      this.levelFinished
+      || !this.activations.isComplete()
+      || this.seals.length > 0
+    ) return;
+    this.levelFinished = true;
+    this.finalizeCompletion();
+    if (this.isHost) {
+      this.coopEnded = true;
+      coopSession.sendEnd("won");
+    }
     this.physics.pause();
     this.emitHud();
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "level-transition");
@@ -1379,7 +1609,12 @@ export class PuzzleScene extends Phaser.Scene {
     this.levelFinished = true;
     this.recordRunStatistics("defeat");
     this.player.markDefeated();
+    this.player2?.markDefeated();
     gameSaveStore.save(this.save);
+    if (this.isHost) {
+      this.coopEnded = true;
+      coopSession.sendEnd("lost");
+    }
     this.physics.pause();
     this.playSfx("game-over");
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
@@ -1427,6 +1662,10 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private emitHud(): void {
+    if (this.isGuest) {
+      this.emitGuestHud();
+      return;
+    }
     const charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
     this.lastHudSecond = Math.ceil(this.remainingTimeMs / 1000);
     this.lastSpinHudStep = Math.ceil(this.player.getSpinCooldownRemaining(this.time.now) / 100);
@@ -1485,6 +1724,9 @@ export class PuzzleScene extends Phaser.Scene {
       this.unbindContinue?.();
       this.unbindMenu?.();
       this.unbindCameraZoom?.();
+      for (const unbind of this.coopUnbinds) unbind();
+      this.coopUnbinds.length = 0;
+      if (this.coop) coopSession.leave();
       touchInputStore.reset();
       this.scene.stop("UIScene");
     });
@@ -1492,6 +1734,265 @@ export class PuzzleScene extends Phaser.Scene {
 
   private playSfx(cue: SfxCue): void {
     gameEvents.emit(EVENTS.SFX_REQUESTED, { cue });
+  }
+
+  // ======================= Capa de co-op online =======================
+
+  private bindCoopNet(): void {
+    if (this.isHost) {
+      this.coopUnbinds.push(
+        coopSession.onInput((message) => {
+          if (message.seq <= this.lastRemoteSeq) return;
+          this.lastRemoteSeq = message.seq;
+          this.remoteHeld = unpackInputState(message.bits);
+        }),
+      );
+    }
+    if (this.isGuest) {
+      this.coopUnbinds.push(
+        coopSession.onSnapshot((snapshot) => {
+          if (this.latestSnapshot && snapshot.seq <= this.latestSnapshot.seq) return;
+          this.prevSnapshot = this.latestSnapshot;
+          this.latestSnapshot = snapshot;
+          this.snapshotRecvAt = this.time.now;
+        }),
+      );
+    }
+    this.coopUnbinds.push(coopSession.onEnd((message) => this.handleRemoteEnd(message.reason)));
+    this.coopUnbinds.push(coopSession.onPeerLeft(() => this.endCoopToMenu()));
+  }
+
+  // Host: convierte el ultimo estado sostenido recibido del guest en un frame con
+  // flancos "justPressed" derivados de la transicion respecto del frame anterior.
+  private consumeRemoteInputFrame(): GameplayInputFrame {
+    const held = this.remoteHeld;
+    const prev = this.remotePrevHeld;
+    const frame: GameplayInputFrame = {
+      ...held,
+      jumpJustPressed: held.jump && !prev.jump,
+      meleeJustPressed: held.melee && !prev.melee,
+      spinJustPressed: held.spin && !prev.spin,
+      healJustPressed: held.heal && !prev.heal,
+      powerJustPressed: held.power && !prev.power,
+      pauseJustPressed: held.pause && !prev.pause,
+    };
+    this.remotePrevHeld = { ...held };
+    return frame;
+  }
+
+  private maybeSendSnapshot(time: number): void {
+    if (!this.player2) return;
+    if (time - this.lastSnapshotAt < 1000 / COOP_SNAPSHOT_RATE_HZ) return;
+    this.lastSnapshotAt = time;
+    coopSession.sendSnapshot(this.buildSnapshot());
+  }
+
+  private toNetPlayer(
+    player: Player,
+    charges: { healingCharges: number; powerCharges: number },
+  ): NetPlayerState {
+    const body = player.body as Phaser.Physics.Arcade.Body;
+    return {
+      x: Math.round(player.x),
+      y: Math.round(player.y),
+      vx: Math.round(body.velocity.x),
+      vy: Math.round(body.velocity.y),
+      facing: player.facing,
+      state: player.state,
+      health: player.stats.health,
+      maxHealth: player.stats.maxHealth,
+      healCharges: charges.healingCharges,
+      powerCharges: charges.powerCharges,
+      spinCdMs: Math.round(player.getSpinCooldownRemaining(this.time.now)),
+    };
+  }
+
+  private buildSnapshot(): WorldSnapshot {
+    this.snapshotSeq += 1;
+    const p1Charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
+    const enemies: Array<[number, number, number]> = [];
+    this.enemies.children.each((obj) => {
+      const enemy = obj as BaseEnemy;
+      const netId = enemy.getData("netId") as number | undefined;
+      if (typeof netId === "number" && enemy.active) {
+        enemies.push([netId, Math.round(enemy.x), Math.round(enemy.y)]);
+      }
+      return true;
+    });
+    const active = this.level.requiredActivations.filter((id) => this.activations.isActive(id));
+    return {
+      seq: this.snapshotSeq,
+      players: [
+        this.toNetPlayer(this.player, p1Charges),
+        this.toNetPlayer(this.player2!, this.p2Charges),
+      ],
+      crates: this.crates.map((crate) => [Math.round(crate.x), Math.round(crate.y)]),
+      enemies,
+      active,
+      gatesOpen: this.gates.map((gate) => gate.opened),
+      sealsAlive: this.level.seals.map((_, index) =>
+        this.seals.some((seal) => seal.index === index),
+      ),
+      goalOpen: this.goalGate.opened,
+      timeMs: Math.round(this.remainingTimeMs),
+    };
+  }
+
+  private updateGuest(time: number, delta: number): void {
+    void delta;
+    const input = this.inputSystem.readFrame();
+    if (input.pauseJustPressed) {
+      this.handlePausePressed();
+      return;
+    }
+    // Enviar mi input al host cuando cambia o al menos al ritmo minimo.
+    const bits = packInputState(input);
+    if (bits !== this.lastInputBits || time - this.lastInputSentAt >= 1000 / COOP_INPUT_RATE_HZ) {
+      this.lastInputBits = bits;
+      this.lastInputSentAt = time;
+      this.inputSeq += 1;
+      coopSession.sendInput({ seq: this.inputSeq, bits });
+    }
+
+    if (this.latestSnapshot) {
+      this.applySnapshot(this.latestSnapshot);
+      this.remainingTimeMs = this.latestSnapshot.timeMs;
+    }
+    if (this.midpoint && this.player2) {
+      this.cameraSystem.updateMidpoint(this.midpoint, this.player, this.player2);
+    }
+    this.updatePlateKeyInterface();
+    this.updateObjectiveText();
+    this.emitHud();
+  }
+
+  private applySnapshot(snap: WorldSnapshot): void {
+    const smoothing = 0.4;
+    this.applyNetPlayer(this.player, snap.players[0], smoothing);
+    if (this.player2) this.applyNetPlayer(this.player2, snap.players[1], smoothing);
+
+    // Deteccion de dano propio (slot B) para el destello local del guest.
+    const self = snap.players[1];
+    if (Number.isFinite(this.guestPrevSelfHealth) && self.health < this.guestPrevSelfHealth) {
+      gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount: this.guestPrevSelfHealth - self.health });
+      this.playSfx("player-hit");
+    }
+    this.guestPrevSelfHealth = self.health;
+
+    snap.crates.forEach(([x, y], index) => {
+      const crate = this.crates[index];
+      if (!crate) return;
+      crate.x = Phaser.Math.Linear(crate.x, x, smoothing);
+      crate.y = Phaser.Math.Linear(crate.y, y, smoothing);
+    });
+
+    const aliveEnemies = new Map<number, [number, number]>();
+    for (const [netId, x, y] of snap.enemies) aliveEnemies.set(netId, [x, y]);
+    this.enemies.children.each((obj) => {
+      const enemy = obj as BaseEnemy;
+      const netId = enemy.getData("netId") as number | undefined;
+      if (typeof netId !== "number") return true;
+      const target = aliveEnemies.get(netId);
+      if (!target) {
+        enemy.destroy();
+        return true;
+      }
+      enemy.x = Phaser.Math.Linear(enemy.x, target[0], smoothing);
+      enemy.y = Phaser.Math.Linear(enemy.y, target[1], smoothing);
+      return true;
+    });
+
+    // Estado de objetivos: activaciones, placas, puertas, sellos y portal.
+    this.activations.reset(this.level.requiredActivations);
+    for (const id of snap.active) this.activations.setParticipantActive(id, "net", true);
+    for (const plate of this.plates) {
+      const active = this.activations.isActive(plate.id);
+      plate.rect.setFillStyle(active ? 0x3f8d6e : this.visualPalette.lowerFace);
+      plate.visual.setTint(active ? 0x9ff0c5 : this.visualPalette.objectTint);
+    }
+    snap.gatesOpen.forEach((open, index) => {
+      if (open && this.gates[index]) this.openGate(this.gates[index]);
+    });
+    snap.sealsAlive.forEach((alive, index) => {
+      if (alive) return;
+      const seal = this.seals.find((candidate) => candidate.index === index);
+      if (seal) this.breakSeal(seal);
+    });
+    this.goal.setFillStyle(0x66dbc0, snap.goalOpen ? 0.34 : 0.12);
+    if (snap.goalOpen) this.openGoalGate();
+  }
+
+  private applyNetPlayer(player: Player, net: NetPlayerState, smoothing: number): void {
+    player.x = Phaser.Math.Linear(player.x, net.x, smoothing);
+    player.y = Phaser.Math.Linear(player.y, net.y, smoothing);
+    player.stats.health = net.health;
+    player.renderNetState(net.state, net.facing);
+  }
+
+  private emitGuestHud(): void {
+    const snap = this.latestSnapshot;
+    const self = snap?.players[1];
+    const hud: HudState = {
+      ...this.save.player,
+      health: self?.health ?? this.save.player.health,
+      maxHealth: self?.maxHealth ?? this.save.player.maxHealth,
+      healingCharges: self?.healCharges ?? 0,
+      powerCharges: self?.powerCharges ?? 0,
+      stageNumber: this.level.stageNumber,
+      timeRemaining: snap ? Math.ceil(snap.timeMs / 1000) : this.level.timeLimitSeconds,
+      timeLimit: this.level.timeLimitSeconds,
+      progressPercent: Phaser.Math.Clamp(((self?.x ?? 0) / this.level.worldWidth) * 100, 0, 100),
+      spinCooldownRemainingMs: self?.spinCdMs ?? 0,
+    };
+    gameEvents.emit(EVENTS.HUD_UPDATED, hud);
+  }
+
+  // El guest ejecuta el cierre de nivel al recibir end("won") del host, y su
+  // derrota al recibir end("lost"). "left" termina la sesion para ambos lados.
+  private handleRemoteEnd(reason: "won" | "lost" | "left"): void {
+    if (reason === "won") {
+      if (this.levelFinished) return;
+      this.levelFinished = true;
+      this.finalizeCompletion();
+      this.physics.pause();
+      this.emitHud();
+      gameEvents.emit(EVENTS.SCREEN_CHANGED, "level-transition");
+    } else if (reason === "lost") {
+      if (this.levelFinished) return;
+      this.levelFinished = true;
+      this.recordRunStatistics("defeat");
+      this.player.markDefeated();
+      this.player2?.markDefeated();
+      gameSaveStore.save(this.save);
+      this.physics.pause();
+      this.playSfx("game-over");
+      gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
+    } else {
+      this.endCoopToMenu();
+    }
+  }
+
+  // Pausa en co-op: salir de la sesion (no se puede pausar sin desincronizar).
+  private leaveCoop(): void {
+    if (this.coopEnded) return;
+    this.coopEnded = true;
+    coopSession.sendEnd("left");
+    if (!this.levelFinished) {
+      this.recordRunStatistics("abandoned");
+      gameSaveStore.save(this.save);
+    }
+    this.scene.start("MainMenuScene");
+  }
+
+  // El peer se fue o cerro: terminamos la sesion y volvemos al menu.
+  private endCoopToMenu(): void {
+    if (this.coopEnded) return;
+    this.coopEnded = true;
+    if (!this.levelFinished) {
+      this.recordRunStatistics("abandoned");
+      gameSaveStore.save(this.save);
+    }
+    this.scene.start("MainMenuScene");
   }
 
   private updateCrateSolidity(): void {
@@ -1505,18 +2006,24 @@ export class PuzzleScene extends Phaser.Scene {
     // Solucion: mientras el jugador esta encima de una caja, esa caja deja de
     // ser empujable y actua como solida, asi el jugador aterriza sobre ella.
     // Al costado sigue siendo empujable para poder resolver los puzzles.
-    const player = this.player.body as Phaser.Physics.Arcade.Body;
     for (const crate of this.crates) {
       const body = crate.body as Phaser.Physics.Arcade.Body;
-      body.pushable = !shouldCrateStaySolid(
-        {
-          left: player.left,
-          right: player.right,
-          centerY: player.center.y,
-          velocityY: player.velocity.y,
-        },
-        { left: body.left, right: body.right, top: body.top },
-      );
+      let staySolid = false;
+      this.forEachPlayer((player) => {
+        const playerBody = player.body as Phaser.Physics.Arcade.Body;
+        if (shouldCrateStaySolid(
+          {
+            left: playerBody.left,
+            right: playerBody.right,
+            centerY: playerBody.center.y,
+            velocityY: playerBody.velocity.y,
+          },
+          { left: body.left, right: body.right, top: body.top },
+        )) {
+          staySolid = true;
+        }
+      });
+      body.pushable = !staySolid;
     }
   }
 

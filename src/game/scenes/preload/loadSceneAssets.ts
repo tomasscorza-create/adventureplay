@@ -54,6 +54,8 @@ import ancientChamber5Url from "../../../assets/scenery/ancient-trials/chamber-5
 import ancientChamber6Url from "../../../assets/scenery/ancient-trials/chamber-6-treasure.webp";
 import ancientChamber7Url from "../../../assets/scenery/ancient-trials/chamber-7.webp";
 import ancientChamber8Url from "../../../assets/scenery/ancient-trials/chamber-8.webp";
+import ancientChamber9Url from "../../../assets/scenery/ancient-trials/chamber-9.webp";
+import ancientChamber10Url from "../../../assets/scenery/ancient-trials/chamber-10.webp";
 import ancientMechanismsSourceUrl from "../../../assets/scenery/ancient-trials/mechanisms-source.webp";
 import ancientSpikesUrl from "../../../assets/scenery/ancient-trials/spikes.webp";
 import floorStripUrl from "../../../assets/scenery/forest-floor-strip.png";
@@ -152,6 +154,8 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
       ancientChamber6Url,
       ancientChamber7Url,
       ancientChamber8Url,
+      ancientChamber9Url,
+      ancientChamber10Url,
     ].forEach((url, index) => {
       scene.load.image(`ancient-trials-chamber-${index + 1}`, url);
     });

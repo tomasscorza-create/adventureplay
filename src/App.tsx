@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { gameEvents } from "./game/events/EventBus";
+import type { CoopSessionInfo } from "./game/events/EventBus";
 import {
   canChooseInitialCharacter,
   getNextCharacterUnlockRequirement,
@@ -303,7 +304,7 @@ export function App() {
     gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
   };
 
-  const startGame = (levelId: string) => {
+  const startGame = (levelId: string, coop?: CoopSessionInfo) => {
     const currentSave = gameSaveStore.load();
     if (
       authStatus !== "signed-in" ||
@@ -315,7 +316,7 @@ export function App() {
 
     setSave(currentSave);
     setActiveLevelId(levelId);
-    gameEvents.emit(EVENTS.START_GAME, { levelId });
+    gameEvents.emit(EVENTS.START_GAME, { levelId, coop });
   };
   const selectCharacter = (characterId: CharacterId) => {
     const currentSave = gameSaveStore.load();

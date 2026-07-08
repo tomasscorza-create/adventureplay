@@ -8,10 +8,16 @@ import type { AchievementIconId, AchievementReward } from "../data/achievements"
 import type { LevelRewardDefinition } from "../data/progression";
 import type { SfxCue } from "../data/sfx";
 import type { HapticCue } from "../../shared/haptics/GameHaptics";
+import type { CoopRole } from "../systems/net/coopMessages";
 import { EVENTS } from "../../shared/constants/events";
 
+export interface CoopSessionInfo {
+  role: CoopRole;
+  code: string;
+}
+
 type GameEventMap = {
-  [EVENTS.START_GAME]: { levelId: string };
+  [EVENTS.START_GAME]: { levelId: string; coop?: CoopSessionInfo };
   [EVENTS.RESUME_GAME]: undefined;
   [EVENTS.PAUSE_FOR_POWER_SHOP]: undefined;
   [EVENTS.RESTART_GAME]: { levelId: string };
