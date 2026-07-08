@@ -9,9 +9,10 @@ interface ChallengeViewProps {
   save: SaveData;
   onBack: () => void;
   onStartLevel: (levelId: string) => void;
+  onOpenCoop: () => void;
 }
 
-export function ChallengeView({ save, onBack, onStartLevel }: ChallengeViewProps) {
+export function ChallengeView({ save, onBack, onStartLevel, onOpenCoop }: ChallengeViewProps) {
   const levels = puzzleLevelOrder.map((levelId) => puzzleLevelDefinitions[levelId]);
   const completedCount = levels.filter((level) => save.completedLevels.includes(level.id)).length;
 
@@ -66,15 +67,14 @@ export function ChallengeView({ save, onBack, onStartLevel }: ChallengeViewProps
           })}
         </div>
 
-        <article className="challenge-card challenge-card--coop" aria-disabled="true">
-          <span className="challenge-card__status">Proxima fase</span>
+        <article className="challenge-card challenge-card--coop">
+          <span className="challenge-card__status">Disponible</span>
           <h3>Cooperativo</h3>
           <strong>Activadores para varios heroes</strong>
           <p>
-            Las camaras declaran objetivos compartidos y compatibilidad cooperativa. La sesion
-            de red, sincronizacion y segundo jugador se incorporaran sobre ese contrato.
+            Las camaras declaran objetivos compartidos y compatibilidad cooperativa. Ingresa al lobby para crear una sala o unirte a tu compañero mediante un código.
           </p>
-          <button type="button" disabled>Multijugador en preparacion</button>
+          <button type="button" onClick={onOpenCoop}>Jugar en cooperativo</button>
         </article>
       </section>
     </div>

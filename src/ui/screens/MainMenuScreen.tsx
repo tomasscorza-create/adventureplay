@@ -16,6 +16,7 @@ import { AchievementIcon } from "../components/AchievementIcon";
 import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
 import { ChallengeView } from "./main-menu/ChallengeView";
+import { CoopLobby } from "./main-menu/CoopLobby";
 import { ExploreView } from "./main-menu/ExploreView";
 import { InventoryView } from "./main-menu/InventoryView";
 import { MenuHeading } from "./main-menu/MenuPrimitives";
@@ -30,7 +31,7 @@ import {
   getCarouselOffset,
 } from "./main-menu/menuUtils";
 
-type MenuView = "main" | "profile" | "modes" | "explore" | "challenge" | "characters" | "inventory" | "achievements" | "options" | "audio" | "commands" | "mobile-controls";
+type MenuView = "main" | "profile" | "modes" | "explore" | "challenge" | "characters" | "inventory" | "achievements" | "options" | "audio" | "commands" | "mobile-controls" | "coop";
 type ProfileSectionId = "edit" | "statistics";
 
 interface MainMenuScreenProps {
@@ -868,6 +869,15 @@ export function MainMenuScreen({
             <ChallengeView
               save={save}
               onBack={() => setView("modes")}
+              onStartLevel={onStartLevel}
+              onOpenCoop={() => runMenuAction(() => setView("coop"))}
+            />
+          )}
+
+          {view === "coop" && (
+            <CoopLobby
+              save={save}
+              onBack={() => setView("challenge")}
               onStartLevel={onStartLevel}
             />
           )}
