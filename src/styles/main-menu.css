@@ -4,6 +4,42 @@
     calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
 }
 
+/* Scoped Context Themes */
+.menu-stage--modes, .menu-stage--explore, .menu-stage--challenge {
+  --theme-accent: #7fe8b6;
+  --theme-accent-bright: #a1f5cc;
+  --theme-accent-rgb: 127, 232, 182;
+  --theme-glow: 0 0 22px rgba(127, 232, 182, 0.16);
+}
+
+.menu-stage--characters {
+  --theme-accent: #a78bfa;
+  --theme-accent-bright: #c4b5fd;
+  --theme-accent-rgb: 167, 139, 250;
+  --theme-glow: 0 0 22px rgba(167, 139, 250, 0.16);
+}
+
+.menu-stage--inventory {
+  --theme-accent: #e84a5f;
+  --theme-accent-bright: #ff6b80;
+  --theme-accent-rgb: 232, 74, 95;
+  --theme-glow: 0 0 22px rgba(232, 74, 95, 0.16);
+}
+
+.menu-stage--achievements {
+  --theme-accent: var(--aurum);
+  --theme-accent-bright: var(--aurum-bright);
+  --theme-accent-rgb: 232, 201, 135;
+  --theme-glow: 0 0 22px rgba(232, 201, 135, 0.16);
+}
+
+.menu-stage--profile, .menu-stage--options, .menu-stage--audio, .menu-stage--commands, .menu-stage--mobile-controls {
+  --theme-accent: #f3768c;
+  --theme-accent-bright: #fb9db1;
+  --theme-accent-rgb: 243, 118, 140;
+  --theme-glow: 0 0 22px rgba(243, 118, 140, 0.16);
+}
+
 .menu-stage--main .menu-shell {
   display: grid;
   height: 100%;
@@ -689,7 +725,7 @@
 
 .map-column {
   background:
-    radial-gradient(circle at 50% 0, rgba(127, 216, 242, 0.1), transparent 36%),
+    radial-gradient(circle at 50% 0, rgba(var(--theme-accent-rgb), 0.1), transparent 36%),
     linear-gradient(180deg, rgba(17, 30, 48, 0.94), rgba(9, 16, 28, 0.96));
 }
 
@@ -718,7 +754,7 @@
 .map-column__header strong,
 .menu-chamber--map .level-column__header strong {
   flex: 0 0 auto;
-  color: var(--cyan);
+  color: var(--theme-accent);
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -807,7 +843,7 @@
     brightness(1.14)
     saturate(1.18)
     drop-shadow(0 0 7px rgba(181, 236, 255, 0.72))
-    drop-shadow(0 0 13px rgba(127, 216, 242, 0.42));
+    drop-shadow(0 0 13px rgba(var(--theme-accent-rgb), 0.42));
   animation: explore-region-highlight-in 180ms ease-out both;
   pointer-events: none;
   user-select: none;
@@ -907,7 +943,7 @@
 }
 
 .menu-chamber--map .level-list:focus-visible {
-  outline: 2px solid var(--cyan);
+  outline: 2px solid var(--theme-accent);
   outline-offset: -4px;
 }
 
@@ -1036,7 +1072,7 @@
   .app-shell > .mobile-controls .touch-button--ability {
     width: 51px;
     height: 51px;
-    border-color: rgba(127, 216, 242, 0.52);
+    border-color: rgba(var(--theme-accent-rgb), 0.52);
     background:
       radial-gradient(circle at 38% 30%, rgba(181, 236, 255, 0.2), transparent 38%),
       rgba(8, 26, 40, 0.62);
@@ -1162,7 +1198,7 @@
     background:
       radial-gradient(circle, rgba(197, 233, 255, 0.16) 0 34%, transparent 35%),
       rgba(8, 22, 35, 0.64);
-    box-shadow: inset 0 0 24px rgba(4, 10, 16, 0.42), 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 14px rgba(127, 216, 242, 0.12);
+    box-shadow: inset 0 0 24px rgba(4, 10, 16, 0.42), 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 14px rgba(var(--theme-accent-rgb), 0.12);
     pointer-events: auto;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
@@ -1203,13 +1239,13 @@
 
   .mobile-joystick:not(.mobile-joystick--idle) {
     border-color: rgba(183, 231, 255, 0.96);
-    box-shadow: inset 0 0 26px rgba(83, 143, 183, 0.24), 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 20px rgba(127, 216, 242, 0.28);
+    box-shadow: inset 0 0 26px rgba(83, 143, 183, 0.24), 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 20px rgba(var(--theme-accent-rgb), 0.28);
   }
 
   .mobile-joystick--left .mobile-joystick__direction--left,
   .mobile-joystick--right .mobile-joystick__direction--right {
-    color: var(--cyan-bright);
-    filter: drop-shadow(0 0 5px rgba(127, 216, 242, 0.8));
+    color: var(--theme-accent-bright);
+    filter: drop-shadow(0 0 5px rgba(var(--theme-accent-rgb), 0.8));
     transform: scale(1.18);
   }
 
@@ -1272,7 +1308,7 @@
     height: 54px;
     z-index: 1;
     border-color: rgba(181, 236, 255, 0.88);
-    box-shadow: 0 0 14px rgba(127, 216, 242, 0.28);
+    box-shadow: 0 0 14px rgba(var(--theme-accent-rgb), 0.28);
   }
 
   .app-shell > .mobile-controls .mobile-action-wheel .mobile-action-wheel__melee {
@@ -1331,22 +1367,27 @@
 }
 
 .menu-stage--main .menu-relic:hover {
-  filter: brightness(1.14) saturate(1.08) drop-shadow(0 9px 7px rgba(0, 0, 0, 0.42)) !important;
+  filter: brightness(1.14) saturate(1.08) drop-shadow(0 9px 12px rgba(var(--theme-accent-rgb), 0.55)) !important;
   transform: translateY(-2px) scale(1.015) !important;
   border-color: transparent !important;
   box-shadow: none !important;
+  z-index: 2;
 }
 
 .menu-stage--main .menu-relic--start {
+  --theme-accent-rgb: 127, 232, 182;
   background-image: url(../assets/menu/menu-start.webp) !important;
 }
 .menu-stage--main .menu-relic--character {
+  --theme-accent-rgb: 167, 139, 250;
   background-image: url(../assets/menu/menu-character.webp) !important;
 }
 .menu-stage--main .menu-relic--inventory {
+  --theme-accent-rgb: 232, 74, 95;
   background-image: url(../assets/menu/menu-inventory.webp) !important;
 }
 .menu-stage--main .menu-relic--achievements {
+  --theme-accent-rgb: 232, 201, 135;
   background-image: url(../assets/menu/menu-achievements.webp) !important;
 }
 

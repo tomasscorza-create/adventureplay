@@ -68,13 +68,13 @@
 
 .game-intro__start:hover,
 .game-intro__start:focus-visible {
-  border-color: var(--cyan);
+  border-color: var(--theme-accent);
   background: rgba(14, 28, 44, 0.9);
   outline: none;
 }
 
 .game-intro__start-icon {
-  color: var(--cyan);
+  color: var(--theme-accent);
   font-size: 0.72rem;
 }
 
@@ -97,8 +97,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 12px rgba(127, 216, 242, 0.78);
+  background: var(--theme-accent);
+  box-shadow: 0 0 12px rgba(var(--theme-accent-rgb), 0.78);
   animation: game-intro-loading-pulse 900ms ease-in-out infinite alternate;
 }
 

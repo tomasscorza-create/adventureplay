@@ -48,11 +48,15 @@
   --line-soft: rgba(148, 178, 208, 0.14);
   --line: rgba(148, 178, 208, 0.26);
   --line-strong: rgba(196, 220, 240, 0.45);
-  --line-cyan: rgba(127, 216, 242, 0.48);
+  --line-cyan: rgba(var(--theme-accent-rgb), 0.48);
   /* Sombras y brillos */
   --shadow-soft: 0 8px 22px rgba(2, 6, 12, 0.35);
   --shadow-panel: 0 24px 70px rgba(2, 6, 12, 0.55);
-  --glow-cyan: 0 0 22px rgba(127, 216, 242, 0.16);
+  --theme-glow: 0 0 22px rgba(127, 216, 242, 0.16);
+  /* Tema Actual (Seccion Activa) */
+  --theme-accent: var(--cyan);
+  --theme-accent-bright: var(--cyan-bright);
+  --theme-accent-rgb: 127, 216, 242;
   /* Radios */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -88,7 +92,7 @@
 }
 
 .character-carousel:focus-visible {
-  box-shadow: inset 0 0 0 2px rgba(127, 216, 242, 0.7);
+  box-shadow: inset 0 0 0 2px rgba(var(--theme-accent-rgb), 0.7);
 }
 
 .character-carousel__stage {
@@ -141,7 +145,7 @@
   box-shadow:
     inset 0 0 0 1px rgba(181, 236, 255, 0.1),
     0 18px 32px rgba(2, 6, 12, 0.5),
-    var(--glow-cyan);
+    var(--theme-glow);
   transform: translate(-50%, -50%) translateZ(76px) scale(1.018);
 }
 
@@ -206,7 +210,7 @@
 .character-carousel__arrow:focus-visible {
   border-color: var(--line-cyan);
   color: #0b1d2c;
-  background: linear-gradient(180deg, var(--cyan-bright), #6fb6d4);
+  background: linear-gradient(180deg, var(--theme-accent-bright), #6fb6d4);
   transform: translateY(-50%) scale(1.06);
 }
 
@@ -242,17 +246,17 @@
 
 .character-carousel__dot--active {
   width: 28px;
-  background: var(--cyan);
-  box-shadow: 0 0 12px rgba(127, 216, 242, 0.5);
+  background: var(--theme-accent);
+  box-shadow: 0 0 12px rgba(var(--theme-accent-rgb), 0.5);
 }
 
 .menu-chamber--characters .character-card--selected {
-  border-color: var(--cyan);
+  border-color: var(--theme-accent);
   box-shadow:
     inset 0 0 0 1px rgba(181, 236, 255, 0.16),
     0 0 0 2px rgba(43, 143, 179, 0.42),
     0 18px 34px rgba(2, 6, 12, 0.5),
-    0 0 26px rgba(127, 216, 242, 0.2);
+    0 0 26px rgba(var(--theme-accent-rgb), 0.2);
 }
 
 .menu-chamber--characters .character-card--locked {
@@ -293,7 +297,7 @@
     inset 0 0 0 5px rgba(195, 211, 228, 0.06),
     0 0 0 7px rgba(5, 9, 15, 0.24),
     0 14px 30px rgba(0, 0, 0, 0.54),
-    0 0 24px rgba(127, 216, 242, 0.16);
+    0 0 24px rgba(var(--theme-accent-rgb), 0.16);
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
@@ -344,7 +348,7 @@
 }
 
 .character-card__select:focus-visible {
-  outline: 3px solid var(--cyan-bright);
+  outline: 3px solid var(--theme-accent-bright);
   outline-offset: -6px;
 }
 
@@ -373,7 +377,7 @@
 .character-card__view:hover,
 .character-card__view:focus-visible {
   color: #0b1d2c;
-  background: var(--cyan-bright);
+  background: var(--theme-accent-bright);
 }
 
 .character-card__portrait {
@@ -428,12 +432,12 @@
 .character-card:hover .character-card__identity strong,
 .character-card:focus-within .character-card__identity strong {
   color: transparent;
-  background: linear-gradient(100deg, var(--steel-bright) 15%, #ffffff 42%, var(--cyan) 54%, #ffffff 66%, var(--steel-bright) 85%);
+  background: linear-gradient(100deg, var(--steel-bright) 15%, #ffffff 42%, var(--theme-accent) 54%, #ffffff 66%, var(--steel-bright) 85%);
   background-size: 230% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   letter-spacing: 0.09em;
-  text-shadow: 0 0 16px rgba(127, 216, 242, 0.5);
+  text-shadow: 0 0 16px rgba(var(--theme-accent-rgb), 0.5);
   transform: translateY(-3px) scale(1.08);
   animation: character-name-shimmer 780ms ease-out both;
 }
@@ -453,7 +457,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 18% 22%, rgba(127, 216, 242, 0.1), transparent 36%),
+    radial-gradient(circle at 18% 22%, rgba(var(--theme-accent-rgb), 0.1), transparent 36%),
     linear-gradient(145deg, rgba(19, 32, 51, 0.98), rgba(9, 16, 28, 0.98));
   box-shadow: inset 0 1px 0 rgba(238, 244, 251, 0.08), 0 14px 32px rgba(2, 6, 12, 0.32);
 }
@@ -614,7 +618,7 @@
   display: grid;
   gap: 7px;
   padding: 10px;
-  border: 1px solid rgba(127, 216, 242, 0.28);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.28);
   border-radius: var(--radius-md);
   background: rgba(12, 36, 52, 0.6);
 }
@@ -980,11 +984,11 @@
   align-items: center;
   min-height: 108px;
   padding: 18px;
-  border: 1px solid rgba(127, 216, 242, 0.38);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.38);
   border-radius: var(--radius-lg);
   color: #eafaff;
   background:
-    radial-gradient(circle at 12% 24%, rgba(127, 216, 242, 0.16), transparent 30%),
+    radial-gradient(circle at 12% 24%, rgba(var(--theme-accent-rgb), 0.16), transparent 30%),
     linear-gradient(145deg, rgba(18, 56, 76, 0.88), rgba(8, 20, 36, 0.94));
   box-shadow: inset 0 1px rgba(238, 244, 251, 0.1), 0 10px 22px rgba(2, 6, 12, 0.26);
 }
@@ -1202,14 +1206,14 @@
   .touch-button--ability {
     width: 47px;
     height: 47px;
-    border-color: rgba(127, 216, 242, 0.52);
+    border-color: rgba(var(--theme-accent-rgb), 0.52);
     background:
       radial-gradient(circle at 38% 30%, rgba(181, 236, 255, 0.2), transparent 38%),
       rgba(8, 26, 40, 0.62);
     box-shadow:
       inset 0 0 0 2px rgba(4, 12, 22, 0.3),
       0 5px 13px rgba(0, 0, 0, 0.3),
-      0 0 10px rgba(127, 216, 242, 0.13);
+      0 0 10px rgba(var(--theme-accent-rgb), 0.13);
   }
 
   .touch-button--ability:first-child {
@@ -1307,7 +1311,7 @@ button {
   min-height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 16%, rgba(127, 216, 242, 0.13), transparent 30%),
+    radial-gradient(circle at 18% 16%, rgba(var(--theme-accent-rgb), 0.13), transparent 30%),
     radial-gradient(circle at 84% 12%, rgba(130, 153, 177, 0.14), transparent 28%),
     linear-gradient(180deg, var(--depth-3) 0%, var(--depth-1) 48%, var(--abyss) 100%);
   touch-action: none;
@@ -1347,7 +1351,7 @@ button {
   aspect-ratio: 16 / 9;
   max-height: 100vh;
   overflow: hidden;
-  border: 1px solid rgba(127, 216, 242, 0.24);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.24);
   background: #0b1220;
   box-shadow:
     0 0 0 2px rgba(20, 36, 58, 0.88),
@@ -1382,7 +1386,7 @@ button {
 }
 
 .stage-level-badge strong {
-  color: var(--cyan);
+  color: var(--theme-accent);
   font-family: var(--font-display);
   font-size: 0.88rem;
   font-weight: 700;
@@ -1454,7 +1458,7 @@ button {
   border-radius: var(--radius-lg);
   color: var(--ink-strong);
   background:
-    radial-gradient(circle at 12% 20%, rgba(127, 216, 242, 0.16), transparent 32%),
+    radial-gradient(circle at 12% 20%, rgba(var(--theme-accent-rgb), 0.16), transparent 32%),
     linear-gradient(125deg, rgba(10, 18, 31, 0.97), rgba(15, 26, 42, 0.98) 58%, rgba(38, 36, 26, 0.98));
   box-shadow:
     0 18px 55px rgba(0, 0, 0, 0.5),
@@ -1469,7 +1473,7 @@ button {
   position: absolute;
   inset: 5px;
   z-index: -1;
-  border: 1px solid rgba(127, 216, 242, 0.16);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.16);
   border-radius: var(--radius-md);
   content: "";
 }
@@ -1526,7 +1530,7 @@ button {
 .achievement-unlock__eyebrow {
   display: block;
   margin-bottom: 6px;
-  color: var(--cyan);
+  color: var(--theme-accent);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -1582,7 +1586,7 @@ button {
 }
 
 .level-up-toast .achievement-unlock__timer {
-  background: linear-gradient(90deg, var(--heal), var(--cyan-bright));
+  background: linear-gradient(90deg, var(--heal), var(--theme-accent-bright));
 }
 
 .achievement-unlock__shine {
@@ -1600,7 +1604,7 @@ button {
   bottom: 0;
   left: 0;
   height: 4px;
-  background: linear-gradient(90deg, var(--cyan), var(--aurum) 58%, var(--aurum-bright));
+  background: linear-gradient(90deg, var(--theme-accent), var(--aurum) 58%, var(--aurum-bright));
   box-shadow: 0 0 12px rgba(232, 201, 135, 0.66);
   transform-origin: left;
   animation: achievement-timer 3500ms 650ms linear both;
@@ -1823,7 +1827,7 @@ button {
   color: #0b1d2c;
   font-size: 0.78rem;
   font-weight: 800;
-  background: linear-gradient(180deg, var(--cyan-bright), #6fb6d4);
+  background: linear-gradient(180deg, var(--theme-accent-bright), #6fb6d4);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
   cursor: pointer;
 }
@@ -1898,7 +1902,7 @@ button {
   border-radius: var(--radius-sm);
   color: #0b1d2c;
   font-weight: 700;
-  background: linear-gradient(180deg, var(--cyan-bright), #6fb6d4);
+  background: linear-gradient(180deg, var(--theme-accent-bright), #6fb6d4);
   cursor: pointer;
 }
 

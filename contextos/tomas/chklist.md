@@ -4,7 +4,7 @@ Lista de 13 objetivos pendientes ordenados por nivel de complejidad técnica par
 
 ## 🟢 Fáciles (Implementación Rápida / Bajo Riesgo)
 - [ ] **Progresión Guiada y Bloqueo de Mapas:** Bloquear visual y funcionalmente mapas en Modo Explorar hasta cumplir requisitos, guiando la ruta del jugador.
-- [ ] **Dashboard Administrador Independiente:** Proyecto frontend paralelo conectado a Supabase para métricas, análisis de patrones y gestión de bans/cuentas.
+- [ ] **Dashboard Administrador Independiente:** Proyecto frontend paralelo conectado a Supabase para métricas, análisis de patrones y gestión de bans/cuentas. (en construccion ya hay primer implementacion funcional y conectada, revisar)
 - [ ] **Retención Mensual y Recompensas:** Entregas diarias/semanales/mensuales basadas en tiempo de servidor para fidelizar a la comunidad.
 - [ ] **Pulido Visual y de Colores:** Ajustes finos de CSS, gradientes y diseño (requerirá confirmación visual tuya).
 
