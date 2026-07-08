@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   puzzleLevelDefinitions,
   puzzleLevelOrder,
 } from "../../../game/data/puzzleLevels";
-import type { SaveData } from "../../../shared/types/game";
+import { levelDefinitions } from "../../../game/data/levels";
+import type { LevelTheme, SaveData } from "../../../shared/types/game";
 import type { CoopSessionInfo } from "../../../game/events/EventBus";
 import { coopSession, type CoopConnectionState } from "../../../game/systems/net/CoopSession";
 import { isSupabaseConfigured } from "../../../shared/supabase/client";
@@ -13,15 +14,47 @@ import {
 } from "../../../game/systems/net/coopMessages";
 import { MenuHeading } from "./MenuPrimitives";
 
+export type CoopLobbyMode = "challenge" | "explore";
+
 interface CoopLobbyProps {
   save: SaveData;
+  mode: CoopLobbyMode;
   onBack: () => void;
   onStartLevel: (levelId: string, coop: CoopSessionInfo) => void;
 }
 
+interface SelectableLevel {
+  id: string;
+  label: string;
+}
+
 type LobbyStep = "choose" | "host" | "join";
 
-export function CoopLobby({ save, onBack, onStartLevel }: CoopLobbyProps) {
+const EXPLORE_THEME_RANK: Record<string, number> = {
+  forest: 0,
+  "enchanted-forest": 1,
+  "active-volcano": 2,
+};
+
+function getSelectableLevels(mode: CoopLobbyMode, unlockedLevels: string[]): SelectableLevel[] {
+  const unlocked = new Set(unlockedLevels);
+  if (mode === "challenge") {
+    return puzzleLevelOrder
+      .map((id) => puzzleLevelDefinitions[id])
+      .filter((level) => unlocked.has(level.id))
+      .map((level) => ({ id: level.id, label: `${level.stageNumber}. ${level.name}` }));
+  }
+  return Object.values(levelDefinitions)
+    .filter((level) => unlocked.has(level.id))
+    .sort((a, b) => {
+      const rankDiff = (EXPLORE_THEME_RANK[a.theme as LevelTheme] ?? 0)
+        - (EXPLORE_THEME_RANK[b.theme as LevelTheme] ?? 0);
+      return rankDiff !== 0 ? rankDiff : a.stageNumber - b.stageNumber;
+    })
+    .map((level) => ({ id: level.id, label: level.name }));
+}
+
+export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) {
   const [step, setStep] = useState<LobbyStep>("choose");
   const [code, setCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -30,11 +63,12 @@ export function CoopLobby({ save, onBack, onStartLevel }: CoopLobbyProps) {
   const [busy, setBusy] = useState(false);
   const startedRef = useRef(false);
 
-  const unlockedChambers = puzzleLevelOrder
-    .map((id) => puzzleLevelDefinitions[id])
-    .filter((level) => save.unlockedLevels.includes(level.id));
+  const selectableLevels = useMemo(
+    () => getSelectableLevels(mode, save.unlockedLevels),
+    [mode, save.unlockedLevels],
+  );
   const [selectedLevelId, setSelectedLevelId] = useState(
-    unlockedChambers[0]?.id ?? "trialChamber1",
+    selectableLevels[0]?.id ?? (mode === "challenge" ? "trialChamber1" : "meadowOutpost"),
   );
 
   // Mantener el estado de conexion sincronizado con la sesion singleton.
@@ -157,21 +191,21 @@ export function CoopLobby({ save, onBack, onStartLevel }: CoopLobbyProps) {
             <p className="coop-lobby__label">Codigo de la sala</p>
             <p className="coop-lobby__code" aria-live="polite">{code || "…"}</p>
             <p className="coop-lobby__status">
-              {peerReady ? "Companero conectado. Elige la camara y comienza." : "Esperando a que se una otro jugador…"}
+              {peerReady ? "Companero conectado. Elige el nivel y comienza." : "Esperando a que se una otro jugador…"}
             </p>
 
             {peerReady && (
               <>
                 <div className="coop-lobby__levels">
-                  {unlockedChambers.map((level) => (
+                  {selectableLevels.map((level, index) => (
                     <button
                       key={level.id}
                       type="button"
                       className={`coop-lobby__level${selectedLevelId === level.id ? " is-selected" : ""}`}
                       onClick={() => setSelectedLevelId(level.id)}
                     >
-                      <span>{level.stageNumber}</span>
-                      {level.name}
+                      <span>{index + 1}</span>
+                      {level.label}
                     </button>
                   ))}
                 </div>
@@ -189,7 +223,7 @@ export function CoopLobby({ save, onBack, onStartLevel }: CoopLobbyProps) {
             <p className="coop-lobby__status" aria-live="polite">
               {connection === "connecting" && "Conectando…"}
               {connection === "waiting" && "Conectado. Esperando al anfitrion…"}
-              {peerReady && "Listo. Esperando que el anfitrion inicie la camara…"}
+              {peerReady && "Listo. Esperando que el anfitrion inicie el nivel…"}
               {connection === "error" && "No se pudo conectar. Revisa el codigo."}
             </p>
           </div>

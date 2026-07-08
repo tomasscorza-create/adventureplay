@@ -1748,7 +1748,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
     if (this.isGuest) {
       this.coopUnbinds.push(
-        coopSession.onSnapshot((snapshot) => {
+        coopSession.onSnapshot<WorldSnapshot>((snapshot) => {
           if (this.latestSnapshot && snapshot.seq <= this.latestSnapshot.seq) return;
           this.prevSnapshot = this.latestSnapshot;
           this.latestSnapshot = snapshot;

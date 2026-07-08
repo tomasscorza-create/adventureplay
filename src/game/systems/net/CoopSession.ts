@@ -10,7 +10,6 @@ import {
   type CoopRole,
   type CoopStartMessage,
   type GuestInputMessage,
-  type WorldSnapshot,
 } from "./coopMessages";
 
 export type CoopConnectionState =
@@ -27,7 +26,9 @@ interface CoopCallbacks {
   peerJoined: Set<(hello: CoopHello) => void>;
   peerLeft: Set<() => void>;
   input: Set<(message: GuestInputMessage) => void>;
-  snapshot: Set<(snapshot: WorldSnapshot) => void>;
+  // Payload generico: cada escena serializa/castea su propio tipo de snapshot
+  // (Desafio usa WorldSnapshot, Explorar usa LevelSnapshot).
+  snapshot: Set<(snapshot: unknown) => void>;
   start: Set<(message: CoopStartMessage) => void>;
   end: Set<(message: CoopEndMessage) => void>;
 }
@@ -119,7 +120,7 @@ class CoopSession {
       this.callbacks.input.forEach((cb) => cb(payload as GuestInputMessage));
     });
     channel.on("broadcast", { event: COOP_EVENTS.snapshot }, ({ payload }) => {
-      this.callbacks.snapshot.forEach((cb) => cb(payload as WorldSnapshot));
+      this.callbacks.snapshot.forEach((cb) => cb(payload));
     });
     channel.on("broadcast", { event: COOP_EVENTS.start }, ({ payload }) => {
       this._connectionState = "in-game";
@@ -181,7 +182,7 @@ class CoopSession {
     this.broadcast(COOP_EVENTS.input, message);
   }
 
-  sendSnapshot(snapshot: WorldSnapshot): void {
+  sendSnapshot(snapshot: unknown): void {
     this.broadcast(COOP_EVENTS.snapshot, snapshot);
   }
 
@@ -230,8 +231,12 @@ class CoopSession {
   onInput(cb: (message: GuestInputMessage) => void): () => void {
     return this.subscribe("input", cb);
   }
-  onSnapshot(cb: (snapshot: WorldSnapshot) => void): () => void {
-    return this.subscribe("snapshot", cb);
+  onSnapshot<T>(cb: (snapshot: T) => void): () => void {
+    const wrapped = cb as (snapshot: unknown) => void;
+    this.callbacks.snapshot.add(wrapped);
+    return () => {
+      this.callbacks.snapshot.delete(wrapped);
+    };
   }
   onStart(cb: (message: CoopStartMessage) => void): () => void {
     return this.subscribe("start", cb);

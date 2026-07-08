@@ -98,6 +98,7 @@ interface ExploreViewProps {
   onPreviewRegionChange: (regionId?: string) => void;
   onBack: () => void;
   onStartLevel: (levelId: string) => void;
+  onOpenCoop: () => void;
 }
 
 export function ExploreView({
@@ -108,6 +109,7 @@ export function ExploreView({
   onPreviewRegionChange,
   onBack,
   onStartLevel,
+  onOpenCoop,
 }: ExploreViewProps) {
   const selectedRegion = regions.find((region) => region.id === activeRegionId) ?? regions[0];
   const activeRegion = regions.find((region) => region.id === previewRegionId) ?? selectedRegion;
@@ -128,6 +130,11 @@ export function ExploreView({
   return (
     <div className="menu-chamber menu-chamber--map">
       <MenuHeading title="Explorar" variant="explore" onBack={onBack} backLabel="Modos" />
+      <div className="explore-coop-access">
+        <button type="button" className="explore-coop-access__button" onClick={onOpenCoop}>
+          Jugar en cooperativo
+        </button>
+      </div>
       <div className="explore-layout">
         <section className="map-column" aria-label="Regiones del continente">
           <div className="map-column__header"><span>Mapa de regiones</span><strong>{regions.length} regiones</strong></div>

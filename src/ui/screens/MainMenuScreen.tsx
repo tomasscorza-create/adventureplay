@@ -16,7 +16,7 @@ import { AchievementIcon } from "../components/AchievementIcon";
 import { AchievementsView } from "./main-menu/AchievementsView";
 import { CharacterDetail } from "./main-menu/CharacterDetail";
 import { ChallengeView } from "./main-menu/ChallengeView";
-import { CoopLobby } from "./main-menu/CoopLobby";
+import { CoopLobby, type CoopLobbyMode } from "./main-menu/CoopLobby";
 import { ExploreView } from "./main-menu/ExploreView";
 import { InventoryView } from "./main-menu/InventoryView";
 import { MenuHeading } from "./main-menu/MenuPrimitives";
@@ -120,6 +120,7 @@ export function MainMenuScreen({
   onPurchaseCharacterPower,
 }: MainMenuScreenProps) {
   const [view, setView] = useState<MenuView>(() => save.primaryCharacterId ? "main" : "characters");
+  const [coopMode, setCoopMode] = useState<CoopLobbyMode>("challenge");
   const [inspectedCharacterId, setInspectedCharacterId] = useState<CharacterId>();
   const [activeProfileSectionId, setActiveProfileSectionId] = useState<ProfileSectionId>("edit");
   const [activeRegionId, setActiveRegionId] = useState("verdant-frontier");
@@ -862,6 +863,7 @@ export function MainMenuScreen({
               onPreviewRegionChange={setPreviewRegionId}
               onBack={() => setView("modes")}
               onStartLevel={onStartLevel}
+              onOpenCoop={() => runMenuAction(() => { setCoopMode("explore"); setView("coop"); })}
             />
           )}
 
@@ -870,14 +872,15 @@ export function MainMenuScreen({
               save={save}
               onBack={() => setView("modes")}
               onStartLevel={onStartLevel}
-              onOpenCoop={() => runMenuAction(() => setView("coop"))}
+              onOpenCoop={() => runMenuAction(() => { setCoopMode("challenge"); setView("coop"); })}
             />
           )}
 
           {view === "coop" && (
             <CoopLobby
               save={save}
-              onBack={() => setView("challenge")}
+              mode={coopMode}
+              onBack={() => setView(coopMode === "explore" ? "explore" : "challenge")}
               onStartLevel={onStartLevel}
             />
           )}

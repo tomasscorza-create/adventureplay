@@ -1,9 +1,13 @@
 # 🌐 Estado Multijugador (Co-op)
 
+> 📖 **Guía completa y actualizada:** `contextos/multijugador/` (arquitectura de red,
+> integración en escenas, decisiones, limitaciones e historial). Este archivo es solo un resumen.
+
 > 🏆 **Hito Logrado (08 Julio 2026)**: Primera conexión multijugador exitosa funcionando de manera remota a través del despliegue (Deploy). El modo cooperativo ya es una realidad tangible.
 
-El juego cuenta con un modo cooperativo funcional, enfocado en el **Modo Desafío (Puzzles)**.  
-Actualmente, la infraestructura de red, la sincronización de Phaser y la interfaz de Lobby ya están implementadas.
+El juego cuenta con un modo cooperativo funcional en **ambos modos jugables**: **Desafío**
+(`PuzzleScene`) y **Explorar** (`LevelScene`). La infraestructura de red, la sincronización de
+Phaser y la interfaz de Lobby están implementadas.
 
 ## 1. Arquitectura de Red y Lobby
 - **Sistemas Independientes:** Toda la lógica de red vive fuera de Phaser, en `src/game/systems/net/`.
@@ -16,7 +20,7 @@ Actualmente, la infraestructura de red, la sincronización de Phaser y la interf
 ## 2. Sincronización en Phaser (`PuzzleScene.ts`)
 - **Player 2 Instanciado:** La escena instancia a dos jugadores. El jugador principal local usa los stats de tu partida guardada. El segundo jugador (el compañero) recibe su posición desde la red y sus animaciones son interpoladas (`applyNetPlayer`).
 - **Validación Conjunta:** Las cajas (`crates`) validan colisiones para ambos jugadores simultáneamente usando `this.forEachPlayer()`, evitando bugs donde un jugador atraviesa las cajas.
-- **Cámara Compartida (`CameraSystem.ts`):** En lugar de seguir al jugador local, la cámara sigue dinámicamente un punto medio (`midpoint`) entre el Jugador 1 y el Jugador 2, adaptando su vista para mantener a ambos en pantalla.
+- **Cámara Independiente por dispositivo (`CameraSystem.ts`):** cada pantalla sigue a su propio personaje local (guest → `player2`, host/single → `player`), para que ambos exploren libremente. (Antes seguía un punto medio compartido; ese enfoque `followMidpoint`/`midpoint` fue removido.)
 - **Gestión de Sesión:** Si el compañero gana, pierde o abandona la partida, la red captura los eventos `handleRemoteEnd` y `leaveCoop` y los refleja en tiempo real en la sesión local.
 
 ## 3. Resolución Concurrente de Puzzles
