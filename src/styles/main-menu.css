@@ -690,12 +690,52 @@
 
 /* Explorador: mapa completo sin scroll y niveles con scroll independiente. */
 .menu-chamber--map {
+  position: relative;
   display: grid;
   width: min(1080px, calc(100vw - 44px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   height: min(700px, calc(100vh - 44px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.explore-coop-access {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.explore-coop-access__button {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--aurum) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--aurum) 40%, transparent);
+  color: var(--aurum-bright);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.explore-coop-access__button:hover,
+.explore-coop-access__button:focus-visible {
+  background: color-mix(in srgb, var(--aurum) 25%, transparent);
+  border-color: color-mix(in srgb, var(--aurum) 80%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 12px color-mix(in srgb, var(--aurum) 20%, transparent);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.explore-coop-access__button:active {
+  transform: translateY(1px);
+  background: color-mix(in srgb, var(--aurum) 15%, transparent);
 }
 
 .menu-chamber--map .menu-heading {
