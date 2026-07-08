@@ -1,19 +1,20 @@
 # 🧩 Modos de Juego: Modo Desafío (Challenge)
 
 Es el modo orientado a puzzles. Controlado por `PuzzleScene.ts` (54KB).
-Total de 7 niveles encadenados ("cámaras de ingenio").
+Total de **14 niveles encadenados** ("cámaras de ingenio").
 
 ## 1. Diferencias Clave con Explorar
 - **Sin Auto-Scroll**: Tienes libertad de moverte por toda la cámara.
 - **Mecánicas Interactivas Ambientales**: Cajas de peso, placas de presión en suelo, palancas golpeables y sellos mágicos destructibles.
 - **Enemigos Opcionales / Obstáculo**: A partir del reciente update, hay M0 y M1. Pero el objetivo principal NO es derrotar enemigos, sino abrir la `Goal Gate`.
-- **Tema Visual Dinámico**: `PuzzleVisualPalette` calcula los colores de las plataformas basados en un color complementario extraído del fondo de la cámara (HSL).
+- **Tema Visual Dinámico y Parallax**: `PuzzleVisualPalette` calcula los colores de las plataformas basados en el color extraído del fondo de la cámara (HSL). Además, ciertos niveles (ej. 12, 13 y 14) utilizan imágenes WebP optimizadas con un efecto de `Parallax Scrolling` real sincronizado con la cámara.
 
 ## 2. Activadores (PuzzleActivationSystem)
 Es un sistema diseñado para *posible modo multijugador futuro*.
 - Para completar el nivel, TODOS los requerimientos de la cámara deben estar en estado `active`.
 - Una palanca funciona como un *Toggle* o *Hold*.
 - Una Placa de Presión requiere masa encima (jugador, enemigo, caja).
+- **Multijugador:** El sistema está completamente conectado a la red. Permite que múltiples héroes (Host y Guest) validen y activen palancas y placas al unísono de forma determinista.
 
 ## 3. Física Avanzada
 - Las **cajas son apilables** (`crates vs crates` collider activado).

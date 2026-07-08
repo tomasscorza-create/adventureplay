@@ -20,7 +20,7 @@ Cada archivo está diseñado para transmitir máxima información precisa en mí
 | Entender el modo Desafío | `modos-de-juego/modo-desafio.md` |
 | Trabajar con el guardado o Supabase | `infraestructura/guardado-y-supabase.md` |
 | Trabajar con UI React, pantallas, CSS | `infraestructura/ui-react-y-estilos.md` |
-| Conocer el estado del cooperativo/red | `arquitectura/preparacion-multijugador.md` |
+| Conocer el estado del cooperativo/red | `arquitectura/estado-multijugador.md` |
 | Reglas de colaboración entre agentes | `agentes-de-ia/protocolo-de-trabajo.md` |
 
 ## Convenciones de estos documentos
