@@ -141,6 +141,30 @@ export const itemDefinitions: Record<string, ItemDefinition> = {
     inventoryCategory: "plansKeys",
     description: "Nucleo incandescente que late en el centro de las camaras antiguas.",
   },
+  twinWellsSigil: {
+    id: "twinWellsSigil",
+    name: "Sello de los pozos gemelos",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "plansKeys",
+    description: "Emblema grabado con dos espejos que resuena al presionar dos placas a la vez.",
+  },
+  sniperGorgeTalisman: {
+    id: "sniperGorgeTalisman",
+    name: "Talisman del desfiladero",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Lente de puntería tallada por los vigías del desfiladero de los francotiradores.",
+  },
+  crucibleCitadelCrown: {
+    id: "crucibleCitadelCrown",
+    name: "Corona de la ciudadela",
+    type: "resource",
+    value: 1,
+    inventoryCategory: "toolsWeapons",
+    description: "Corona coronada de brasas que solo obtienen quienes atraviesan la ciudadela del crisol.",
+  },
 };
 
 export const randomInventoryRewardItemIds = Object.values(itemDefinitions)

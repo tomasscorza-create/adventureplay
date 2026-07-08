@@ -275,6 +275,18 @@ describe("normalizeSaveData", () => {
       ...createDefaultSave(),
       completedLevels: [...firstEight, "trialChamber9", "trialChamber10"],
     }).unlockedLevels).toContain("trialChamber11");
+    expect(normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: [...firstEight, "trialChamber9", "trialChamber10", "trialChamber11"],
+    }).unlockedLevels).toContain("trialChamber12");
+    expect(normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: [...firstEight, "trialChamber9", "trialChamber10", "trialChamber11", "trialChamber12"],
+    }).unlockedLevels).toContain("trialChamber13");
+    expect(normalizeSaveData({
+      ...createDefaultSave(),
+      completedLevels: [...firstEight, "trialChamber9", "trialChamber10", "trialChamber11", "trialChamber12", "trialChamber13"],
+    }).unlockedLevels).toContain("trialChamber14");
   });
 
   it("unlocks the expanded volcanic sequence from existing completed progress", () => {

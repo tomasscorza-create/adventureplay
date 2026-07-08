@@ -59,6 +59,9 @@ export const puzzleLevelOrder = [
   "trialChamber9",
   "trialChamber10",
   "trialChamber11",
+  "trialChamber12",
+  "trialChamber13",
+  "trialChamber14",
 ] as const;
 
 export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
@@ -931,6 +934,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     id: "trialChamber11",
     name: "El corazon del crisol",
     stageNumber: 11,
+    nextLevelId: "trialChamber12",
     difficultyRating: 760,
     worldWidth: 6900,
     timeLimitSeconds: 280,
@@ -1050,6 +1054,384 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     plate: { x: 2010, y: 625, width: 76 },
     lever: { x: 990, y: 282 },
     gate: { x: 2300, y: 0, width: 54, height: 640 },
+  },
+  trialChamber12: {
+    // Identidad: POZOS GEMELOS. Dos fosos contiguos, cada uno con su caja y su
+    // placa, alimentan una unica puerta DOBLE que exige ambas placas presionadas
+    // a la vez: por primera vez hay que resolver dos fosos en paralelo. Cierra
+    // con un relevo a distancia y un santuario de sellos escalonado.
+    id: "trialChamber12",
+    name: "Los pozos gemelos",
+    stageNumber: 12,
+    nextLevelId: "trialChamber13",
+    difficultyRating: 930,
+    worldWidth: 7200,
+    timeLimitSeconds: 300,
+    experienceReward: 1650,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 7200, height: 80 },
+      { x: 650, y: 510, width: 130, height: 24 }, // Torre inicial, paso 1
+      { x: 850, y: 410, width: 130, height: 24 }, // Torre inicial, paso 2
+      { x: 1050, y: 320, width: 170, height: 24 }, // Torre inicial, cima (palanca)
+      { x: 1750, y: 490, width: 40, height: 150 }, // Foso 1, muro izquierdo
+      { x: 2050, y: 490, width: 40, height: 150 }, // Foso 1, muro derecho
+      { x: 2450, y: 490, width: 40, height: 150 }, // Foso 2, muro izquierdo
+      { x: 2750, y: 490, width: 40, height: 150 }, // Foso 2, muro derecho
+      { x: 3250, y: 520, width: 130, height: 24 }, // Percha de tiro, escalon
+      { x: 3450, y: 410, width: 170, height: 24 }, // Percha de tiro
+      { x: 3950, y: 410, width: 120, height: 24 }, // Pilar de la palanca a distancia
+      { x: 4500, y: 490, width: 160, height: 24 }, // Santuario, cornisa baja (sello)
+      { x: 4850, y: 510, width: 130, height: 24 }, // Santuario, escalon
+      { x: 5050, y: 400, width: 160, height: 24 }, // Santuario, cornisa media (sello)
+      { x: 5550, y: 400, width: 110, height: 24 }, // Pilar francotirador (sello aislado)
+      { x: 5950, y: 490, width: 160, height: 24 }, // Santuario, cornisa baja 2 (sello)
+      { x: 6300, y: 510, width: 130, height: 24 }, // Santuario, escalon 2
+      { x: 6500, y: 410, width: 170, height: 24 }, // Santuario, cornisa media 2 (sello)
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 300, y: 580, value: 6 },
+      { itemId: "bronzeCoin", x: 1120, y: 270, value: 7 },
+      { itemId: "bronzeCoin", x: 1900, y: 560, value: 7 },
+      { itemId: "bronzeCoin", x: 2620, y: 560, value: 7 },
+      { itemId: "bronzeCoin", x: 3520, y: 360, value: 7 },
+      { itemId: "bronzeCoin", x: 5120, y: 250, value: 8 },
+      { itemId: "bronzeCoin", x: 5600, y: 250, value: 8 },
+      { itemId: "bronzeCoin", x: 6570, y: 260, value: 8 },
+    ],
+    crates: [
+      { x: 1880, y: 560 }, // Foso 1: nace junto a su placa
+      { x: 2580, y: 560 }, // Foso 2: nace junto a su placa
+    ],
+    plates: [
+      {
+        id: "plate-1",
+        x: 1980,
+        y: 625,
+        width: 78,
+        hint: "Pozo izquierdo: salta dentro y empuja la caja sobre la placa",
+      },
+      {
+        id: "plate-2",
+        x: 2680,
+        y: 625,
+        width: 78,
+        hint: "Pozo derecho: la puerta doble exige ambas placas a la vez",
+      },
+    ],
+    levers: [
+      {
+        id: "lever-1",
+        x: 1120,
+        y: 272,
+        hint: "Escala la torre inicial y golpea su palanca",
+      },
+      {
+        id: "lever-dist",
+        x: 4010,
+        y: 410,
+        rangedOnly: true,
+        hint: "Sube a la percha y dispara a la palanca del pilar lejano",
+      },
+    ],
+    gates: [
+      { id: "gate-1", x: 1400, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      // Puerta doble: exige los dos pozos resueltos simultaneamente
+      { id: "gate-2", x: 3000, y: 0, width: 54, height: 640, requiredActivations: ["plate-1", "plate-2"] },
+      { id: "gate-3", x: 4200, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+    ],
+    seals: [
+      { x: 4570, y: 350, width: 52, height: 140 }, // Cornisa baja del santuario
+      { x: 5120, y: 260, width: 52, height: 140 }, // Cornisa media del santuario
+      { x: 5600, y: 260, width: 52, height: 140 }, // Pilar francotirador (solo a tiro)
+      { x: 6020, y: 350, width: 52, height: 140 }, // Cornisa baja 2
+      { x: 6570, y: 270, width: 52, height: 140 }, // Cornisa media 2
+      { x: 6800, y: 500, width: 52, height: 140 }, // Guardian terrestre ante el portal
+    ],
+    hazards: [
+      { x: 1450, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 3300, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 4400, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 5300, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 6650, y: 610, width: 90, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber12:mirror",
+      itemId: "twinWellsSigil",
+      x: 3150,
+      y: 575,
+    },
+    goal: { x: 7000, y: 560 },
+    requiredActivations: ["lever-1", "plate-1", "plate-2", "lever-dist"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-8",
+      shadeAlpha: 0.45,
+      accentColor: 0xffe8b0,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 1880, y: 560 },
+    plate: { x: 1980, y: 625, width: 78 },
+    lever: { x: 1120, y: 272 },
+    gate: { x: 1400, y: 0, width: 50, height: 640 },
+  },
+  trialChamber13: {
+    // Identidad: DESFILADERO DEL FRANCOTIRADOR. Una galeria de tiro: perchas
+    // alcanzables desde las que se rompen sellos plantados en pilares aislados,
+    // intercaladas con una torre de palanca, un foso y un relevo a distancia.
+    // Premia la punteria mas que la escalada.
+    id: "trialChamber13",
+    name: "El desfiladero del francotirador",
+    stageNumber: 13,
+    nextLevelId: "trialChamber14",
+    difficultyRating: 1140,
+    worldWidth: 7700,
+    timeLimitSeconds: 320,
+    experienceReward: 2000,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 7700, height: 80 },
+      { x: 650, y: 500, width: 130, height: 24 }, // Torre 1, paso 1
+      { x: 850, y: 400, width: 130, height: 24 }, // Torre 1, paso 2
+      { x: 1050, y: 310, width: 160, height: 24 }, // Torre 1, cima (palanca)
+      { x: 1650, y: 490, width: 40, height: 150 }, // Foso, muro izquierdo
+      { x: 1950, y: 490, width: 40, height: 150 }, // Foso, muro derecho
+      { x: 2400, y: 520, width: 130, height: 24 }, // Relevo a distancia, escalon
+      { x: 2600, y: 410, width: 170, height: 24 }, // Relevo a distancia, percha
+      { x: 3100, y: 410, width: 120, height: 24 }, // Pilar de la palanca a distancia
+      { x: 3600, y: 500, width: 120, height: 24 }, // Galeria: escalon percha B
+      { x: 3720, y: 400, width: 160, height: 24 }, // Galeria: percha B
+      { x: 4150, y: 400, width: 110, height: 24 }, // Galeria: pilar del sello 1
+      { x: 4450, y: 510, width: 120, height: 24 }, // Galeria: escalon percha C
+      { x: 4570, y: 410, width: 160, height: 24 }, // Galeria: percha C
+      { x: 5000, y: 410, width: 110, height: 24 }, // Galeria: pilar del sello 2
+      { x: 5350, y: 490, width: 160, height: 24 }, // Galeria: cornisa con sello escalable
+      { x: 5650, y: 500, width: 130, height: 24 }, // Torre 2, paso 1
+      { x: 5850, y: 400, width: 140, height: 24 }, // Torre 2, paso 2
+      { x: 6050, y: 310, width: 160, height: 24 }, // Torre 2, cima (palanca)
+      { x: 6600, y: 490, width: 160, height: 24 }, // Santuario, cornisa baja (sello)
+      { x: 6900, y: 510, width: 120, height: 24 }, // Santuario, escalon
+      { x: 7020, y: 410, width: 160, height: 24 }, // Santuario, cornisa media (sello)
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 300, y: 580, value: 6 },
+      { itemId: "bronzeCoin", x: 1120, y: 260, value: 7 },
+      { itemId: "bronzeCoin", x: 1740, y: 560, value: 7 },
+      { itemId: "bronzeCoin", x: 2680, y: 360, value: 7 },
+      { itemId: "bronzeCoin", x: 4200, y: 220, value: 8 },
+      { itemId: "bronzeCoin", x: 5050, y: 230, value: 8 },
+      { itemId: "bronzeCoin", x: 6120, y: 260, value: 8 },
+      { itemId: "bronzeCoin", x: 7090, y: 270, value: 8 },
+    ],
+    crates: [
+      { x: 1780, y: 560 }, // Foso: nace junto a su placa
+    ],
+    plates: [
+      {
+        id: "plate-1",
+        x: 1890,
+        y: 625,
+        width: 76,
+        hint: "Salta al foso y empuja la caja sobre la placa",
+      },
+    ],
+    levers: [
+      {
+        id: "lever-1",
+        x: 1120,
+        y: 262,
+        hint: "Escala la primera torre y golpea su palanca",
+      },
+      {
+        id: "lever-dist",
+        x: 3160,
+        y: 410,
+        rangedOnly: true,
+        hint: "Sube a la percha y dispara a la palanca del pilar",
+      },
+      {
+        id: "lever-2",
+        x: 6120,
+        y: 262,
+        hint: "Escala la segunda torre y golpea su palanca",
+      },
+    ],
+    gates: [
+      { id: "gate-1", x: 1350, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      { id: "gate-2", x: 2150, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
+      { id: "gate-3", x: 3350, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-4", x: 6350, y: 0, width: 50, height: 640, requiredActivations: ["lever-2"] },
+    ],
+    seals: [
+      { x: 4200, y: 260, width: 52, height: 140 }, // Sello 1: solo a tiro desde la percha B
+      { x: 5050, y: 270, width: 52, height: 140 }, // Sello 2: solo a tiro desde la percha C
+      { x: 5420, y: 350, width: 52, height: 140 }, // Sello escalable de la galeria
+      { x: 6670, y: 350, width: 52, height: 140 }, // Santuario, cornisa baja
+      { x: 7090, y: 270, width: 52, height: 140 }, // Santuario, cornisa media
+      { x: 7300, y: 500, width: 52, height: 140 }, // Guardian terrestre ante el portal
+    ],
+    hazards: [
+      { x: 1400, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 2800, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 3900, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 4800, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 5900, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 7150, y: 610, width: 90, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber13:gorge",
+      itemId: "sniperGorgeTalisman",
+      x: 5300,
+      y: 575,
+    },
+    goal: { x: 7500, y: 560 },
+    requiredActivations: ["lever-1", "plate-1", "lever-dist", "lever-2"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-8",
+      shadeAlpha: 0.45,
+      accentColor: 0xffedc0,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 1780, y: 560 },
+    plate: { x: 1890, y: 625, width: 76 },
+    lever: { x: 1120, y: 262 },
+    gate: { x: 1350, y: 0, width: 50, height: 640 },
+  },
+  trialChamber14: {
+    // Identidad: CIUDADELA DEL CRISOL. Gran final que combina todo: torre de
+    // palanca, pozos gemelos con puerta doble, relevo a distancia, un PUENTE de
+    // sellos que se cruza rompiendolos, una aguja alta y un santuario con la
+    // meta ELEVADA rodeada de sellos a todas las alturas.
+    id: "trialChamber14",
+    name: "La ciudadela del crisol",
+    stageNumber: 14,
+    difficultyRating: 1400,
+    worldWidth: 8200,
+    timeLimitSeconds: 345,
+    experienceReward: 2450,
+    playerStart: { x: 150, y: 560 },
+    platforms: [
+      { x: 0, y: 640, width: 8200, height: 80 },
+      { x: 650, y: 500, width: 130, height: 24 }, // Torre 1, paso 1
+      { x: 850, y: 400, width: 130, height: 24 }, // Torre 1, paso 2
+      { x: 1050, y: 310, width: 160, height: 24 }, // Torre 1, cima (palanca)
+      { x: 1700, y: 490, width: 40, height: 150 }, // Foso 1, muro izquierdo
+      { x: 2000, y: 490, width: 40, height: 150 }, // Foso 1, muro derecho
+      { x: 2350, y: 490, width: 40, height: 150 }, // Foso 2, muro izquierdo
+      { x: 2650, y: 490, width: 40, height: 150 }, // Foso 2, muro derecho
+      { x: 3150, y: 520, width: 130, height: 24 }, // Relevo a distancia, escalon
+      { x: 3350, y: 410, width: 170, height: 24 }, // Relevo a distancia, percha
+      { x: 3850, y: 410, width: 120, height: 24 }, // Pilar de la palanca a distancia
+      { x: 4350, y: 510, width: 120, height: 24 }, // Puente, ascenso 1
+      { x: 4500, y: 410, width: 120, height: 24 }, // Puente, ascenso 2
+      { x: 4450, y: 330, width: 760, height: 24 }, // Puente de los tres sellos
+      { x: 5400, y: 510, width: 130, height: 24 }, // Aguja, paso 1
+      { x: 5600, y: 410, width: 140, height: 24 }, // Aguja, paso 2
+      { x: 5800, y: 310, width: 150, height: 24 }, // Aguja, paso 3
+      { x: 6000, y: 220, width: 160, height: 24 }, // Aguja, cima (palanca)
+      { x: 6500, y: 510, width: 110, height: 24 }, // Santuario, escalon percha
+      { x: 6610, y: 400, width: 140, height: 24 }, // Santuario, percha de tiro
+      { x: 7000, y: 400, width: 120, height: 24 }, // Pilar francotirador (sello aislado)
+      { x: 7300, y: 490, width: 150, height: 24 }, // Santuario, cornisa (sello)
+      { x: 7750, y: 500, width: 240, height: 24 }, // Plataforma del portal elevado
+    ],
+    coins: [
+      { itemId: "bronzeCoin", x: 300, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 1120, y: 260, value: 7 },
+      { itemId: "bronzeCoin", x: 2020, y: 560, value: 7 },
+      { itemId: "bronzeCoin", x: 4700, y: 280, value: 8 },
+      { itemId: "bronzeCoin", x: 4950, y: 280, value: 8 },
+      { itemId: "bronzeCoin", x: 6070, y: 180, value: 8 },
+      { itemId: "bronzeCoin", x: 7370, y: 300, value: 9 },
+      { itemId: "bronzeCoin", x: 7870, y: 410, value: 9 },
+    ],
+    crates: [
+      { x: 1830, y: 560 }, // Foso 1: nace junto a su placa
+      { x: 2480, y: 560 }, // Foso 2: nace junto a su placa
+    ],
+    plates: [
+      {
+        id: "plate-1",
+        x: 1930,
+        y: 625,
+        width: 76,
+        hint: "Pozo izquierdo: empuja su caja sobre la placa",
+      },
+      {
+        id: "plate-2",
+        x: 2580,
+        y: 625,
+        width: 76,
+        hint: "Pozo derecho: la puerta doble exige ambas placas a la vez",
+      },
+    ],
+    levers: [
+      {
+        id: "lever-1",
+        x: 1120,
+        y: 262,
+        hint: "Escala la torre inicial y golpea su palanca",
+      },
+      {
+        id: "lever-dist",
+        x: 3910,
+        y: 410,
+        rangedOnly: true,
+        hint: "Desde la percha, dispara a la palanca del pilar lejano",
+      },
+      {
+        id: "lever-2",
+        x: 6070,
+        y: 172,
+        hint: "Escala la gran aguja y golpea la palanca de la cima",
+      },
+    ],
+    gates: [
+      { id: "gate-1", x: 1350, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
+      // Puerta doble: los dos pozos gemelos a la vez
+      { id: "gate-2", x: 2900, y: 0, width: 54, height: 640, requiredActivations: ["plate-1", "plate-2"] },
+      { id: "gate-3", x: 4100, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-4", x: 6300, y: 0, width: 50, height: 640, requiredActivations: ["lever-2"] },
+    ],
+    seals: [
+      { x: 4600, y: 190, width: 52, height: 140 }, // Puente, guardian 1
+      { x: 4850, y: 190, width: 52, height: 140 }, // Puente, guardian 2
+      { x: 5100, y: 190, width: 52, height: 140 }, // Puente, guardian 3
+      { x: 7050, y: 260, width: 52, height: 140 }, // Pilar francotirador (solo a tiro)
+      { x: 7370, y: 350, width: 52, height: 140 }, // Santuario, cornisa escalable
+      { x: 7600, y: 500, width: 52, height: 140 }, // Guardian terrestre ante el portal
+    ],
+    hazards: [
+      { x: 1450, y: 610, width: 90, height: 30, damage: 1 },
+      { x: 3000, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 4200, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 5250, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 6350, y: 610, width: 100, height: 30, damage: 1 },
+      { x: 7150, y: 610, width: 90, height: 30, damage: 1 },
+    ],
+    inventoryReward: {
+      claimId: "trialChamber14:citadel",
+      itemId: "crucibleCitadelCrown",
+      x: 6450,
+      y: 575,
+    },
+    goal: { x: 7900, y: 450 },
+    requiredActivations: ["lever-1", "plate-1", "plate-2", "lever-dist", "lever-2"],
+    supportsCooperative: true,
+    visualTheme: {
+      backgroundTextureKey: "ancient-trials-chamber-8",
+      shadeAlpha: 0.45,
+      accentColor: 0xfff4d0,
+    },
+
+    // Compatibilidad singular
+    crate: { x: 1830, y: 560 },
+    plate: { x: 1930, y: 625, width: 76 },
+    lever: { x: 1120, y: 262 },
+    gate: { x: 1350, y: 0, width: 50, height: 640 },
   },
 };
 

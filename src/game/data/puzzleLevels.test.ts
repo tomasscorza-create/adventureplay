@@ -82,8 +82,8 @@ describe("puzzle level campaign", () => {
     });
   }
 
-  it("chains eleven chambers and increases difficulty by 20 to 25 percent", () => {
-    expect(levels).toHaveLength(11);
+  it("chains fourteen chambers and increases difficulty by 20 to 25 percent", () => {
+    expect(levels).toHaveLength(14);
     levels.forEach((level, index) => {
       expect(level.stageNumber).toBe(index + 1);
       expect(level.nextLevelId).toBe(levels[index + 1]?.id);
@@ -106,6 +106,9 @@ describe("puzzle level campaign", () => {
       "ancient-trials-chamber-6",
       "ancient-trials-chamber-7",
       "ancient-trials-chamber-7",
+      "ancient-trials-chamber-8",
+      "ancient-trials-chamber-8",
+      "ancient-trials-chamber-8",
       "ancient-trials-chamber-8",
     ]);
   });
@@ -448,8 +451,15 @@ describe("puzzle level campaign", () => {
     });
   });
 
-  it("keeps every objective of the playground chambers nine to eleven reachable", () => {
-    for (const levelId of ["trialChamber9", "trialChamber10", "trialChamber11"]) {
+  it("keeps every objective of the playground chambers nine to fourteen reachable", () => {
+    for (const levelId of [
+      "trialChamber9",
+      "trialChamber10",
+      "trialChamber11",
+      "trialChamber12",
+      "trialChamber13",
+      "trialChamber14",
+    ]) {
       const level = puzzleLevelDefinitions[levelId];
       const reachable = reachablePlatforms(level);
 
@@ -601,7 +611,7 @@ describe("puzzle level campaign", () => {
     const reachable = reachablePlatforms(level);
     const tripleGate = level.gates.find((gate) => gate.id === "gate-1")!;
 
-    expect(level.nextLevelId).toBeUndefined();
+    expect(level.nextLevelId).toBe("trialChamber12");
     expect(tripleGate.requiredActivations).toEqual(["lever-1", "plate-1", "plate-2"]);
 
     // El sello francotirador: su pilar es inalcanzable a pie, pero hay
