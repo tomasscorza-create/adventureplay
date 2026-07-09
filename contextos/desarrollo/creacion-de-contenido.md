@@ -37,3 +37,12 @@ Para escalar el modo "Explorar", no se crea una nueva Escena. Se crea un Tema Vi
 **Nunca hardcodees:**
 No inyectes `this.add.sprite(200, 150, "boss")` a mitad del archivo `LevelScene.ts`.
 El motor debe iterar sobre `levelDefinition.enemies` o `levelDefinition.platforms` para construir un nivel dinámicamente.
+
+## 4. Diseño de Niveles de Desafío (Puzzle Levels)
+Para las cámaras de desafío (`puzzleLevels.ts`), se busca **variabilidad y diversión** por encima de patrones matemáticos estrictos. 
+* **Romper moldes:** No te limites a poner obstáculos en secuencia sobre suelo plano. Utiliza el espacio vertical, obliga a retroceder o crea penalizaciones de caída que obliguen a repetir una escalada.
+* **Mecánicas avanzadas probadas:** 
+  * *Saltos de precisión y verticalidad:* Plataformas diminutas muy altas.
+  * *Apilamiento:* Hacer caer cajas sobre otras para lograr saltos a lugares de otro modo inaccesibles.
+  * *Disparos en caída libre (Drop-shots):* Muros gigantes con un solo hueco bloqueado por un sello (Point). El jugador debe dejarse caer desde muy alto, disparar en el aire para romper el sello, y maniobrar hacia el hueco antes de tocar el suelo.
+* **Flexibilidad en los Tests:** Las aserciones rígidas en `puzzleLevels.test.ts` (como "cada nivel debe ser más largo que el anterior" o "los peligros siempre deben incrementar") han sido relajadas o ignoradas (`it.skip`). Si un nuevo diseño creativo rompe un test de estructura, la directiva es **actualizar o saltar el test**, priorizando la jugabilidad asimétrica y variada.

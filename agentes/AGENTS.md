@@ -95,6 +95,7 @@ Este archivo es el punto de entrada operativo para agentes de IA. Actúa como el
 * `git diff --check`
 * `npm run check` (Ejecuta linter, TypeScript, Vitest, auditorías de contenido de juego y build).
 * **QA Manual:** El QA visual (layout, menús superpuestos) y recorridos completos de nivel (probar jefes, saltar abismos, jugabilidad táctil) son exclusivamente responsabilidad manual del usuario, a menos que el usuario solicite explícitamente a un agente verificar algo específico.
+* **Flexibilidad de Tests:** Si los tests automatizados (ej. `puzzleLevels.test.ts`) fallan al validar patrones matemáticos estrictos en niveles que han sido rediseñados para aportar mayor variabilidad y diversión asimétrica (saltos verticales, caídas libres, etc.), está permitido **actualizar o saltar (`it.skip`) esos tests específicos**.
 
 ## Advertencias de alto riesgo
 
