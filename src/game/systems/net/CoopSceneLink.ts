@@ -13,18 +13,18 @@ import {
   unpackInputState,
   type CoopEndMessage,
   type CoopEndReason,
+  type CoopInputMessage,
   type CoopRole,
-  type GuestInputMessage,
 } from "./coopMessages";
 
 // Transporte minimo que necesita el link. CoopSession lo satisface tal cual;
 // los tests inyectan una implementacion falsa sin tocar Supabase.
 export interface CoopLinkTransport {
-  onInput(cb: (message: GuestInputMessage) => void): () => void;
+  onInput(cb: (message: CoopInputMessage) => void): () => void;
   onSnapshot<T>(cb: (snapshot: T) => void): () => void;
   onEnd(cb: (message: CoopEndMessage) => void): () => void;
   onPeerLeft(cb: () => void): () => void;
-  sendInput(message: GuestInputMessage): void;
+  sendInput(message: CoopInputMessage): void;
   sendSnapshot(snapshot: unknown): void;
   sendEnd(reason: CoopEndReason): void;
   leave(): void;
@@ -38,22 +38,36 @@ export interface CoopLinkHooks {
 const MIN_INPUT_INTERVAL_MS = 1000 / COOP_INPUT_RATE_HZ;
 const SNAPSHOT_INTERVAL_MS = 1000 / COOP_SNAPSHOT_RATE_HZ;
 
+// Estado del input remoto de un slot: el ultimo sostenido, el previo (para
+// flancos) y los flancos acumulados entre consumos.
+interface RemoteInputSlot {
+  held: GameplayInputState;
+  prevHeld: GameplayInputState;
+  pressed: GameplayInputState;
+  lastSeq: number;
+}
+
+function createRemoteInputSlot(): RemoteInputSlot {
+  return {
+    held: { ...emptyGameplayInputState },
+    prevHeld: { ...emptyGameplayInputState },
+    pressed: { ...emptyGameplayInputState },
+    lastSeq: -1,
+  };
+}
+
 // Plumbing co-op compartido por las escenas (Desafio y Explorar): deduplicacion
 // por seq en ambas direcciones, reconstruccion de flancos del input remoto,
 // throttling de envios y guardas de fin de sesion. Vive fuera de Phaser: las
 // escenas solo aportan como construir/aplicar su snapshot especifico.
 export class CoopSceneLink<TSnapshot extends { seq: number }> {
   readonly role: CoopRole;
+  readonly localSlot: number;
   private readonly transport: CoopLinkTransport;
 
-  // Host: ultimo estado sostenido recibido del guest y el previo para flancos.
-  private remoteHeld: GameplayInputState = { ...emptyGameplayInputState };
-  private remotePrevHeld: GameplayInputState = { ...emptyGameplayInputState };
-  // Host: flancos ascendentes acumulados entre consumos. Si un press y su
-  // release llegan juntos (batching de la red), compararlos contra el ultimo
-  // consumo los colapsaria y el tap se perderia; aca quedan retenidos.
-  private remotePressed: GameplayInputState = { ...emptyGameplayInputState };
-  private lastRemoteSeq = -1;
+  // Host: input remoto por slot emisor (uno por guest). Cada guest tiene su
+  // propia numeracion de seq, deduplicada de forma independiente.
+  private readonly remoteInputs = new Map<number, RemoteInputSlot>();
 
   // Guest: throttling de input saliente y ultimo snapshot aceptado.
   private lastInputSentAt = 0;
@@ -70,6 +84,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
 
   constructor(info: CoopSessionInfo, transport: CoopLinkTransport = coopSession) {
     this.role = info.role;
+    this.localSlot = info.localSlot;
     this.transport = transport;
   }
 
@@ -89,13 +104,14 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     if (this.isHost) {
       this.unbinds.push(
         this.transport.onInput((message) => {
-          if (message.seq <= this.lastRemoteSeq) return;
-          this.lastRemoteSeq = message.seq;
+          const slot = this.remoteSlot(message.slot);
+          if (message.seq <= slot.lastSeq) return;
+          slot.lastSeq = message.seq;
           const held = unpackInputState(message.bits);
           for (const action of Object.keys(held) as Array<keyof GameplayInputState>) {
-            if (held[action] && !this.remoteHeld[action]) this.remotePressed[action] = true;
+            if (held[action] && !slot.held[action]) slot.pressed[action] = true;
           }
-          this.remoteHeld = held;
+          slot.held = held;
         }),
       );
     }
@@ -111,25 +127,34 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     this.unbinds.push(this.transport.onPeerLeft(() => hooks.onPeerLeft()));
   }
 
-  // Host: convierte el ultimo estado sostenido recibido del guest en un frame
-  // con flancos "justPressed" derivados de la transicion respecto del consumo
-  // anterior, mas los flancos acumulados entre mensajes para que ningun tap
-  // se pierda aunque su press y release lleguen en el mismo lote de red.
-  consumeRemoteInputFrame(): GameplayInputFrame {
-    const held = this.remoteHeld;
-    const prev = this.remotePrevHeld;
-    const pressed = this.remotePressed;
+  private remoteSlot(slot: number): RemoteInputSlot {
+    let state = this.remoteInputs.get(slot);
+    if (!state) {
+      state = createRemoteInputSlot();
+      this.remoteInputs.set(slot, state);
+    }
+    return state;
+  }
+
+  // Host: convierte el ultimo estado sostenido recibido del guest en el `slot`
+  // dado en un frame con flancos "justPressed" derivados de la transicion
+  // respecto del consumo anterior, mas los flancos acumulados entre mensajes
+  // para que ningun tap se pierda aunque su press y release lleguen en el mismo
+  // lote de red. Un slot sin input aun devuelve un frame vacio.
+  consumeRemoteInputFrame(slot: number): GameplayInputFrame {
+    const state = this.remoteSlot(slot);
+    const { held, prevHeld, pressed } = state;
     const frame: GameplayInputFrame = {
       ...held,
-      jumpJustPressed: (held.jump && !prev.jump) || pressed.jump,
-      meleeJustPressed: (held.melee && !prev.melee) || pressed.melee,
-      spinJustPressed: (held.spin && !prev.spin) || pressed.spin,
-      healJustPressed: (held.heal && !prev.heal) || pressed.heal,
-      powerJustPressed: (held.power && !prev.power) || pressed.power,
-      pauseJustPressed: (held.pause && !prev.pause) || pressed.pause,
+      jumpJustPressed: (held.jump && !prevHeld.jump) || pressed.jump,
+      meleeJustPressed: (held.melee && !prevHeld.melee) || pressed.melee,
+      spinJustPressed: (held.spin && !prevHeld.spin) || pressed.spin,
+      healJustPressed: (held.heal && !prevHeld.heal) || pressed.heal,
+      powerJustPressed: (held.power && !prevHeld.power) || pressed.power,
+      pauseJustPressed: (held.pause && !prevHeld.pause) || pressed.pause,
     };
-    this.remotePressed = { ...emptyGameplayInputState };
-    this.remotePrevHeld = { ...held };
+    state.pressed = { ...emptyGameplayInputState };
+    state.prevHeld = { ...held };
     return frame;
   }
 
@@ -156,7 +181,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     this.lastInputBits = bits;
     this.lastInputSentAt = timeMs;
     this.inputSeq += 1;
-    this.transport.sendInput({ seq: this.inputSeq, bits });
+    this.transport.sendInput({ slot: this.localSlot, seq: this.inputSeq, bits });
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.

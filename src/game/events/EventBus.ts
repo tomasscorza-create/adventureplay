@@ -14,6 +14,8 @@ import { EVENTS } from "../../shared/constants/events";
 export interface CoopSessionInfo {
   role: CoopRole;
   code: string;
+  // Slot del jugador local dentro de la sala (0 = host, 1..N = guests).
+  localSlot: number;
 }
 
 type GameEventMap = {

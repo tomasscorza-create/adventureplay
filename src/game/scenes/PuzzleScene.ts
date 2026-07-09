@@ -137,6 +137,8 @@ export class PuzzleScene extends Phaser.Scene {
   private coopLink?: CoopSceneLink<WorldSnapshot>;
   private isHost = false;
   private isGuest = false;
+  // Slot del jugador local en el modelo de red (0 = host, 1..N = guests).
+  private coopSelfSlot = 0;
   private player2?: Player;
   private readonly movement2 = new MovementSystem();
   // Host: cargas vivas del jugador 2 (sembradas desde el save del host).
@@ -174,6 +176,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.coopLink = this.coop ? new CoopSceneLink<WorldSnapshot>(this.coop) : undefined;
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
+    this.coopSelfSlot = this.coop?.localSlot ?? 0;
     this.player2 = undefined;
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
     this.projectilePuppets = this.isGuest
@@ -229,7 +232,8 @@ export class PuzzleScene extends Phaser.Scene {
     this.handleActionsFor(this.player, input, "player-1");
 
     if (this.isHost && this.player2 && this.coopLink) {
-      const remoteFrame = this.coopLink.consumeRemoteInputFrame();
+      // player2 es el unico guest (slot 1) en el modelo actual de 2 jugadores.
+      const remoteFrame = this.coopLink.consumeRemoteInputFrame(1);
       const jumped2 = this.movement2.update(this.player2, remoteFrame, delta);
       if (jumped2) this.playSfx("jump");
       this.handleActionsFor(this.player2, remoteFrame, "player-2");
@@ -1681,15 +1685,19 @@ export class PuzzleScene extends Phaser.Scene {
         gameSaveStore.save(this.save);
       }
       const nextId = puzzleLevelDefinitions[levelId] ? levelId : this.level.id;
-      this.scene.start("PuzzleScene", { levelId: nextId });
+      this.scene.start("PuzzleScene", { levelId: nextId, coop: this.coop });
     });
     this.unbindContinue = gameEvents.on(EVENTS.CONTINUE_LEVEL, ({ completedLevelId, nextLevelId }) => {
       if (!this.levelFinished || completedLevelId !== this.level.id) return;
       if (nextLevelId && puzzleLevelDefinitions[nextLevelId]) {
-        this.scene.start("PuzzleScene", { levelId: nextLevelId });
+        this.scene.start("PuzzleScene", { levelId: nextLevelId, coop: this.coop });
         return;
       }
-      this.scene.start("MainMenuScene");
+      this.scene.start("GameOverScene", {
+        result: "victory",
+        restartLevelId: this.level.id,
+        coop: this.coop,
+      });
     });
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {
       // Si la sesion co-op sigue viva, avisar al peer antes de abandonar.
@@ -1791,17 +1799,17 @@ export class PuzzleScene extends Phaser.Scene {
 
   private applySnapshot(snap: WorldSnapshot): void {
     const smoothing = 0.4;
-    applyNetPlayer(this.player, snap.players[0], smoothing);
-    if (this.player2) applyNetPlayer(this.player2, snap.players[1], smoothing);
+    if (snap.players[0]) applyNetPlayer(this.player, snap.players[0], smoothing);
+    if (this.player2 && snap.players[1]) applyNetPlayer(this.player2, snap.players[1], smoothing);
     this.projectilePuppets?.apply(snap.projectiles, smoothing);
 
-    // Deteccion de dano propio (slot B) para el destello local del guest.
-    const self = snap.players[1];
-    if (Number.isFinite(this.guestPrevSelfHealth) && self.health < this.guestPrevSelfHealth) {
+    // Deteccion de dano propio para el destello local del guest, leido en su slot.
+    const self = snap.players[this.coopSelfSlot];
+    if (self && Number.isFinite(this.guestPrevSelfHealth) && self.health < this.guestPrevSelfHealth) {
       gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount: this.guestPrevSelfHealth - self.health });
       this.playSfx("player-hit");
     }
-    this.guestPrevSelfHealth = self.health;
+    if (self) this.guestPrevSelfHealth = self.health;
 
     snap.crates.forEach(([x, y], index) => {
       const crate = this.crates[index];
@@ -1848,7 +1856,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   private emitGuestHud(): void {
     const snap = this.coopLink?.latestSnapshot;
-    const self = snap?.players[1];
+    const self = snap?.players[this.coopSelfSlot];
     const hud: HudState = {
       ...this.save.player,
       health: self?.health ?? this.save.player.health,

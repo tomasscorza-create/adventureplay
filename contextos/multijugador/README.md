@@ -6,7 +6,9 @@ valores y nombres exactos del código fuente.
 
 > **Estado (actualizado):** co-op online **funcional** en los dos modos jugables:
 > **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Host-autoritativo sobre Supabase
-> Realtime, cámara independiente por dispositivo, fin de partida compartido.
+> Realtime, cámara independiente por dispositivo, fin de partida compartido. Protocolo **v4** con
+> modelo de slots N-ready (gameplay aún de 2 jugadores). Ver historial de fases en
+> `decisiones-limitaciones-historial.md`.
 
 ## Índice del área
 
@@ -21,10 +23,12 @@ valores y nombres exactos del código fuente.
 - **Transporte:** un singleton fuera de Phaser (`coopSession`) sobre **Supabase Realtime**
   (broadcast + presence, canal `coop-room-<CÓDIGO>`). Sin servidor propio, sin tablas, sin RLS.
 - **Modelo:** **host-autoritativo**. El host simula toda la física de ambos jugadores y del
-  mundo, y transmite *snapshots* ~20 Hz. El guest envía solo su input ~30 Hz, **congela** sus
-  cuerpos autoritativos y renderiza el snapshot interpolado.
-- **Slots:** `this.player` = **slot A** = personaje del **host**. `this.player2` = **slot B** =
-  personaje del **guest**. Es así en ambas máquinas, sin importar el rol.
+  mundo, y transmite *snapshots* ~20 Hz. El guest envía su input **al cambiar** (tope 30 Hz) más
+  un keepalive, **congela** sus cuerpos autoritativos y renderiza el snapshot interpolado.
+- **Slots (protocolo N-ready):** `this.player` = **slot 0** = **host**; `this.player2` = **slot 1**
+  = **guest**. El input lleva el slot del emisor y `players` del snapshot es un arreglo por slot.
+  El gameplay usa 2 (`COOP_MAX_PLAYERS = 2`), pero el protocolo ya admite más. Toda la mecánica de
+  red común vive en `CoopSceneLink`.
 - **Cámara:** **independiente por dispositivo** (cada pantalla sigue a su personaje local).
 - **Fin compartido:** muerte de cualquiera o tiempo agotado → derrota para ambos; llegar a la
   meta → victoria para ambos.

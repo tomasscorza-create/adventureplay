@@ -107,6 +107,9 @@ export class LevelScene extends Phaser.Scene {
   private coopLink?: CoopSceneLink<LevelSnapshot>;
   private isHost = false;
   private isGuest = false;
+  // Slot del jugador local en el modelo de red (0 = host, 1..N = guests). El
+  // gameplay sigue siendo de 2, pero el "self" del guest se lee por su slot.
+  private coopSelfSlot = 0;
   private player2?: Player;
   private readonly movement2 = new MovementSystem();
   private p2Charges = { healingCharges: 0, powerCharges: 0 };
@@ -133,6 +136,7 @@ export class LevelScene extends Phaser.Scene {
     this.coopLink = this.coop ? new CoopSceneLink<LevelSnapshot>(this.coop) : undefined;
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
+    this.coopSelfSlot = this.coop?.localSlot ?? 0;
     this.player2 = undefined;
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
     this.projectilePuppets = this.isGuest
@@ -229,7 +233,8 @@ export class LevelScene extends Phaser.Scene {
     this.handleActionsFor(this.player, input, 0, true);
 
     if (this.isHost && this.player2 && this.coopLink) {
-      const remoteFrame = this.coopLink.consumeRemoteInputFrame();
+      // player2 es el unico guest (slot 1) en el modelo actual de 2 jugadores.
+      const remoteFrame = this.coopLink.consumeRemoteInputFrame(1);
       const didJump2 = this.movement2.update(this.player2, remoteFrame, delta);
       if (didJump2) this.playSfx("jump");
       this.handleActionsFor(this.player2, remoteFrame, 1, false);
@@ -572,7 +577,7 @@ export class LevelScene extends Phaser.Scene {
         this.recordRunStatistics("abandoned");
         gameSaveStore.save(this.save);
       }
-      this.scene.start("LevelScene", { levelId: restartLevelId });
+      this.scene.start("LevelScene", { levelId: restartLevelId, coop: this.coop });
     });
 
     this.unbindContinue = gameEvents.on(
@@ -583,13 +588,14 @@ export class LevelScene extends Phaser.Scene {
         }
 
         if (nextLevelId && levelDefinitions[nextLevelId]) {
-          this.scene.start("LevelScene", { levelId: nextLevelId });
+          this.scene.start("LevelScene", { levelId: nextLevelId, coop: this.coop });
           return;
         }
 
         this.scene.start("GameOverScene", {
           result: "victory",
           restartLevelId: this.level.id,
+          coop: this.coop,
         });
       },
     );
@@ -1840,7 +1846,7 @@ export class LevelScene extends Phaser.Scene {
     if (this.player2) (this.player2.body as Phaser.Physics.Arcade.Body).enable = false;
     if (this.isHost) this.coopLink?.finish("lost");
     this.time.delayedCall(620, () => {
-      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id, coop: this.coop });
     });
   }
 
@@ -2105,13 +2111,14 @@ export class LevelScene extends Phaser.Scene {
 
   private applySnapshot(snap: LevelSnapshot): void {
     const s = 0.4;
-    applyNetPlayer(this.player, snap.players[0], s);
-    if (this.player2) applyNetPlayer(this.player2, snap.players[1], s);
+    if (snap.players[0]) applyNetPlayer(this.player, snap.players[0], s);
+    if (this.player2 && snap.players[1]) applyNetPlayer(this.player2, snap.players[1], s);
     this.projectilePuppets?.apply(snap.projectiles, s);
 
-    // Deteccion de dano propio (slot B) para el destello/sacudida local del guest.
-    const self = snap.players[1];
-    if (Number.isFinite(this.guestPrevSelfHealth) && self.health < this.guestPrevSelfHealth) {
+    // Deteccion de dano propio para el destello/sacudida local del guest, leido
+    // en su slot dentro del snapshot.
+    const self = snap.players[this.coopSelfSlot];
+    if (self && Number.isFinite(this.guestPrevSelfHealth) && self.health < this.guestPrevSelfHealth) {
       // El guest no simula: este es su unico registro de dano recibido, y el
       // logro de nivel perfecto depende de que quede marcado.
       this.damageTakenThisLevel = true;
@@ -2119,7 +2126,7 @@ export class LevelScene extends Phaser.Scene {
       this.playSfx("player-hit");
       this.cameras.main.shake(160, 0.009);
     }
-    this.guestPrevSelfHealth = self.health;
+    if (self) this.guestPrevSelfHealth = self.health;
 
     const aliveEnemies = new Map<number, [number, number, number]>();
     for (const [id, x, y, flip] of snap.enemies) aliveEnemies.set(id, [x, y, flip]);
@@ -2188,7 +2195,7 @@ export class LevelScene extends Phaser.Scene {
 
   private emitGuestHud(): void {
     const snap = this.coopLink?.latestSnapshot;
-    const self = snap?.players[1];
+    const self = snap?.players[this.coopSelfSlot];
     gameEvents.emit(EVENTS.HUD_UPDATED, {
       ...this.save.player,
       health: self?.health ?? this.save.player.health,

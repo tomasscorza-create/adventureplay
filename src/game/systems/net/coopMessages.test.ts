@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyGameplayInputState, type GameplayInputState } from "../../../shared/types/input";
 import {
+  assignSlots,
   collectPeerPresences,
   COOP_PROTOCOL_VERSION,
   generateRoomCode,
@@ -70,7 +71,7 @@ describe("coopMessages room codes", () => {
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(3);
+    expect(COOP_PROTOCOL_VERSION).toBe(4);
   });
 
   it("excluye la propia key y normaliza los payloads de los peers", () => {
@@ -94,5 +95,40 @@ describe("coopMessages presence", () => {
     expect(peers).toEqual([
       { key: "guest", role: "guest", characterId: "sarix", protocol: 1 },
     ]);
+  });
+});
+
+describe("coopMessages slots", () => {
+  it("da al host el slot 0 y a los guests 1..N ordenados por clientId", () => {
+    const roster = assignSlots([
+      { key: "zeta", role: "guest", characterId: "amy" },
+      { key: "host-key", role: "host", characterId: "ruder" },
+      { key: "alpha", role: "guest", characterId: "sarix" },
+    ]);
+    expect(roster).toEqual([
+      { key: "host-key", role: "host", characterId: "ruder", slot: 0 },
+      { key: "alpha", role: "guest", characterId: "sarix", slot: 1 },
+      { key: "zeta", role: "guest", characterId: "amy", slot: 2 },
+    ]);
+  });
+
+  it("es determinista sin importar el orden de entrada", () => {
+    const entries = [
+      { key: "c", role: "guest" as const, characterId: "amy" },
+      { key: "a", role: "host" as const, characterId: "ruder" },
+      { key: "b", role: "guest" as const, characterId: "sarix" },
+    ];
+    const forward = assignSlots(entries);
+    const reversed = assignSlots([...entries].reverse());
+    expect(reversed).toEqual(forward);
+  });
+
+  it("tolera una sala sin host todavia (solo guests)", () => {
+    const roster = assignSlots([
+      { key: "b", role: "guest", characterId: "amy" },
+      { key: "a", role: "guest", characterId: "sarix" },
+    ]);
+    expect(roster.map((entry) => entry.slot)).toEqual([1, 2]);
+    expect(roster[0].key).toBe("a");
   });
 });

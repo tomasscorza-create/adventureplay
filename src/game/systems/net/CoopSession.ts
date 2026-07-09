@@ -1,17 +1,20 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "../../../shared/supabase/client";
 import {
+  assignSlots,
   collectPeerPresences,
   COOP_EVENTS,
   COOP_PROTOCOL_VERSION,
   generateRoomCode,
+  HOST_SLOT,
   normalizeRoomCode,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopHello,
+  type CoopInputMessage,
+  type CoopParticipant,
   type CoopRole,
   type CoopStartMessage,
-  type GuestInputMessage,
 } from "./coopMessages";
 
 export type CoopConnectionState =
@@ -27,7 +30,7 @@ interface CoopCallbacks {
   connectionState: Set<(state: CoopConnectionState) => void>;
   peerJoined: Set<(hello: CoopHello) => void>;
   peerLeft: Set<() => void>;
-  input: Set<(message: GuestInputMessage) => void>;
+  input: Set<(message: CoopInputMessage) => void>;
   // Payload generico: cada escena serializa/castea su propio tipo de snapshot
   // (Desafio usa WorldSnapshot, Explorar usa LevelSnapshot).
   snapshot: Set<(snapshot: unknown) => void>;
@@ -61,6 +64,9 @@ class CoopSession {
   private peerHello: CoopHello | null = null;
   private clientKey = "";
   private protocolMismatch = false;
+  // Roster con slots asignados (0 = host, 1..N = guests) y el slot local.
+  private _participants: CoopParticipant[] = [];
+  private _localSlot = HOST_SLOT;
 
   private readonly callbacks: CoopCallbacks = {
     connectionState: new Set(),
@@ -97,6 +103,21 @@ class CoopSession {
     return this.peerHello?.characterId ?? null;
   }
 
+  // Slot del jugador local dentro de la sala (0 = host, 1..N = guests).
+  get localSlot(): number {
+    return this._localSlot;
+  }
+
+  // Roster completo con slots ya asignados. Vacio hasta que la sala esta lista.
+  get participants(): CoopParticipant[] {
+    return this._participants;
+  }
+
+  // Personaje del participante en un slot dado, si esta presente.
+  characterIdForSlot(slot: number): string | null {
+    return this._participants.find((entry) => entry.slot === slot)?.characterId ?? null;
+  }
+
   async host(hello: CoopHello): Promise<string> {
     const code = generateRoomCode();
     await this.connect("host", code, hello);
@@ -121,6 +142,9 @@ class CoopSession {
     this._peerPresent = false;
     this.protocolMismatch = false;
     this.clientKey = generateClientKey();
+    // Slot provisional segun el rol; syncPresence lo confirma con el roster real.
+    this._localSlot = role === "host" ? HOST_SLOT : HOST_SLOT + 1;
+    this._participants = [];
     this.setConnectionState("connecting");
 
     const channel = supabase.channel(`coop-room-${code}`, {
@@ -136,7 +160,7 @@ class CoopSession {
       this.emitPeerJoined();
     });
     channel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
-      this.callbacks.input.forEach((cb) => cb(payload as GuestInputMessage));
+      this.callbacks.input.forEach((cb) => cb(payload as CoopInputMessage));
     });
     channel.on("broadcast", { event: COOP_EVENTS.snapshot }, ({ payload }) => {
       this.callbacks.snapshot.forEach((cb) => cb(payload));
@@ -172,19 +196,16 @@ class CoopSession {
   }
 
   private syncPresence(): void {
-    if (!this.channel) return;
+    if (!this.channel || !this._role) return;
     const presence = this.channel.presenceState() as unknown as Record<
       string,
       Array<Record<string, unknown>>
     >;
-    const otherRole: CoopRole = this._role === "host" ? "guest" : "host";
-    const peer = collectPeerPresences(presence, this.clientKey).find(
-      (entry) => entry.role === otherRole,
-    );
+    const peers = collectPeerPresences(presence, this.clientKey);
 
     // Version incompatible (incluye builds previos sin campo protocol): error
     // claro una sola vez en lugar de una sala que espera para siempre.
-    if (peer && peer.protocol !== COOP_PROTOCOL_VERSION) {
+    if (peers.some((entry) => entry.protocol !== COOP_PROTOCOL_VERSION)) {
       if (!this.protocolMismatch) {
         this.protocolMismatch = true;
         this.callbacks.sessionError.forEach((cb) =>
@@ -194,6 +215,18 @@ class CoopSession {
       }
       return;
     }
+
+    // Roster determinista incluyendo al jugador local, para fijar el slot propio
+    // y el de cada peer igual en todos los dispositivos.
+    this._participants = assignSlots([
+      { key: this.clientKey, role: this._role, characterId: this.localHello.characterId },
+      ...peers,
+    ]);
+    this._localSlot = this._participants.find((entry) => entry.key === this.clientKey)?.slot
+      ?? this._localSlot;
+
+    const otherRole: CoopRole = this._role === "host" ? "guest" : "host";
+    const peer = peers.find((entry) => entry.role === otherRole);
 
     if (peer && !this._peerPresent) {
       this._peerPresent = true;
@@ -221,7 +254,7 @@ class CoopSession {
     this.broadcast(COOP_EVENTS.hello, this.localHello);
   }
 
-  sendInput(message: GuestInputMessage): void {
+  sendInput(message: CoopInputMessage): void {
     this.broadcast(COOP_EVENTS.input, message);
   }
 
@@ -254,6 +287,8 @@ class CoopSession {
     this._peerPresent = false;
     this.peerHello = null;
     this.protocolMismatch = false;
+    this._participants = [];
+    this._localSlot = HOST_SLOT;
     this.setConnectionState("idle");
   }
 
@@ -272,7 +307,7 @@ class CoopSession {
   onPeerLeft(cb: () => void): () => void {
     return this.subscribe("peerLeft", cb);
   }
-  onInput(cb: (message: GuestInputMessage) => void): () => void {
+  onInput(cb: (message: CoopInputMessage) => void): () => void {
     return this.subscribe("input", cb);
   }
   onSnapshot<T>(cb: (snapshot: T) => void): () => void {

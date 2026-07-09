@@ -20,9 +20,18 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 // v1: presencia con key por rol, hello sin protocol (builds previos).
 // v2: presencia con key por clientId y payload {role, characterId, protocol}.
 // v3: snapshots con proyectiles de poder letal ([netId, x, y, dir]).
-export const COOP_PROTOCOL_VERSION = 3;
+// v4: modelo de slots N jugadores: input con slot emisor y players como arreglo.
+export const COOP_PROTOCOL_VERSION = 4;
 
 export type CoopRole = "host" | "guest";
+
+// Cantidad de jugadores admitida en una sala. Hoy el gameplay usa 2; el modelo
+// de slots ya esta preparado para crecer. Subir este tope es parte de la Fase 3
+// (gameplay y lobby N jugadores), no de la generalizacion del protocolo.
+export const COOP_MAX_PLAYERS = 2;
+
+// Slot fijo del anfitrion. Los guests ocupan slots 1..N segun `assignSlots`.
+export const HOST_SLOT = 0;
 
 // Eventos de broadcast usados en el canal de la sala.
 export const COOP_EVENTS = {
@@ -71,6 +80,31 @@ export function collectPeerPresences(
   return peers;
 }
 
+// Participante con su slot ya asignado dentro de la sala.
+export interface CoopParticipant {
+  key: string;
+  role: CoopRole;
+  characterId: string;
+  slot: number;
+}
+
+// Roster determinista de la sala: el anfitrion ocupa HOST_SLOT y los guests se
+// ordenan por su clientId ascendente para recibir slots 1..N. Al derivarse solo
+// del conjunto de presencias (identico en todos los dispositivos), cada cliente
+// calcula el mismo mapa sin necesitar un mensaje de asignacion ni una carrera.
+export function assignSlots(
+  entries: ReadonlyArray<{ key: string; role: CoopRole; characterId: string }>,
+): CoopParticipant[] {
+  const roster: CoopParticipant[] = [];
+  const host = entries.find((entry) => entry.role === "host");
+  if (host) roster.push({ ...host, slot: HOST_SLOT });
+  entries
+    .filter((entry) => entry.role === "guest")
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .forEach((guest, index) => roster.push({ ...guest, slot: HOST_SLOT + 1 + index }));
+  return roster;
+}
+
 export interface CoopStartMessage {
   levelId: string;
 }
@@ -94,7 +128,10 @@ const INPUT_ORDER: readonly (keyof GameplayInputState)[] = [
   "pause",
 ];
 
-export interface GuestInputMessage {
+// Input de un guest hacia el host. `slot` identifica al emisor para que el host
+// enrute varios streams simultaneos (uno por guest); `seq` se deduplica por slot.
+export interface CoopInputMessage {
+  slot: number;
   seq: number;
   bits: number;
 }
@@ -135,9 +172,11 @@ export interface NetPlayerState {
 export type NetProjectile = [number, number, number, -1 | 1];
 
 // Snapshot completo del mundo que el host transmite ~20 veces por segundo.
+// `players` esta indexado por slot (0 = host, 1..N = guests). Hoy son 2, pero el
+// arreglo admite mas sin cambiar la forma del mensaje.
 export interface WorldSnapshot {
   seq: number;
-  players: [NetPlayerState, NetPlayerState];
+  players: NetPlayerState[];
   crates: Array<[number, number]>;
   // [netId, x, y] por enemigo vivo; los ausentes fueron derrotados.
   enemies: Array<[number, number, number]>;

@@ -9,7 +9,7 @@ import {
   packInputState,
   type CoopEndMessage,
   type CoopEndReason,
-  type GuestInputMessage,
+  type CoopInputMessage,
 } from "./coopMessages";
 
 interface TestSnapshot {
@@ -18,16 +18,16 @@ interface TestSnapshot {
 }
 
 class FakeTransport implements CoopLinkTransport {
-  readonly inputHandlers = new Set<(message: GuestInputMessage) => void>();
+  readonly inputHandlers = new Set<(message: CoopInputMessage) => void>();
   readonly snapshotHandlers = new Set<(snapshot: unknown) => void>();
   readonly endHandlers = new Set<(message: CoopEndMessage) => void>();
   readonly peerLeftHandlers = new Set<() => void>();
-  readonly sentInputs: GuestInputMessage[] = [];
+  readonly sentInputs: CoopInputMessage[] = [];
   readonly sentSnapshots: unknown[] = [];
   readonly sentEnds: CoopEndReason[] = [];
   leaveCalls = 0;
 
-  onInput(cb: (message: GuestInputMessage) => void): () => void {
+  onInput(cb: (message: CoopInputMessage) => void): () => void {
     this.inputHandlers.add(cb);
     return () => this.inputHandlers.delete(cb);
   }
@@ -44,7 +44,7 @@ class FakeTransport implements CoopLinkTransport {
     this.peerLeftHandlers.add(cb);
     return () => this.peerLeftHandlers.delete(cb);
   }
-  sendInput(message: GuestInputMessage): void {
+  sendInput(message: CoopInputMessage): void {
     this.sentInputs.push(message);
   }
   sendSnapshot(snapshot: unknown): void {
@@ -57,7 +57,7 @@ class FakeTransport implements CoopLinkTransport {
     this.leaveCalls += 1;
   }
 
-  emitInput(message: GuestInputMessage): void {
+  emitInput(message: CoopInputMessage): void {
     this.inputHandlers.forEach((cb) => cb(message));
   }
   emitSnapshot(snapshot: TestSnapshot): void {
@@ -85,11 +85,11 @@ function asFrame(state: Partial<GameplayInputState>): GameplayInputFrame {
 }
 
 function makeHost(transport: FakeTransport): CoopSceneLink<TestSnapshot> {
-  return new CoopSceneLink<TestSnapshot>({ role: "host", code: "ABCD" }, transport);
+  return new CoopSceneLink<TestSnapshot>({ role: "host", code: "ABCD", localSlot: 0 }, transport);
 }
 
-function makeGuest(transport: FakeTransport): CoopSceneLink<TestSnapshot> {
-  return new CoopSceneLink<TestSnapshot>({ role: "guest", code: "ABCD" }, transport);
+function makeGuest(transport: FakeTransport, localSlot = 1): CoopSceneLink<TestSnapshot> {
+  return new CoopSceneLink<TestSnapshot>({ role: "guest", code: "ABCD", localSlot }, transport);
 }
 
 describe("CoopSceneLink host", () => {
@@ -98,10 +98,10 @@ describe("CoopSceneLink host", () => {
     const link = makeHost(transport);
     link.bind(noopHooks);
 
-    transport.emitInput({ seq: 2, bits: packInputState({ ...emptyGameplayInputState, right: true }) });
-    transport.emitInput({ seq: 1, bits: packInputState({ ...emptyGameplayInputState, left: true }) });
+    transport.emitInput({ slot: 1, seq: 2, bits: packInputState({ ...emptyGameplayInputState, right: true }) });
+    transport.emitInput({ slot: 1, seq: 1, bits: packInputState({ ...emptyGameplayInputState, left: true }) });
 
-    const frame = link.consumeRemoteInputFrame();
+    const frame = link.consumeRemoteInputFrame(1);
     expect(frame.right).toBe(true);
     expect(frame.left).toBe(false);
   });
@@ -111,15 +111,15 @@ describe("CoopSceneLink host", () => {
     const link = makeHost(transport);
     link.bind(noopHooks);
 
-    transport.emitInput({ seq: 1, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
-    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(true);
+    transport.emitInput({ slot: 1, seq: 1, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
+    expect(link.consumeRemoteInputFrame(1).jumpJustPressed).toBe(true);
     // El mismo estado sostenido no vuelve a disparar el flanco.
-    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(false);
+    expect(link.consumeRemoteInputFrame(1).jumpJustPressed).toBe(false);
 
-    transport.emitInput({ seq: 2, bits: 0 });
-    expect(link.consumeRemoteInputFrame().jump).toBe(false);
-    transport.emitInput({ seq: 3, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
-    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(true);
+    transport.emitInput({ slot: 1, seq: 2, bits: 0 });
+    expect(link.consumeRemoteInputFrame(1).jump).toBe(false);
+    transport.emitInput({ slot: 1, seq: 3, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
+    expect(link.consumeRemoteInputFrame(1).jumpJustPressed).toBe(true);
   });
 
   // Un tap corto puede llegar como press+release en el mismo lote de red, entre
@@ -129,14 +129,54 @@ describe("CoopSceneLink host", () => {
     const link = makeHost(transport);
     link.bind(noopHooks);
 
-    transport.emitInput({ seq: 1, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
-    transport.emitInput({ seq: 2, bits: 0 });
+    transport.emitInput({ slot: 1, seq: 1, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
+    transport.emitInput({ slot: 1, seq: 2, bits: 0 });
 
-    const frame = link.consumeRemoteInputFrame();
+    const frame = link.consumeRemoteInputFrame(1);
     expect(frame.jump).toBe(false);
     expect(frame.jumpJustPressed).toBe(true);
     // El flanco retenido se consume una sola vez.
-    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(false);
+    expect(link.consumeRemoteInputFrame(1).jumpJustPressed).toBe(false);
+  });
+
+  // Cada guest (slot) mantiene su propio estado y numeracion de seq: los inputs
+  // de uno no deben contaminar al otro. Prepara el terreno para 3-4 jugadores.
+  it("enruta inputs por slot de emisor de forma independiente", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    link.bind(noopHooks);
+
+    transport.emitInput({ slot: 1, seq: 1, bits: packInputState({ ...emptyGameplayInputState, left: true }) });
+    transport.emitInput({ slot: 2, seq: 1, bits: packInputState({ ...emptyGameplayInputState, right: true }) });
+
+    const slot1 = link.consumeRemoteInputFrame(1);
+    const slot2 = link.consumeRemoteInputFrame(2);
+    expect(slot1.left).toBe(true);
+    expect(slot1.right).toBe(false);
+    expect(slot2.right).toBe(true);
+    expect(slot2.left).toBe(false);
+
+    // El seq se deduplica por slot: un seq 1 en el slot 2 no bloquea al slot 1.
+    transport.emitInput({ slot: 1, seq: 2, bits: 0 });
+    expect(link.consumeRemoteInputFrame(1).left).toBe(false);
+    expect(link.consumeRemoteInputFrame(2).right).toBe(true);
+  });
+
+  it("un slot sin input devuelve un frame vacio", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    link.bind(noopHooks);
+
+    const frame = link.consumeRemoteInputFrame(3);
+    expect(frame).toEqual({
+      ...emptyGameplayInputState,
+      jumpJustPressed: false,
+      meleeJustPressed: false,
+      spinJustPressed: false,
+      healJustPressed: false,
+      powerJustPressed: false,
+      pauseJustPressed: false,
+    });
   });
 
   it("limita los snapshots a la frecuencia configurada con seq creciente", () => {
@@ -172,6 +212,15 @@ describe("CoopSceneLink guest", () => {
     expect(transport.sentInputs.map((message) => message.seq)).toEqual([1, 2, 3]);
     expect(transport.sentInputs[0].bits).toBe(packInputState(running));
     expect(transport.sentInputs[2].bits).toBe(packInputState(idle));
+  });
+
+  it("estampa su slot local en cada input enviado", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport, 2);
+
+    link.sendLocalInput(100, asFrame({ right: true }));
+
+    expect(transport.sentInputs[0].slot).toBe(2);
   });
 
   // Los taps tactiles pueden vivir un solo frame como justPressed sin estado

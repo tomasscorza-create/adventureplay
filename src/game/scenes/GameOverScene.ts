@@ -2,16 +2,19 @@ import Phaser from "phaser";
 import { EVENTS } from "../../shared/constants/events";
 import { levelDefinitions } from "../data/levels";
 import { gameEvents } from "../events/EventBus";
+import type { CoopSessionInfo } from "../events/EventBus";
 
 export class GameOverScene extends Phaser.Scene {
   private unbindRestart?: () => void;
   private unbindMenu?: () => void;
+  private coop?: CoopSessionInfo;
 
   constructor() {
     super("GameOverScene");
   }
 
-  create(data: { result?: "defeat" | "victory"; restartLevelId?: string }): void {
+  create(data: { result?: "defeat" | "victory"; restartLevelId?: string; coop?: CoopSessionInfo }): void {
+    this.coop = data.coop;
     const sceneRestartLevelId = data.restartLevelId && levelDefinitions[data.restartLevelId]
       ? data.restartLevelId
       : undefined;
@@ -24,7 +27,7 @@ export class GameOverScene extends Phaser.Scene {
         this.scene.start("MainMenuScene");
         return;
       }
-      this.scene.start("LevelScene", { levelId: restartLevelId });
+      this.scene.start("LevelScene", { levelId: restartLevelId, coop: this.coop });
     });
 
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {

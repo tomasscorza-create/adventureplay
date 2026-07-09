@@ -103,7 +103,11 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
   useEffect(() => {
     return coopSession.onStart(({ levelId }) => {
       startedRef.current = true;
-      onStartLevel(levelId, { role: "guest", code: coopSession.code });
+      onStartLevel(levelId, {
+        role: "guest",
+        code: coopSession.code,
+        localSlot: coopSession.localSlot,
+      });
     });
   }, [onStartLevel]);
 
@@ -152,7 +156,11 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
     if (!peerReady) return;
     startedRef.current = true;
     coopSession.sendStart(selectedLevelId);
-    onStartLevel(selectedLevelId, { role: "host", code: coopSession.code });
+    onStartLevel(selectedLevelId, {
+      role: "host",
+      code: coopSession.code,
+      localSlot: coopSession.localSlot,
+    });
   };
 
   const leaveAndBack = () => {

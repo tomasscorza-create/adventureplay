@@ -5,44 +5,60 @@ Ambas escenas jugables integran el co-op con el **mismo patrón** host-autoritat
 
 ## Flujo React → Phaser
 
-1. `CoopLobby` (React) crea/une la sala vía `coopSession`. Al comenzar:
-   - Host: `coopSession.sendStart(levelId)` + `onStartLevel(levelId, { role: "host", code })`.
-   - Guest: recibe `onStart` → `onStartLevel(levelId, { role: "guest", code })`.
+1. `CoopLobby` (React) crea/une la sala vía `coopSession`. Al comenzar (ambos incluyen `localSlot`):
+   - Host: `coopSession.sendStart(levelId)` + `onStartLevel(levelId, { role: "host", code, localSlot })`.
+   - Guest: recibe `onStart` → `onStartLevel(levelId, { role: "guest", code, localSlot })`.
 2. `App.startGame(levelId, coop?)` emite `START_GAME` con `coop`.
 3. `MainMenuScene` reenvía `{ levelId, coop }` a `PuzzleScene` o `LevelScene` según el id.
-4. La escena, en `create()`, activa el modo red **solo si** `coop && coopSession.isActive`.
+4. La escena, en `create()`, activa el modo red **solo si** `coop && coopSession.isActive`, crea su
+   `CoopSceneLink<Snapshot>` y guarda `coopSelfSlot = coop.localSlot`.
 
 ## Ciclo de `update()` por rol
 
 | Rol | Qué hace cada frame |
 |---|---|
 | **single** | Igual que antes del co-op (sin cambios). |
-| **host** | Lee input local (slot A) + `consumeRemoteInputFrame` (slot B) → mueve ambos → simula mundo → `maybeSendSnapshot`. |
-| **guest** | `updateGuest`: empaqueta y envía su input; aplica el último snapshot (`applySnapshot`) + `emitGuestHud`. No simula. |
+| **host** | Lee input local (slot 0) + `coopLink.consumeRemoteInputFrame(1)` (slot 1) → mueve ambos → simula mundo → `coopLink.maybeSendSnapshot`. |
+| **guest** | `updateGuest`: `coopLink.sendLocalInput(time, frame)`; aplica `coopLink.latestSnapshot` (`applySnapshot`) + `emitGuestHud`. No simula. |
 
-`pauseJustPressed` en co-op → **salir de la sesión** (`leaveCoop`), porque pausar la escena
-desincronizaría al peer.
+`pauseJustPressed` en co-op → emite `SCREEN_CHANGED "coop-exit-confirm"`: la partida **sigue
+corriendo** detrás de una confirmación React (`CoopExitConfirmScreen`), porque pausar la escena
+desincronizaría al peer. "Salir" avisa al peer vía `GO_TO_MENU` → `coopLink.finish("left")`.
 
-## Helpers compartidos (existen en ambas escenas)
+## Plumbing de red compartido (`CoopSceneLink`)
+
+Toda la mecánica de red común vive en `CoopSceneLink<TSnapshot>` (fuera de Phaser, testeable con
+transporte inyectado). La escena solo aporta cómo construir/aplicar su snapshot.
+
+| Miembro del link | Función |
+|---|---|
+| `bind({ onRemoteEnd, onPeerLeft })` | Suscribe input (host), snapshot (guest), `end` y `peerLeft`. |
+| `consumeRemoteInputFrame(slot)` | Reconstruye `justPressed` del input del guest en ese slot (flancos + acumulados). |
+| `sendLocalInput(time, frame)` | Guest: envía al cambiar + keepalive, estampando su `localSlot`. |
+| `maybeSendSnapshot(time, build)` | Host: throttle 20 Hz + numeración de `seq`. |
+| `latestSnapshot` | Guest: último snapshot aceptado (dedupe por `seq`). |
+| `finish(reason)` / `markEnded()` / `dispose()` | Guardas de fin de sesión (una sola vez) y limpieza. |
+
+## Helpers de escena (en ambas escenas)
 
 | Helper | Función |
 |---|---|
 | `forEachPlayer(cb)` | Itera `player` (slot 0) y `player2` (slot 1). Base de colisiones y daño por jugador. |
 | `nearestPlayerTo(enemy)` | Objetivo del enemigo = jugador más cercano (solo host). |
 | `freezePuppet(obj)` | `body.enable = false` en el guest para no simular localmente. |
-| `bindCoopNet` | Suscribe input (host), snapshot (guest), `end` y `peerLeft`. |
-| `consumeRemoteInputFrame` | Reconstruye `justPressed` del input sostenido del guest. |
-| `toNetPlayer` / `applyNetPlayer` | Serializa / aplica (interpolado) el estado de un jugador. |
-| `maybeSendSnapshot` / `buildSnapshot` / `applySnapshot` | Envío/armado/aplicación de snapshots. |
-| `emitGuestHud` | El guest arma su HUD desde el snapshot de **su** personaje (slot B). |
-| `handleRemoteEnd` / `leaveCoop` / `endCoopToMenu` | Gestión de fin de sesión. |
+| `bindCoopNet` | Conecta los hooks de la escena al `coopLink`. |
+| `toNetPlayer` / `applyNetPlayer` | (En `coopPlayerNet.ts`) serializa / aplica interpolado el estado de un jugador. |
+| `buildSnapshot(seq)` / `applySnapshot` | Armado/aplicación del snapshot específico de la escena. |
+| `emitGuestHud` | El guest arma su HUD desde el snapshot de **su** slot (`coopSelfSlot`). |
+| `handleRemoteEnd` / `endCoopToMenu` | Gestión de fin de sesión. |
 | `finalizeCompletion` | Bookkeeping de nivel completado, compartido host/guest. |
 
 ## Qué se sincroniza (tabla por modo)
 
 | Entidad | Desafío (`PuzzleScene`) | Explorar (`LevelScene`) |
 |---|---|---|
-| Jugadores (x,y,estado,vida,cargas) | ✅ `NetPlayerState` | ✅ `NetPlayerState` |
+| Jugadores (x,y,estado,vida,cargas) | ✅ `players[]` (`NetPlayerState` por slot) | ✅ `players[]` por slot |
+| Proyectiles de poder letal | ✅ `[netId,x,y,dir]` | ✅ `[netId,x,y,dir]` |
 | Enemigos | ✅ `[netId,x,y]` | ✅ `[netId,x,y,flip]` (M0/M1/M2/M3) |
 | Cajas empujables | ✅ posiciones | — |
 | Placas/palancas/sellos/puertas/portal | ✅ (`active[]`, `gatesOpen[]`, `sealsAlive[]`, `goalOpen`) | — |
@@ -68,9 +84,12 @@ el conjunto `active` del snapshot. Así ambos pueden activar objetivos en simult
 - Los **efectos** de gameplay (daño, recolección, meta, checkpoint) se resuelven solo en
   host/single (`const fx = !this.isGuest`); el guest los recibe por snapshot.
 - El daño es por slot (`damagePlayerSlot(player, slot, amount)`). El **destello/sacudida local**
-  solo se dispara para el personaje del cliente (slot A en host/single; el guest lo dispara al
-  detectar la baja de su propia vida en el snapshot).
-- Vida independiente por jugador. Cargas del slot B: el host las siembra en `p2Charges` desde su
+  solo se dispara para el personaje del cliente (slot 0 en host/single; el guest lo dispara al
+  detectar la baja de su propia vida en el snapshot, leída en `coopSelfSlot`).
+- **Nivel perfecto por jugador:** `damageTakenThisLevel` se marca solo por el daño del personaje
+  local (el del compañero no arruina el logro del host). El guest, que no simula, lo marca al
+  detectar su propia baja en el snapshot.
+- Vida independiente por jugador. Cargas del slot 1: el host las siembra en `p2Charges` desde su
   propio save (el gasto en co-op **no** se persiste al save del guest).
 
 ## Fin de partida (compartido)
