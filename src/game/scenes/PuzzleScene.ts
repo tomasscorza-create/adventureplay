@@ -50,8 +50,9 @@ import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
 import { coopSession } from "../systems/net/CoopSession";
 import type { CoopSessionInfo } from "../events/EventBus";
 import { CoopSceneLink } from "../systems/net/CoopSceneLink";
+import { CoopProjectilePuppets } from "../systems/net/CoopProjectilePuppets";
 import { applyNetPlayer, toNetPlayer } from "../systems/net/coopPlayerNet";
-import type { WorldSnapshot } from "../systems/net/coopMessages";
+import type { NetProjectile, WorldSnapshot } from "../systems/net/coopMessages";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -142,6 +143,8 @@ export class PuzzleScene extends Phaser.Scene {
   private p2Charges = { healingCharges: 0, powerCharges: 0 };
   private damageCooldownUntil2 = 0;
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
+  private projectilePuppets?: CoopProjectilePuppets;
+  private nextProjectileNetId = 1;
 
   constructor() {
     super("PuzzleScene");
@@ -173,6 +176,10 @@ export class PuzzleScene extends Phaser.Scene {
     this.isGuest = this.coop?.role === "guest";
     this.player2 = undefined;
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
+    this.projectilePuppets = this.isGuest
+      ? new CoopProjectilePuppets(this, () => this.playSfx("lethal-power"))
+      : undefined;
+    this.nextProjectileNetId = 1;
     if (this.isHost) {
       const guestCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
       this.p2Charges = {
@@ -255,8 +262,9 @@ export class PuzzleScene extends Phaser.Scene {
   private handlePausePressed(): void {
     this.playSfx("ui-click");
     if (this.coop) {
-      // Pausar desincronizaria la sesion: en co-op salir termina la partida.
-      this.leaveCoop();
+      // Pausar desincronizaria la sesion: en co-op la partida sigue corriendo
+      // detras de una confirmacion React para salir ("coop-exit-confirm").
+      gameEvents.emit(EVENTS.SCREEN_CHANGED, "coop-exit-confirm");
       return;
     }
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "paused");
@@ -1481,6 +1489,8 @@ export class PuzzleScene extends Phaser.Scene {
       player.y - 12,
       direction,
     );
+    projectile.setData("netId", this.nextProjectileNetId);
+    this.nextProjectileNetId += 1;
     this.projectiles.add(projectile);
     projectile.launch();
     this.playSfx("lethal-power");
@@ -1648,6 +1658,12 @@ export class PuzzleScene extends Phaser.Scene {
 
   private bindSceneEvents(): void {
     this.unbindResume = gameEvents.on(EVENTS.RESUME_GAME, () => {
+      // En co-op la escena nunca se pausa: "seguir jugando" desde la
+      // confirmacion de salida solo devuelve la pantalla a "playing".
+      if (this.coop && !this.scene.isPaused()) {
+        gameEvents.emit(EVENTS.SCREEN_CHANGED, "playing");
+        return;
+      }
       if (!this.scene.isPaused()) return;
       this.save = gameSaveStore.load();
       this.scene.resume();
@@ -1676,6 +1692,8 @@ export class PuzzleScene extends Phaser.Scene {
       this.scene.start("MainMenuScene");
     });
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {
+      // Si la sesion co-op sigue viva, avisar al peer antes de abandonar.
+      this.coopLink?.finish("left");
       if (!this.levelFinished) {
         this.recordRunStatistics("abandoned");
         gameSaveStore.save(this.save);
@@ -1719,6 +1737,20 @@ export class PuzzleScene extends Phaser.Scene {
       }
       return true;
     });
+    const projectiles: NetProjectile[] = [];
+    this.projectiles.children.each((obj) => {
+      const projectile = obj as PowerProjectile;
+      const netId = projectile.getData("netId") as number | undefined;
+      if (typeof netId === "number" && projectile.active) {
+        projectiles.push([
+          netId,
+          Math.round(projectile.x),
+          Math.round(projectile.y),
+          projectile.flipX ? -1 : 1,
+        ]);
+      }
+      return true;
+    });
     const active = this.level.requiredActivations.filter((id) => this.activations.isActive(id));
     return {
       seq,
@@ -1728,6 +1760,7 @@ export class PuzzleScene extends Phaser.Scene {
       ],
       crates: this.crates.map((crate) => [Math.round(crate.x), Math.round(crate.y)]),
       enemies,
+      projectiles,
       active,
       gatesOpen: this.gates.map((gate) => gate.opened),
       sealsAlive: this.level.seals.map((_, index) =>
@@ -1760,6 +1793,7 @@ export class PuzzleScene extends Phaser.Scene {
     const smoothing = 0.4;
     applyNetPlayer(this.player, snap.players[0], smoothing);
     if (this.player2) applyNetPlayer(this.player2, snap.players[1], smoothing);
+    this.projectilePuppets?.apply(snap.projectiles, smoothing);
 
     // Deteccion de dano propio (slot B) para el destello local del guest.
     const self = snap.players[1];
@@ -1853,16 +1887,6 @@ export class PuzzleScene extends Phaser.Scene {
     } else {
       this.endCoopToMenu();
     }
-  }
-
-  // Pausa en co-op: salir de la sesion (no se puede pausar sin desincronizar).
-  private leaveCoop(): void {
-    if (!this.coopLink?.finish("left")) return;
-    if (!this.levelFinished) {
-      this.recordRunStatistics("abandoned");
-      gameSaveStore.save(this.save);
-    }
-    this.scene.start("MainMenuScene");
   }
 
   // El peer se fue o cerro: terminamos la sesion y volvemos al menu.

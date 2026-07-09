@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { emptyGameplayInputState, type GameplayInputState } from "../../../shared/types/input";
+import {
+  emptyGameplayInputState,
+  type GameplayInputFrame,
+  type GameplayInputState,
+} from "../../../shared/types/input";
 import { CoopSceneLink, type CoopLinkTransport } from "./CoopSceneLink";
 import {
   packInputState,
@@ -66,6 +70,20 @@ class FakeTransport implements CoopLinkTransport {
 
 const noopHooks = { onRemoteEnd: () => undefined, onPeerLeft: () => undefined };
 
+// Frame local sin flancos: el estado sostenido es la unica fuente de bits.
+function asFrame(state: Partial<GameplayInputState>): GameplayInputFrame {
+  return {
+    ...emptyGameplayInputState,
+    ...state,
+    jumpJustPressed: false,
+    meleeJustPressed: false,
+    spinJustPressed: false,
+    healJustPressed: false,
+    powerJustPressed: false,
+    pauseJustPressed: false,
+  };
+}
+
 function makeHost(transport: FakeTransport): CoopSceneLink<TestSnapshot> {
   return new CoopSceneLink<TestSnapshot>({ role: "host", code: "ABCD" }, transport);
 }
@@ -104,6 +122,23 @@ describe("CoopSceneLink host", () => {
     expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(true);
   });
 
+  // Un tap corto puede llegar como press+release en el mismo lote de red, entre
+  // dos frames del host: el flanco no debe perderse por el colapso.
+  it("retiene el flanco cuando el press y el release llegan entre dos consumos", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    link.bind(noopHooks);
+
+    transport.emitInput({ seq: 1, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
+    transport.emitInput({ seq: 2, bits: 0 });
+
+    const frame = link.consumeRemoteInputFrame();
+    expect(frame.jump).toBe(false);
+    expect(frame.jumpJustPressed).toBe(true);
+    // El flanco retenido se consume una sola vez.
+    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(false);
+  });
+
   it("limita los snapshots a la frecuencia configurada con seq creciente", () => {
     const transport = new FakeTransport();
     const link = makeHost(transport);
@@ -124,8 +159,8 @@ describe("CoopSceneLink guest", () => {
   it("envia el input inmediatamente al cambiar y como keepalive espaciado sin cambios", () => {
     const transport = new FakeTransport();
     const link = makeGuest(transport);
-    const idle: GameplayInputState = { ...emptyGameplayInputState };
-    const running: GameplayInputState = { ...emptyGameplayInputState, right: true };
+    const idle = asFrame({});
+    const running = asFrame({ right: true });
 
     link.sendLocalInput(100, running); // cambio inicial: se envia
     link.sendLocalInput(120, running); // sin cambios, 20 ms: silencio
@@ -137,6 +172,21 @@ describe("CoopSceneLink guest", () => {
     expect(transport.sentInputs.map((message) => message.seq)).toEqual([1, 2, 3]);
     expect(transport.sentInputs[0].bits).toBe(packInputState(running));
     expect(transport.sentInputs[2].bits).toBe(packInputState(idle));
+  });
+
+  // Los taps tactiles pueden vivir un solo frame como justPressed sin estado
+  // sostenido (cola de TouchInputStore): deben entrar igual a los bits.
+  it("funde los flancos justPressed del frame local en los bits enviados", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    const tap: GameplayInputFrame = { ...asFrame({}), jumpJustPressed: true };
+
+    link.sendLocalInput(100, tap);
+    link.sendLocalInput(150, asFrame({}));
+
+    expect(transport.sentInputs).toHaveLength(2);
+    expect(transport.sentInputs[0].bits).toBe(packInputState({ ...emptyGameplayInputState, jump: true }));
+    expect(transport.sentInputs[1].bits).toBe(0);
   });
 
   it("ignora snapshots con seq viejo o repetido", () => {

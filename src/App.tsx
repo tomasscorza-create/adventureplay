@@ -45,6 +45,7 @@ import { GameBootScreen } from "./ui/screens/GameBootScreen";
 import { GameIntroScreen } from "./ui/screens/GameIntroScreen";
 import { MainMenuScreen } from "./ui/screens/MainMenuScreen";
 import { LevelSummaryScreen } from "./ui/screens/LevelSummaryScreen";
+import { CoopExitConfirmScreen } from "./ui/screens/CoopExitConfirmScreen";
 import { PauseScreen } from "./ui/screens/PauseScreen";
 import { PowerShopScreen } from "./ui/screens/PowerShopScreen";
 import { VictoryScreen } from "./ui/screens/VictoryScreen";
@@ -146,6 +147,7 @@ export function App() {
     const puzzleLevel = puzzleLevelDefinitions[activeLevelId];
     const keepsLevelMusic = screen === "playing"
       || screen === "paused"
+      || screen === "coop-exit-confirm"
       || screen === "level-transition"
       || screen === "power-shop"
       || screen === "game-over";
@@ -247,7 +249,7 @@ export function App() {
       if (nextScreen !== "power-shop") {
         setActivePowerShop(undefined);
       }
-      if (nextScreen !== "playing" && nextScreen !== "paused") {
+      if (nextScreen !== "playing" && nextScreen !== "paused" && nextScreen !== "coop-exit-confirm") {
         setHealthPickupFeedback({ sequence: 0, restored: 0 });
       }
     });
@@ -437,7 +439,7 @@ export function App() {
     gameEvents.emit(EVENTS.RESUME_GAME, undefined);
   };
 
-  const gameplayIsVisible = screen === "playing" || screen === "paused";
+  const gameplayIsVisible = screen === "playing" || screen === "paused" || screen === "coop-exit-confirm";
   const appShellClassName = [
     "app-shell",
     gameplayIsVisible ? "app-shell--gameplay" : "",
@@ -474,7 +476,7 @@ export function App() {
           />
         )
       )}
-      {gameReady && (screen === "playing" || screen === "paused") && (
+      {gameReady && (screen === "playing" || screen === "paused" || screen === "coop-exit-confirm") && (
         <HUD
           hud={hud}
           healthPickupFeedback={healthPickupFeedback}
@@ -490,7 +492,7 @@ export function App() {
           onOpenShop={openPowerShop}
         />
       )}
-      {gameReady && (screen === "playing" || screen === "paused") && <OrientationNotice />}
+      {gameReady && (screen === "playing" || screen === "paused" || screen === "coop-exit-confirm") && <OrientationNotice />}
       {gameReady && screen === "playing" && usesMobileGameplayControls && (
         <MobileControls
           hud={hud}
@@ -512,6 +514,9 @@ export function App() {
           onUnlockCharacter={unlockCharacter}
           onPurchaseCharacterPower={purchaseCharacterPower}
         />
+      )}
+      {gameReady && screen === "coop-exit-confirm" && (
+        <CoopExitConfirmScreen onStay={resumeGame} onLeave={goToMenu} />
       )}
       {gameReady && screen === "paused" && (
         <PauseScreen
@@ -555,7 +560,7 @@ export function App() {
       <SaveSyncStatus
         state={saveSyncState}
         error={saveSyncError}
-        quiet={screen === "playing" || screen === "paused"}
+        quiet={screen === "playing" || screen === "paused" || screen === "coop-exit-confirm"}
         onRetry={retrySaveSync}
       />
       <PwaInstallPrompt

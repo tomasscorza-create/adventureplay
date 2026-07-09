@@ -49,6 +49,10 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   // Host: ultimo estado sostenido recibido del guest y el previo para flancos.
   private remoteHeld: GameplayInputState = { ...emptyGameplayInputState };
   private remotePrevHeld: GameplayInputState = { ...emptyGameplayInputState };
+  // Host: flancos ascendentes acumulados entre consumos. Si un press y su
+  // release llegan juntos (batching de la red), compararlos contra el ultimo
+  // consumo los colapsaria y el tap se perderia; aca quedan retenidos.
+  private remotePressed: GameplayInputState = { ...emptyGameplayInputState };
   private lastRemoteSeq = -1;
 
   // Guest: throttling de input saliente y ultimo snapshot aceptado.
@@ -87,7 +91,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
         this.transport.onInput((message) => {
           if (message.seq <= this.lastRemoteSeq) return;
           this.lastRemoteSeq = message.seq;
-          this.remoteHeld = unpackInputState(message.bits);
+          const held = unpackInputState(message.bits);
+          for (const action of Object.keys(held) as Array<keyof GameplayInputState>) {
+            if (held[action] && !this.remoteHeld[action]) this.remotePressed[action] = true;
+          }
+          this.remoteHeld = held;
         }),
       );
     }
@@ -105,27 +113,43 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
 
   // Host: convierte el ultimo estado sostenido recibido del guest en un frame
   // con flancos "justPressed" derivados de la transicion respecto del consumo
-  // anterior, sin depender de eventos de flanco que la red podria descartar.
+  // anterior, mas los flancos acumulados entre mensajes para que ningun tap
+  // se pierda aunque su press y release lleguen en el mismo lote de red.
   consumeRemoteInputFrame(): GameplayInputFrame {
     const held = this.remoteHeld;
     const prev = this.remotePrevHeld;
+    const pressed = this.remotePressed;
     const frame: GameplayInputFrame = {
       ...held,
-      jumpJustPressed: held.jump && !prev.jump,
-      meleeJustPressed: held.melee && !prev.melee,
-      spinJustPressed: held.spin && !prev.spin,
-      healJustPressed: held.heal && !prev.heal,
-      powerJustPressed: held.power && !prev.power,
-      pauseJustPressed: held.pause && !prev.pause,
+      jumpJustPressed: (held.jump && !prev.jump) || pressed.jump,
+      meleeJustPressed: (held.melee && !prev.melee) || pressed.melee,
+      spinJustPressed: (held.spin && !prev.spin) || pressed.spin,
+      healJustPressed: (held.heal && !prev.heal) || pressed.heal,
+      powerJustPressed: (held.power && !prev.power) || pressed.power,
+      pauseJustPressed: (held.pause && !prev.pause) || pressed.pause,
     };
+    this.remotePressed = { ...emptyGameplayInputState };
     this.remotePrevHeld = { ...held };
     return frame;
   }
 
   // Guest: envia el input inmediatamente cuando cambia (con un tope de
   // COOP_INPUT_RATE_HZ) y, sin cambios, solo como keepalive espaciado.
-  sendLocalInput(timeMs: number, state: GameplayInputState): void {
-    const bits = packInputState(state);
+  // Los taps mobile pueden vivir un unico frame solo como "justPressed", sin
+  // estado sostenido (cola de TouchInputStore): se funden en los bits para que
+  // el host siempre reciba al menos un mensaje con la accion activa.
+  sendLocalInput(timeMs: number, frame: GameplayInputFrame): void {
+    const effective: GameplayInputState = {
+      left: frame.left,
+      right: frame.right,
+      jump: frame.jump || frame.jumpJustPressed,
+      melee: frame.melee || frame.meleeJustPressed,
+      spin: frame.spin || frame.spinJustPressed,
+      heal: frame.heal || frame.healJustPressed,
+      power: frame.power || frame.powerJustPressed,
+      pause: frame.pause || frame.pauseJustPressed,
+    };
+    const bits = packInputState(effective);
     const elapsed = timeMs - this.lastInputSentAt;
     const changed = bits !== this.lastInputBits;
     if (changed ? elapsed < MIN_INPUT_INTERVAL_MS : elapsed < COOP_INPUT_KEEPALIVE_MS) return;

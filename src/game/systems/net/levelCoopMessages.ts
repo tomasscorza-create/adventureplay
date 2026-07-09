@@ -1,4 +1,4 @@
-import type { NetPlayerState } from "./coopMessages";
+import type { NetPlayerState, NetProjectile } from "./coopMessages";
 
 // Snapshot autoritativo del host para el Modo Explorar (LevelScene). Reutiliza
 // NetPlayerState de coopMessages para ambos jugadores; el resto son entidades
@@ -13,6 +13,8 @@ export interface LevelSnapshot {
   platforms: Array<[number, number, number]>;
   // [netId, x, y] por peligro movil.
   hazards: Array<[number, number, number]>;
+  // [netId, x, y, direccion] por proyectil de poder letal vivo.
+  projectiles: NetProjectile[];
   // indices (segun orden de creacion) de monedas y corazones aun presentes.
   coins: number[];
   hearts: number[];

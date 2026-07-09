@@ -19,7 +19,8 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 // si y reciben un error claro en el lobby en lugar de fallar en silencio.
 // v1: presencia con key por rol, hello sin protocol (builds previos).
 // v2: presencia con key por clientId y payload {role, characterId, protocol}.
-export const COOP_PROTOCOL_VERSION = 2;
+// v3: snapshots con proyectiles de poder letal ([netId, x, y, dir]).
+export const COOP_PROTOCOL_VERSION = 3;
 
 export type CoopRole = "host" | "guest";
 
@@ -129,6 +130,10 @@ export interface NetPlayerState {
   spinCdMs: number;
 }
 
+// [netId, x, y, direccion] por proyectil de poder letal vivo; los ausentes
+// impactaron o salieron de pantalla.
+export type NetProjectile = [number, number, number, -1 | 1];
+
 // Snapshot completo del mundo que el host transmite ~20 veces por segundo.
 export interface WorldSnapshot {
   seq: number;
@@ -136,6 +141,7 @@ export interface WorldSnapshot {
   crates: Array<[number, number]>;
   // [netId, x, y] por enemigo vivo; los ausentes fueron derrotados.
   enemies: Array<[number, number, number]>;
+  projectiles: NetProjectile[];
   active: string[];
   gatesOpen: boolean[];
   sealsAlive: boolean[];

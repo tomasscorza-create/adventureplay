@@ -1,4 +1,4 @@
-export type GameScreen = "main-menu" | "playing" | "level-transition" | "power-shop" | "paused" | "game-over" | "victory";
+export type GameScreen = "main-menu" | "playing" | "level-transition" | "power-shop" | "paused" | "coop-exit-confirm" | "game-over" | "victory";
 
 export type PlayerState =
   | "idle"
