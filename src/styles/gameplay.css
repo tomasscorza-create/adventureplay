@@ -593,6 +593,26 @@
   mask: radial-gradient(circle, transparent 57%, #000 60%);
 }
 
+.touch-button__count {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.touch-button__shop-icon {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.5rem;
+  font-size: 1.25rem;
+  line-height: 0.75;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  color: #fff;
+}
+
 .spin-cooldown__time {
   position: relative;
   z-index: 1;

@@ -3,6 +3,7 @@ import type { GameplayInputAction } from "../../shared/types/input";
 import { touchInputStore } from "../../game/systems/input/TouchInputStore";
 import type { HudState } from "../../shared/types/game";
 import type { AchievementReward } from "../../game/data/achievements";
+import type { PurchasablePower } from "../../game/data/powerShop";
 import { AbilityIcon } from "./AbilityIcon";
 import { CombatActionIcon } from "./CombatActionIcon";
 import { SpinCooldownIndicator } from "./SpinCooldownIndicator";
@@ -25,9 +26,10 @@ interface MobileControlsProps {
   hud: HudState;
   achievementReward?: AchievementReward;
   rewardFeedbackKey?: string;
+  onOpenShop: (power: PurchasablePower) => void;
 }
 
-export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: MobileControlsProps) {
+export function MobileControls({ hud, achievementReward, rewardFeedbackKey, onOpenShop }: MobileControlsProps) {
   const bindings = useKeyboardBindings();
   const settings = useMobileGameplaySettings();
   const wheelOrbitAngles = getActionWheelOrbitAngles(settings.actionWheelRotationDegrees);
@@ -190,11 +192,13 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
                 label={getCompactActionBinding(bindings, "heal")}
                 count={hud.healingCharges}
                 ariaLabel={`Regenerar vida. ${hud.healingCharges} disponibles`}
-                disabled={hud.healingCharges <= 0 || hud.health >= hud.maxHealth}
+                disabled={hud.healingCharges > 0 && hud.health >= hud.maxHealth}
                 rewardAmount={achievementReward?.healingCharges}
                 rewardFeedbackKey={rewardFeedbackKey}
                 variant="ability"
                 className="mobile-action-wheel__heal"
+                isShopMode={hud.healingCharges <= 0}
+                onShopClick={() => onOpenShop("healingCharges")}
               />
               <TouchButton
                 action="melee"
@@ -209,11 +213,13 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
                 label={getCompactActionBinding(bindings, "power")}
                 count={hud.powerCharges}
                 ariaLabel={`Poder letal. ${hud.powerCharges} disponibles`}
-                disabled={hud.powerCharges <= 0}
+                disabled={false}
                 rewardAmount={achievementReward?.powerCharges}
                 rewardFeedbackKey={rewardFeedbackKey}
                 variant="ability"
                 className="mobile-action-wheel__power"
+                isShopMode={hud.powerCharges <= 0}
+                onShopClick={() => onOpenShop("powerCharges")}
               />
             </div>
           </div>
@@ -243,20 +249,24 @@ export function MobileControls({ hud, achievementReward, rewardFeedbackKey }: Mo
                 label={getCompactActionBinding(bindings, "heal")}
                 count={hud.healingCharges}
                 ariaLabel={`Regenerar vida. ${hud.healingCharges} disponibles`}
-                disabled={hud.healingCharges <= 0 || hud.health >= hud.maxHealth}
+                disabled={hud.healingCharges > 0 && hud.health >= hud.maxHealth}
                 rewardAmount={achievementReward?.healingCharges}
                 rewardFeedbackKey={rewardFeedbackKey}
                 variant="ability"
+                isShopMode={hud.healingCharges <= 0}
+                onShopClick={() => onOpenShop("healingCharges")}
               />
               <TouchButton
                 action="power"
                 label={getCompactActionBinding(bindings, "power")}
                 count={hud.powerCharges}
                 ariaLabel={`Poder letal. ${hud.powerCharges} disponibles`}
-                disabled={hud.powerCharges <= 0}
+                disabled={false}
                 rewardAmount={achievementReward?.powerCharges}
                 rewardFeedbackKey={rewardFeedbackKey}
                 variant="ability"
+                isShopMode={hud.powerCharges <= 0}
+                onShopClick={() => onOpenShop("powerCharges")}
               />
             </div>
           </div>
@@ -360,6 +370,8 @@ interface TouchButtonProps {
   rewardFeedbackKey?: string;
   cooldownRemainingMs?: number;
   className?: string;
+  isShopMode?: boolean;
+  onShopClick?: () => void;
 }
 
 function TouchButton({
@@ -375,11 +387,22 @@ function TouchButton({
   rewardFeedbackKey,
   cooldownRemainingMs = 0,
   className = "",
+  isShopMode = false,
+  onShopClick,
 }: TouchButtonProps) {
   const ability = variant === "ability";
   const [pressed, setPressedState] = useState(false);
   const setPressed = (pressed: boolean) => (event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
+    
+    if (isShopMode) {
+      if (pressed && onShopClick) {
+        gameHaptics.play("control");
+        onShopClick();
+      }
+      return;
+    }
+
     if (pressed) {
       event.currentTarget.setPointerCapture(event.pointerId);
       gameHaptics.play(action === "left" || action === "right" ? "joystick" : "control");
@@ -416,7 +439,13 @@ function TouchButton({
           : <span>{label}</span>}
       <SpinCooldownIndicator remainingMs={cooldownRemainingMs} />
       {(ability || variant === "combat") && <span className="touch-button__key">{label}</span>}
-      {ability && <small className="touch-button__count">x{count}</small>}
+      {ability && (
+        isShopMode ? (
+          <span className="touch-button__shop-icon">+</span>
+        ) : (
+          <small className="touch-button__count">x{count}</small>
+        )
+      )}
       {rewardAmount && (
         <span className="touch-button__reward-feedback" key={`${action}-${rewardFeedbackKey}`}>
           +{rewardAmount}

@@ -498,6 +498,7 @@ export function App() {
           hud={hud}
           achievementReward={activeAchievement?.reward}
           rewardFeedbackKey={activeAchievement?.id}
+          onOpenShop={openPowerShop}
         />
       )}
       {gameReady && screen === "main-menu" && (
