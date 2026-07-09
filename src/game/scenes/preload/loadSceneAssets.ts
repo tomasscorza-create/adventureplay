@@ -58,6 +58,7 @@ import ancientChamber9Url from "../../../assets/scenery/ancient-trials/chamber-9
 import ancientChamber10Url from "../../../assets/scenery/ancient-trials/chamber-10.webp";
 import ancientMechanismsSourceUrl from "../../../assets/scenery/ancient-trials/mechanisms-source.webp";
 import ancientSpikesUrl from "../../../assets/scenery/ancient-trials/spikes.webp";
+import palancaDistUrl from "../../../assets/scenery/ancient-trials/palanca-dist.webp";
 import floorStripUrl from "../../../assets/scenery/forest-floor-strip.png";
 import lanternPostUrl from "../../../assets/scenery/lantern-post.png";
 import moonUrl from "../../../assets/scenery/moon-new-game.png";
@@ -145,6 +146,7 @@ export function loadSceneAssets(scene: Phaser.Scene): void {
     scene.load.image("ancient-trials-barrier-source", ancientBarrierSourceUrl);
     scene.load.image("ancient-trials-mechanisms-source", ancientMechanismsSourceUrl);
     scene.load.image("ancient-trials-spikes", ancientSpikesUrl);
+    scene.load.image("ancient-trials-lever-dist", palancaDistUrl);
     [
       ancientChamber1Url,
       ancientChamber2Url,

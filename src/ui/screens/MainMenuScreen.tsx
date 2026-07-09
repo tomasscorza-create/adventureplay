@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent, PointerEvent, ReactElement, WheelEvent } from "react";
 import modeExploreUrl from "../../assets/menu/mode-explore.webp";
+import modePuzzleUrl from "../../assets/menu/mode-puzzle.webp";
 import { achievementDefinitions } from "../../game/data/achievements";
 import {
   canChooseInitialCharacter,
@@ -852,7 +853,7 @@ export function MainMenuScreen({
                   disabled={showExploreEntryHint}
                   onClick={() => runMenuAction(() => setView("challenge"))}
                 >
-                  <span className="mode-tile__sigil" aria-hidden="true" />
+                  <img className="mode-tile__art" src={modePuzzleUrl} alt="" aria-hidden="true" />
                   <span>Desafio</span>
                   <strong>Las camaras antiguas</strong>
                 </button>

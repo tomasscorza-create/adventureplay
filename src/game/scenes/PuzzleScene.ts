@@ -613,7 +613,7 @@ export class PuzzleScene extends Phaser.Scene {
         .setAlpha(0.001)
         .setDepth(10);
       const visual = this.add
-        .image(leverDef.x, leverDef.y + 7, "ancient-trials-lever")
+        .image(leverDef.x, leverDef.y + 7, leverDef.rangedOnly ? "ancient-trials-lever-dist" : "ancient-trials-lever")
         .setOrigin(0.5, 1)
         .setDisplaySize(64, 118)
         .setTint(this.visualPalette.objectTint)
