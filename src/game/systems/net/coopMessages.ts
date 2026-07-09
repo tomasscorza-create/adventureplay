@@ -9,6 +9,18 @@ import {
 export const COOP_INPUT_RATE_HZ = 30;
 export const COOP_SNAPSHOT_RATE_HZ = 20;
 
+// El input solo se transmite cuando cambia; este keepalive reenvia el estado
+// sostenido sin cambios para corregir cualquier mensaje perdido sin volver a
+// emitir a COOP_INPUT_RATE_HZ constante (ahorra ~2/3 del trafico de input).
+export const COOP_INPUT_KEEPALIVE_MS = 100;
+
+// Version del protocolo co-op. Incrementarla ante cualquier cambio incompatible
+// de mensajes o presencia: los clientes con versiones distintas no juegan entre
+// si y reciben un error claro en el lobby en lugar de fallar en silencio.
+// v1: presencia con key por rol, hello sin protocol (builds previos).
+// v2: presencia con key por clientId y payload {role, characterId, protocol}.
+export const COOP_PROTOCOL_VERSION = 2;
+
 export type CoopRole = "host" | "guest";
 
 // Eventos de broadcast usados en el canal de la sala.
@@ -21,8 +33,41 @@ export const COOP_EVENTS = {
 } as const;
 
 // El guest se presenta con el heroe que eligio para que el host lo instancie.
+// `protocol` falta en los clientes anteriores a la v2 (se interpreta como 1).
 export interface CoopHello {
   characterId: string;
+  protocol?: number;
+}
+
+// Entrada normalizada de presence de un peer. La key del canal es un clientId
+// unico por dispositivo (no el rol) para admitir mas de un guest en el futuro;
+// el rol viaja dentro del payload.
+export interface CoopPresenceEntry {
+  key: string;
+  role: CoopRole;
+  characterId: string;
+  protocol: number;
+}
+
+export function collectPeerPresences(
+  state: Record<string, Array<Record<string, unknown>>>,
+  selfKey: string,
+): CoopPresenceEntry[] {
+  const peers: CoopPresenceEntry[] = [];
+  for (const [key, entries] of Object.entries(state)) {
+    if (key === selfKey) continue;
+    for (const entry of entries) {
+      const role = entry.role;
+      if (role !== "host" && role !== "guest") continue;
+      peers.push({
+        key,
+        role,
+        characterId: typeof entry.characterId === "string" ? entry.characterId : "",
+        protocol: typeof entry.protocol === "number" ? entry.protocol : 1,
+      });
+    }
+  }
+  return peers;
 }
 
 export interface CoopStartMessage {

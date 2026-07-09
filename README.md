@@ -38,6 +38,7 @@ Detenerlo con `npm run supabase:stop`.
 - `src/ui/`: pantallas, componentes y hooks React.
 - `src/game/`: escenas, entidades, sistemas y datos Phaser.
 - `src/game/systems/save/`: cache sincronica y persistencia Supabase.
+- `src/game/systems/net/`: transporte del co-op online (Supabase Realtime, host-autoritativo).
 - `src/styles/`: estilos separados por area conservando la cascada.
 - `supabase/migrations/`: fuente de verdad del esquema remoto.
 

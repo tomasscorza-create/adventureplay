@@ -30,6 +30,10 @@ interface SelectableLevel {
 
 type LobbyStep = "choose" | "host" | "join";
 
+// Tiempo maximo esperando al anfitrion tras unirse: si nadie aparece, el codigo
+// es incorrecto o la sala ya no existe, y quedarse cargando no informa nada.
+const JOIN_TIMEOUT_MS = 8000;
+
 const EXPLORE_THEME_RANK: Record<string, number> = {
   forest: 0,
   "enchanted-forest": 1,
@@ -73,6 +77,27 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
 
   // Mantener el estado de conexion sincronizado con la sesion singleton.
   useEffect(() => coopSession.onConnectionState(setConnection), []);
+
+  // Errores fatales de la sala (por ejemplo versiones distintas del juego).
+  useEffect(() => {
+    return coopSession.onSessionError((message) => {
+      coopSession.leave();
+      setStep("choose");
+      setCode("");
+      setError(message);
+    });
+  }, []);
+
+  // Unirse a una sala donde nadie espera no debe quedar cargando para siempre.
+  useEffect(() => {
+    if (step !== "join" || connection !== "waiting") return;
+    const timer = window.setTimeout(() => {
+      coopSession.leave();
+      setStep("choose");
+      setError("Nadie respondio en esa sala. Revisa el codigo con el anfitrion e intentalo de nuevo.");
+    }, JOIN_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [step, connection]);
 
   // El guest arranca la partida cuando el host envia el inicio.
   useEffect(() => {

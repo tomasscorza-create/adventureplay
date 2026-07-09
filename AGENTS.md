@@ -31,6 +31,7 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 | Niveles, enemigos, items o plataformas | Datos editables | `src/game/data/`, `MovingPlatform.ts` |
 | Nueva region o escenario | Proceso replicable para crear una region | `levels.ts`, `LevelScene.ts`, `PreloadScene.ts`, `MainMenuScreen.tsx`, `SaveDefaults.ts` |
 | Personajes, poderes o tienda | Personajes jugables, Inventario, Reglas para progresion y guardado | `characters.ts`, `MainMenuScreen.tsx`, `GameSaveStore.ts` |
+| Co-op online | Demo jugable actual (co-op), Advertencias actuales | `src/game/systems/net/`, `CoopLobby.tsx`, `LevelScene.ts`, `PuzzleScene.ts` |
 | Logros | Datos editables, Reglas para progresion y guardado | `achievements.ts`, `AchievementSystem.ts`, `MainMenuScreen.tsx`, `GameSaveStore.ts` |
 | Persistencia o Supabase | Reglas para progresion y guardado | `GameSaveStore.ts`, `SupabaseSaveAdapter.ts`, `SaveDefaults.ts`, `supabase/migrations/` |
 | Responsive o Android | Estado mobile y Android, Reglas mobile | `src/styles.css`, `MobileControls.tsx`, configuracion Phaser |
@@ -140,7 +141,12 @@ El codigo es la fuente de verdad del comportamiento ejecutable. Este archivo es 
 - `src/game/scenes/level/LevelRunTracker.ts`: cuenta tiempo/acciones del intento y aplica estadisticas una sola vez; `LevelScene` conserva la orquestacion jugable.
 - `src/game/scenes/PuzzleScene.ts`: orquesta el gameplay del modo Desafio sin mezclar sus mecanismos con `LevelScene`; reutiliza personaje, input, poderes, HUD, guardado, inventario, progresion y estadisticas.
 - `src/game/data/puzzleLevels.ts`: contrato orientado a datos para siete camaras de ingenio encadenadas, activadores requeridos, dificultad cuantificada y compatibilidad cooperativa futura.
-- `src/game/systems/puzzles/PuzzleActivationSystem.ts`: estado puro de activadores por participante; `PuzzleScene` lo usa para resolver objetivos y un futuro transporte cooperativo debe alimentarlo sin acoplar red a Phaser.
+- `src/game/systems/puzzles/PuzzleActivationSystem.ts`: estado puro de activadores por participante; `PuzzleScene` lo usa para resolver objetivos y el co-op lo alimenta desde snapshots (participante `net`) sin acoplar red a Phaser.
+- `src/game/systems/net/CoopSession.ts`: capa de transporte co-op (singleton fuera de Phaser) sobre Supabase Realtime; canal por sala con broadcast + presence, key de presence por clientId unico y validacion de `COOP_PROTOCOL_VERSION` entre peers.
+- `src/game/systems/net/coopMessages.ts`: contrato de red del co-op (input en bitmask, `NetPlayerState`, codigos de sala, version de protocolo, payload de presence). Cambiar la forma de estos datos exige subir `COOP_PROTOCOL_VERSION`; `coopMessages.test.ts` congela los bits del input.
+- `src/game/systems/net/CoopSceneLink.ts`: plumbing co-op compartido por `LevelScene` y `PuzzleScene` (deduplicacion por seq, flancos del input remoto, throttling de envios, guardas de fin de sesion). Testeable sin Phaser ni Supabase mediante un transporte inyectado; no duplicar esta logica dentro de las escenas.
+- `src/game/systems/net/coopPlayerNet.ts`: serializacion y aplicacion del estado de red de un jugador, compartida por ambas escenas.
+- `src/game/systems/net/levelCoopMessages.ts`: snapshot autoritativo especifico del modo Explorar (`LevelSnapshot`).
 - `src/game/entities/platforms/MovingPlatform.ts`: plataforma fisica movil que transporta entidades y sincroniza su representacion de piedra.
 - `src/shared/types/`: tipos compartidos entre React, Phaser y sistemas.
 - `src/shared/constants/`: constantes compartidas.
@@ -208,7 +214,7 @@ La demo actual permite:
 - No agregar plataformas auxiliares antes de la puerta que permitan alcanzar la cornisa sin caja, ni reducir la puerta por debajo del alto jugable. `puzzleLevels.test.ts` protege ambas condiciones contra atajos accidentales en las camaras 1-4.
 - Compartir entre Explorar y Desafio el heroe seleccionado, salud maxima, controles, poderes y cargas por personaje, ORO, XP/LV, inventario, logros, HUD, pausa, tienda de cargas, guardado remoto y estadisticas acumuladas.
 - Recoger en Desafio ORO persistente y una pieza unica por camara: `Mecanismo antiguo`, `Contrapeso runico`, `Prisma de eco`, `Nucleo del arquitecto`, `Engranaje antiguo`, `Cetro del arquitecto` y `Lente del arquitecto`. Las recompensas de finalizacion escalan a 180, 220, 270, 330, 420, 500 y 620 XP; la primera camara puede desbloquear `Mente y acero` una sola vez.
-- Ver la opcion Cooperativo dentro de Desafio marcada como proxima fase. `PuzzleLevelDefinition` ya declara activadores requeridos y `supportsCooperative`, pero la sesion de red, autoridad, sincronizacion y segundo jugador aun no estan implementados; no presentar esa opcion como jugable.
+- Jugar co-op online de dos jugadores tanto en Desafio como en Explorar. El lobby `CoopLobby.tsx` (parametrizado por modo) crea o une salas por codigo de 4 caracteres; el transporte vive en `src/game/systems/net/` sobre Supabase Realtime (broadcast + presence, canal `coop-room-<CODE>`, sin tablas ni RLS). El modelo es host-autoritativo: el host simula toda la fisica (su heroe en slot A, el del guest en slot B) y transmite snapshots a ~20 Hz; el guest envia su input al cambiar (mas keepalive), congela los cuerpos autoritativos y renderiza el snapshot con interpolacion. Cada dispositivo tiene camara propia sobre su personaje. El fin es compartido: cualquier derrota o victoria la decide el host y aplica a ambos. En Explorar, la linea de presion co-op sigue al jugador mas atrasado y no usa checkpoints. Pausar en co-op abandona la sesion. El modo red solo se activa cuando `START_GAME` trae `coop`; single-player queda identico.
 - En el explorador, el mapa de regiones izquierdo se escala completo al espacio disponible y no tiene scroll; la lista de niveles derecha conserva cabecera fija y scroll independiente. El contenedor general no debe capturar el desplazamiento de niveles.
 - La iluminacion del mapa usa una unica `explore-map__highlight` como hermana de los botones y toma el alfa detallado del WebP regional. Los `clip-path` poligonales se conservan solo como hitboxes invisibles: no volver a introducir la imagen regional dentro del boton, porque el poligono recortaria arboles, puentes y relieves visibles.
 - Elegir niveles desbloqueados desde Frontera Verde.
@@ -758,15 +764,17 @@ Si el usuario solicita verificar gameplay en navegador, comprobar manualmente:
 10. Agregar Capacitor cuando la experiencia mobile web este comoda.
 11. Probar instalacion y actualizacion de la PWA en Android real antes de reutilizar esta base en Capacitor.
 12. Validar manualmente las siete camaras de Desafio y afinar sus tiempos sin romper la progresion protegida 100/123/152/188/231/285/350.
-13. Diseñar el cooperativo de Desafio con autoridad de sesion, IDs de participante y sincronizacion determinista; no acoplar transporte de red directamente a `PuzzleScene`.
+13. Escalar el co-op a mas de dos jugadores en fases: generalizar el protocolo (inputs con identidad de emisor, `players` como arreglo con slots dinamicos, subir `COOP_PROTOCOL_VERSION`), despues gameplay y lobby para 3-4 jugadores, y por ultimo costo de red (delta-encoding, cuotas de Supabase Realtime) y reconexion. Mantener el transporte fuera de Phaser y el plumbing compartido en `CoopSceneLink`.
 
 ## Advertencias actuales
 
 - `WorldMapScene`, `BattleScene` y `UIScene` existen como estructura futura, no como features completas.
 - No hay un paquete completo de assets finales; M3 ya usa cinco cuadros laterales propios, pero gran parte del resto del gameplay sigue siendo placeholder.
-- Los tests automatizados actuales cubren sesion, cola de guardado, normalizacion, aviso de sincronizacion y estadisticas del intento; gameplay, balance y layout visual siguen requiriendo recorridos manuales.
+- Los tests automatizados actuales cubren sesion, cola de guardado, normalizacion, aviso de sincronizacion, estadisticas del intento y el contrato de red del co-op (`coopMessages.test.ts`, `CoopSceneLink.test.ts`); gameplay, balance y layout visual siguen requiriendo recorridos manuales.
 - No hay empaquetado Android todavia.
-- El cooperativo de Desafio esta modelado en datos y visible como proxima fase, pero todavia no existe transporte de red ni segundo jugador controlable.
+- El co-op online funciona pero esta acotado a dos jugadores: el protocolo y las escenas usan pares fijos (slot A/B). Escalarlo a mas jugadores requiere las fases descritas en `Proximos pasos`. Verificarlo exige dos clientes con cuentas distintas; los recorridos co-op son manuales.
+- El co-op no persiste el gasto de cargas del guest (el host las siembra desde su propio save) y el guest acredita niveles completados aunque no los tuviera desbloqueados; son limitaciones aceptadas hasta definir una politica de progresion compartida.
+- Cada sala co-op activa genera trafico sostenido de broadcasts en Supabase Realtime; antes de promocionar el modo, revisar las cuotas de mensajes y conexiones del plan del proyecto.
 - La arquitectura esta preparada, pero debe crecer gradualmente para no volver la demo dificil de entender.
 - La velocidad acumulada actual llega a 310 en LV15 y sigue dentro del rango previsto. Antes de agregar mejoras que lleven al jugador a 340 o mas, revisar manualmente saltos, atajos, persecuciones y ritmo de camara; 340 es el umbral de advertencia de balance, no un aumento aprobado automaticamente.
 

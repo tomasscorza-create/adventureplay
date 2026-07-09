@@ -15,10 +15,7 @@ import type {
   PowerChargeState,
   SaveData,
 } from "../../shared/types/game";
-import {
-  emptyGameplayInputState,
-  type GameplayInputFrame,
-} from "../../shared/types/input";
+import type { GameplayInputFrame } from "../../shared/types/input";
 import type { SfxCue } from "../data/sfx";
 import { BasicEnemy } from "../entities/enemies/BasicEnemy";
 import type { BaseEnemy } from "../entities/enemies/BaseEnemy";
@@ -49,13 +46,8 @@ import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
 import { getEnemyDefeatPalette } from "./level/enemyDefeatPalette";
 import { coopSession } from "../systems/net/CoopSession";
 import type { CoopSessionInfo } from "../events/EventBus";
-import {
-  COOP_INPUT_RATE_HZ,
-  COOP_SNAPSHOT_RATE_HZ,
-  packInputState,
-  unpackInputState,
-  type NetPlayerState,
-} from "../systems/net/coopMessages";
+import { CoopSceneLink } from "../systems/net/CoopSceneLink";
+import { applyNetPlayer, toNetPlayer } from "../systems/net/coopPlayerNet";
 import type { LevelSnapshot } from "../systems/net/levelCoopMessages";
 
 // Margen fijo (px) que la linea de presion co-op mantiene detras del jugador mas
@@ -107,28 +99,20 @@ export class LevelScene extends Phaser.Scene {
   private readonly runTracker = new LevelRunTracker();
 
   // --- Estado de co-op online (activo solo cuando llega `coop` en create) ---
+  // El plumbing de red (seq, throttling, flancos, fin de sesion) vive en
+  // CoopSceneLink; la escena solo conserva el estado jugable del slot B.
   private coop?: CoopSessionInfo;
+  private coopLink?: CoopSceneLink<LevelSnapshot>;
   private isHost = false;
   private isGuest = false;
-  private coopEnded = false;
   private player2?: Player;
   private readonly movement2 = new MovementSystem();
-  private remoteHeld = { ...emptyGameplayInputState };
-  private remotePrevHeld = { ...emptyGameplayInputState };
-  private lastRemoteSeq = -1;
   private p2Charges = { healingCharges: 0, powerCharges: 0 };
   private recoveringFromPit2 = false;
-  private lastInputSentAt = 0;
-  private lastInputBits = -1;
-  private inputSeq = 0;
-  private latestSnapshot?: LevelSnapshot;
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
-  private lastSnapshotAt = 0;
-  private snapshotSeq = 0;
   private coopPressureX = 0;
   private coopPressureCooldown1 = 0;
   private coopPressureCooldown2 = 0;
-  private readonly coopUnbinds: Array<() => void> = [];
 
   constructor() {
     super("LevelScene");
@@ -142,18 +126,11 @@ export class LevelScene extends Phaser.Scene {
     // Modo co-op: solo activo si la sesion sigue viva (si el peer cerro, degradamos
     // a un jugador). En co-op no hay checkpoint persistente compartido.
     this.coop = data.coop && coopSession.isActive ? data.coop : undefined;
+    this.coopLink = this.coop ? new CoopSceneLink<LevelSnapshot>(this.coop) : undefined;
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
-    this.coopEnded = false;
     this.player2 = undefined;
-    this.remoteHeld = { ...emptyGameplayInputState };
-    this.remotePrevHeld = { ...emptyGameplayInputState };
-    this.lastRemoteSeq = -1;
-    this.latestSnapshot = undefined;
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
-    this.lastInputBits = -1;
-    this.inputSeq = 0;
-    this.snapshotSeq = 0;
     this.coopPressureX = 0;
     this.coopPressureCooldown1 = 0;
     this.coopPressureCooldown2 = 0;
@@ -243,8 +220,8 @@ export class LevelScene extends Phaser.Scene {
     }
     this.handleActionsFor(this.player, input, 0, true);
 
-    if (this.isHost && this.player2) {
-      const remoteFrame = this.consumeRemoteInputFrame();
+    if (this.isHost && this.player2 && this.coopLink) {
+      const remoteFrame = this.coopLink.consumeRemoteInputFrame();
       const didJump2 = this.movement2.update(this.player2, remoteFrame, delta);
       if (didJump2) this.playSfx("jump");
       this.handleActionsFor(this.player2, remoteFrame, 1, false);
@@ -276,7 +253,9 @@ export class LevelScene extends Phaser.Scene {
       this.handlePitFall(this.player2, 1);
     }
 
-    if (this.isHost) this.maybeSendSnapshot(time);
+    if (this.isHost && this.player2) {
+      this.coopLink?.maybeSendSnapshot(time, (seq) => this.buildSnapshot(seq));
+    }
   }
 
   private createWorld(): void {
@@ -616,9 +595,7 @@ export class LevelScene extends Phaser.Scene {
       this.unbindContinue?.();
       this.unbindMenu?.();
       this.unbindCameraZoom?.();
-      for (const unbind of this.coopUnbinds) unbind();
-      this.coopUnbinds.length = 0;
-      if (this.coop) coopSession.leave();
+      this.coopLink?.dispose();
       touchInputStore.reset();
       this.scene.stop("UIScene");
     });
@@ -1626,7 +1603,9 @@ export class LevelScene extends Phaser.Scene {
     const defeated = player.takeDamage(amount);
     if (player.stats.health < previousHealth) {
       this.playSfx("player-hit");
-      this.damageTakenThisLevel = true;
+      // El "nivel perfecto" es por jugador: el dano del companero (slot B) no
+      // debe arruinar el logro del heroe local del host.
+      if (slot === 0) this.damageTakenThisLevel = true;
       // Efectos locales del cliente: solo el slot A es "mi" personaje en
       // host/single. El guest los dispara al detectar su propia baja.
       if (slot === 0) {
@@ -1840,10 +1819,7 @@ export class LevelScene extends Phaser.Scene {
     this.player2?.markDefeated();
     (this.player.body as Phaser.Physics.Arcade.Body).enable = false;
     if (this.player2) (this.player2.body as Phaser.Physics.Arcade.Body).enable = false;
-    if (this.isHost) {
-      this.coopEnded = true;
-      coopSession.sendEnd("lost");
-    }
+    if (this.isHost) this.coopLink?.finish("lost");
     this.time.delayedCall(620, () => {
       this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
     });
@@ -1903,10 +1879,7 @@ export class LevelScene extends Phaser.Scene {
 
     this.levelFinished = true;
     this.finalizeCompletion();
-    if (this.isHost) {
-      this.coopEnded = true;
-      coopSession.sendEnd("won");
-    }
+    if (this.isHost) this.coopLink?.finish("won");
     this.showLevelSummary();
   }
 
@@ -2015,72 +1988,13 @@ export class LevelScene extends Phaser.Scene {
   // ======================= Capa de co-op online =======================
 
   private bindCoopNet(): void {
-    if (this.isHost) {
-      this.coopUnbinds.push(
-        coopSession.onInput((message) => {
-          if (message.seq <= this.lastRemoteSeq) return;
-          this.lastRemoteSeq = message.seq;
-          this.remoteHeld = unpackInputState(message.bits);
-        }),
-      );
-    }
-    if (this.isGuest) {
-      this.coopUnbinds.push(
-        coopSession.onSnapshot<LevelSnapshot>((snapshot) => {
-          if (this.latestSnapshot && snapshot.seq <= this.latestSnapshot.seq) return;
-          this.latestSnapshot = snapshot;
-        }),
-      );
-    }
-    this.coopUnbinds.push(coopSession.onEnd((message) => this.handleRemoteEnd(message.reason)));
-    this.coopUnbinds.push(coopSession.onPeerLeft(() => this.endCoopToMenu()));
+    this.coopLink?.bind({
+      onRemoteEnd: (reason) => this.handleRemoteEnd(reason),
+      onPeerLeft: () => this.endCoopToMenu(),
+    });
   }
 
-  private consumeRemoteInputFrame(): GameplayInputFrame {
-    const held = this.remoteHeld;
-    const prev = this.remotePrevHeld;
-    const frame: GameplayInputFrame = {
-      ...held,
-      jumpJustPressed: held.jump && !prev.jump,
-      meleeJustPressed: held.melee && !prev.melee,
-      spinJustPressed: held.spin && !prev.spin,
-      healJustPressed: held.heal && !prev.heal,
-      powerJustPressed: held.power && !prev.power,
-      pauseJustPressed: held.pause && !prev.pause,
-    };
-    this.remotePrevHeld = { ...held };
-    return frame;
-  }
-
-  private maybeSendSnapshot(time: number): void {
-    if (!this.player2) return;
-    if (time - this.lastSnapshotAt < 1000 / COOP_SNAPSHOT_RATE_HZ) return;
-    this.lastSnapshotAt = time;
-    coopSession.sendSnapshot(this.buildSnapshot());
-  }
-
-  private toNetPlayer(
-    player: Player,
-    charges: { healingCharges: number; powerCharges: number },
-  ): NetPlayerState {
-    const body = player.body as Phaser.Physics.Arcade.Body;
-    return {
-      x: Math.round(player.x),
-      y: Math.round(player.y),
-      vx: Math.round(body.velocity.x),
-      vy: Math.round(body.velocity.y),
-      facing: player.facing,
-      state: player.state,
-      health: player.stats.health,
-      maxHealth: player.stats.maxHealth,
-      healCharges: charges.healingCharges,
-      powerCharges: charges.powerCharges,
-      spinCdMs: Math.round(player.getSpinCooldownRemaining(this.time.now)),
-    };
-  }
-
-  private buildSnapshot(): LevelSnapshot {
-    this.snapshotSeq += 1;
+  private buildSnapshot(seq: number): LevelSnapshot {
     const p1Charges = this.getActivePowerCharges();
     const enemies: Array<[number, number, number, number]> = [];
     this.enemies.children.each((obj) => {
@@ -2122,10 +2036,10 @@ export class LevelScene extends Phaser.Scene {
       return true;
     });
     return {
-      seq: this.snapshotSeq,
+      seq,
       players: [
-        this.toNetPlayer(this.player, p1Charges),
-        this.toNetPlayer(this.player2!, this.p2Charges),
+        toNetPlayer(this.player, p1Charges, this.time.now),
+        toNetPlayer(this.player2!, this.p2Charges, this.time.now),
       ],
       enemies,
       platforms,
@@ -2146,28 +2060,26 @@ export class LevelScene extends Phaser.Scene {
       this.handlePausePressed();
       return;
     }
-    const bits = packInputState(input);
-    if (bits !== this.lastInputBits || time - this.lastInputSentAt >= 1000 / COOP_INPUT_RATE_HZ) {
-      this.lastInputBits = bits;
-      this.lastInputSentAt = time;
-      this.inputSeq += 1;
-      coopSession.sendInput({ seq: this.inputSeq, bits });
-    }
-    if (this.latestSnapshot) {
-      this.applySnapshot(this.latestSnapshot);
-      this.remainingTimeMs = this.latestSnapshot.timeMs;
+    this.coopLink?.sendLocalInput(time, input);
+    const snapshot = this.coopLink?.latestSnapshot;
+    if (snapshot) {
+      this.applySnapshot(snapshot);
+      this.remainingTimeMs = snapshot.timeMs;
     }
     this.emitHud();
   }
 
   private applySnapshot(snap: LevelSnapshot): void {
     const s = 0.4;
-    this.applyNetPlayer(this.player, snap.players[0], s);
-    if (this.player2) this.applyNetPlayer(this.player2, snap.players[1], s);
+    applyNetPlayer(this.player, snap.players[0], s);
+    if (this.player2) applyNetPlayer(this.player2, snap.players[1], s);
 
     // Deteccion de dano propio (slot B) para el destello/sacudida local del guest.
     const self = snap.players[1];
     if (Number.isFinite(this.guestPrevSelfHealth) && self.health < this.guestPrevSelfHealth) {
+      // El guest no simula: este es su unico registro de dano recibido, y el
+      // logro de nivel perfecto depende de que quede marcado.
+      this.damageTakenThisLevel = true;
       gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount: this.guestPrevSelfHealth - self.health });
       this.playSfx("player-hit");
       this.cameras.main.shake(160, 0.009);
@@ -2239,15 +2151,8 @@ export class LevelScene extends Phaser.Scene {
     });
   }
 
-  private applyNetPlayer(player: Player, net: NetPlayerState, smoothing: number): void {
-    player.x = Phaser.Math.Linear(player.x, net.x, smoothing);
-    player.y = Phaser.Math.Linear(player.y, net.y, smoothing);
-    player.stats.health = net.health;
-    player.renderNetState(net.state, net.facing);
-  }
-
   private emitGuestHud(): void {
-    const snap = this.latestSnapshot;
+    const snap = this.coopLink?.latestSnapshot;
     const self = snap?.players[1];
     gameEvents.emit(EVENTS.HUD_UPDATED, {
       ...this.save.player,
@@ -2318,9 +2223,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private leaveCoop(): void {
-    if (this.coopEnded) return;
-    this.coopEnded = true;
-    coopSession.sendEnd("left");
+    if (!this.coopLink?.finish("left")) return;
     if (!this.levelFinished) {
       this.recordRunStatistics("abandoned");
       gameSaveStore.save(this.save);
@@ -2329,8 +2232,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private endCoopToMenu(): void {
-    if (this.coopEnded) return;
-    this.coopEnded = true;
+    if (!this.coopLink?.markEnded()) return;
     if (!this.levelFinished) {
       this.recordRunStatistics("abandoned");
       gameSaveStore.save(this.save);

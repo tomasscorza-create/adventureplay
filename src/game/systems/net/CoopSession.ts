@@ -1,7 +1,9 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "../../../shared/supabase/client";
 import {
+  collectPeerPresences,
   COOP_EVENTS,
+  COOP_PROTOCOL_VERSION,
   generateRoomCode,
   normalizeRoomCode,
   type CoopEndMessage,
@@ -31,6 +33,18 @@ interface CoopCallbacks {
   snapshot: Set<(snapshot: unknown) => void>;
   start: Set<(message: CoopStartMessage) => void>;
   end: Set<(message: CoopEndMessage) => void>;
+  // Errores fatales de la sala (por ejemplo versiones de protocolo distintas).
+  sessionError: Set<(message: string) => void>;
+}
+
+// Identidad unica del cliente dentro del canal de presence. La key ya no es el
+// rol: eso permitia que dos guests colisionaran y bloquea el co-op de mas de
+// dos jugadores planificado.
+function generateClientKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 // Capa de red del co-op. Vive completamente fuera de Phaser (regla de arquitectura):
@@ -45,6 +59,8 @@ class CoopSession {
   private _peerPresent = false;
   private localHello: CoopHello = { characterId: "" };
   private peerHello: CoopHello | null = null;
+  private clientKey = "";
+  private protocolMismatch = false;
 
   private readonly callbacks: CoopCallbacks = {
     connectionState: new Set(),
@@ -54,6 +70,7 @@ class CoopSession {
     snapshot: new Set(),
     start: new Set(),
     end: new Set(),
+    sessionError: new Set(),
   };
 
   get role(): CoopRole | null {
@@ -99,15 +116,17 @@ class CoopSession {
     this.leave();
     this._role = role;
     this._code = code;
-    this.localHello = hello;
+    this.localHello = { ...hello, protocol: COOP_PROTOCOL_VERSION };
     this.peerHello = null;
     this._peerPresent = false;
+    this.protocolMismatch = false;
+    this.clientKey = generateClientKey();
     this.setConnectionState("connecting");
 
     const channel = supabase.channel(`coop-room-${code}`, {
       config: {
         broadcast: { self: false, ack: false },
-        presence: { key: role },
+        presence: { key: this.clientKey },
       },
     });
     this.channel = channel;
@@ -137,7 +156,11 @@ class CoopSession {
     await new Promise<void>((resolve, reject) => {
       channel.subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          void channel.track({ role, characterId: hello.characterId });
+          void channel.track({
+            role,
+            characterId: hello.characterId,
+            protocol: COOP_PROTOCOL_VERSION,
+          });
           this.setConnectionState("waiting");
           resolve();
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -150,17 +173,37 @@ class CoopSession {
 
   private syncPresence(): void {
     if (!this.channel) return;
-    const presence = this.channel.presenceState();
+    const presence = this.channel.presenceState() as unknown as Record<
+      string,
+      Array<Record<string, unknown>>
+    >;
     const otherRole: CoopRole = this._role === "host" ? "guest" : "host";
-    const peerNowPresent = Array.isArray(presence[otherRole]) && presence[otherRole].length > 0;
+    const peer = collectPeerPresences(presence, this.clientKey).find(
+      (entry) => entry.role === otherRole,
+    );
 
-    if (peerNowPresent && !this._peerPresent) {
+    // Version incompatible (incluye builds previos sin campo protocol): error
+    // claro una sola vez en lugar de una sala que espera para siempre.
+    if (peer && peer.protocol !== COOP_PROTOCOL_VERSION) {
+      if (!this.protocolMismatch) {
+        this.protocolMismatch = true;
+        this.callbacks.sessionError.forEach((cb) =>
+          cb("Las versiones del juego no coinciden. Ambos jugadores deben actualizar Adventure Play."),
+        );
+        this.setConnectionState("error");
+      }
+      return;
+    }
+
+    if (peer && !this._peerPresent) {
       this._peerPresent = true;
-      // Reanunciamos nuestro hello para que el peer que acaba de entrar lo reciba.
+      // El payload de presence ya trae el heroe del peer; el hello por broadcast
+      // se conserva como reanuncio para clientes que se suscriben tarde.
+      this.peerHello = { characterId: peer.characterId, protocol: peer.protocol };
       this.sendHello();
       this.setConnectionState("ready");
       this.emitPeerJoined();
-    } else if (!peerNowPresent && this._peerPresent) {
+    } else if (!peer && this._peerPresent) {
       this._peerPresent = false;
       this.peerHello = null;
       this.callbacks.peerLeft.forEach((cb) => cb());
@@ -210,6 +253,7 @@ class CoopSession {
     this._code = "";
     this._peerPresent = false;
     this.peerHello = null;
+    this.protocolMismatch = false;
     this.setConnectionState("idle");
   }
 
@@ -243,6 +287,9 @@ class CoopSession {
   }
   onEnd(cb: (message: CoopEndMessage) => void): () => void {
     return this.subscribe("end", cb);
+  }
+  onSessionError(cb: (message: string) => void): () => void {
+    return this.subscribe("sessionError", cb);
   }
 
   private subscribe<K extends keyof CoopCallbacks>(

@@ -8,10 +8,7 @@ import type {
   PlayerStats,
   SaveData,
 } from "../../shared/types/game";
-import {
-  emptyGameplayInputState,
-  type GameplayInputFrame,
-} from "../../shared/types/input";
+import type { GameplayInputFrame } from "../../shared/types/input";
 import { getAchievementDefinition } from "../data/achievements";
 import { getCharacterDefinition } from "../data/characters";
 import type { SfxCue } from "../data/sfx";
@@ -52,14 +49,9 @@ import { gameSaveStore } from "../systems/save/GameSaveStore";
 import { LevelRunTracker, type RunResult } from "./level/LevelRunTracker";
 import { coopSession } from "../systems/net/CoopSession";
 import type { CoopSessionInfo } from "../events/EventBus";
-import {
-  COOP_INPUT_RATE_HZ,
-  COOP_SNAPSHOT_RATE_HZ,
-  packInputState,
-  unpackInputState,
-  type NetPlayerState,
-  type WorldSnapshot,
-} from "../systems/net/coopMessages";
+import { CoopSceneLink } from "../systems/net/CoopSceneLink";
+import { applyNetPlayer, toNetPlayer } from "../systems/net/coopPlayerNet";
+import type { WorldSnapshot } from "../systems/net/coopMessages";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -137,33 +129,19 @@ export class PuzzleScene extends Phaser.Scene {
     visual: Phaser.GameObjects.Image;
     index: number;
   }> = [];
-  private snapshotSeq = 0;
-
   // --- Estado de co-op online (activo solo cuando llega `coop` en create) ---
+  // El plumbing de red (seq, throttling, flancos, fin de sesion) vive en
+  // CoopSceneLink; la escena solo conserva el estado jugable del slot B.
   private coop?: CoopSessionInfo;
+  private coopLink?: CoopSceneLink<WorldSnapshot>;
   private isHost = false;
   private isGuest = false;
-  private coopEnded = false;
   private player2?: Player;
   private readonly movement2 = new MovementSystem();
-  // Host: ultimo input recibido del guest y su frame reconstruido.
-  private remoteHeld = { ...emptyGameplayInputState };
-  private remotePrevHeld = { ...emptyGameplayInputState };
-  private lastRemoteSeq = -1;
-  // Host: cargas vivas del jugador 2 (sembradas desde el hello del guest).
+  // Host: cargas vivas del jugador 2 (sembradas desde el save del host).
   private p2Charges = { healingCharges: 0, powerCharges: 0 };
   private damageCooldownUntil2 = 0;
-  // Guest: envio de input y buffer de snapshots para interpolar.
-  private lastInputSentAt = 0;
-  private lastInputBits = -1;
-  private inputSeq = 0;
-  private latestSnapshot?: WorldSnapshot;
-  private prevSnapshot?: WorldSnapshot;
-  private snapshotRecvAt = 0;
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
-  // Host: throttle de snapshots.
-  private lastSnapshotAt = 0;
-  private readonly coopUnbinds: Array<() => void> = [];
 
   constructor() {
     super("PuzzleScene");
@@ -190,18 +168,11 @@ export class PuzzleScene extends Phaser.Scene {
     // Modo co-op: solo se activa cuando la sesion sigue viva. Si perdimos la
     // conexion (por ejemplo el peer cerro), degradamos a un jugador.
     this.coop = data.coop && coopSession.isActive ? data.coop : undefined;
+    this.coopLink = this.coop ? new CoopSceneLink<WorldSnapshot>(this.coop) : undefined;
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
-    this.coopEnded = false;
     this.player2 = undefined;
-    this.remoteHeld = { ...emptyGameplayInputState };
-    this.remotePrevHeld = { ...emptyGameplayInputState };
-    this.lastRemoteSeq = -1;
-    this.latestSnapshot = undefined;
-    this.prevSnapshot = undefined;
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
-    this.lastInputBits = -1;
-    this.inputSeq = 0;
     if (this.isHost) {
       const guestCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
       this.p2Charges = {
@@ -250,8 +221,8 @@ export class PuzzleScene extends Phaser.Scene {
     if (jumped) this.playSfx("jump");
     this.handleActionsFor(this.player, input, "player-1");
 
-    if (this.isHost && this.player2) {
-      const remoteFrame = this.consumeRemoteInputFrame();
+    if (this.isHost && this.player2 && this.coopLink) {
+      const remoteFrame = this.coopLink.consumeRemoteInputFrame();
       const jumped2 = this.movement2.update(this.player2, remoteFrame, delta);
       if (jumped2) this.playSfx("jump");
       this.handleActionsFor(this.player2, remoteFrame, "player-2");
@@ -270,7 +241,9 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
 
-    if (this.isHost) this.maybeSendSnapshot(time);
+    if (this.isHost && this.player2) {
+      this.coopLink?.maybeSendSnapshot(time, (seq) => this.buildSnapshot(seq));
+    }
 
     const hudSecond = Math.ceil(this.remainingTimeMs / 1000);
     const spinStep = Math.ceil(this.player.getSpinCooldownRemaining(this.time.now) / 100);
@@ -1593,10 +1566,7 @@ export class PuzzleScene extends Phaser.Scene {
     ) return;
     this.levelFinished = true;
     this.finalizeCompletion();
-    if (this.isHost) {
-      this.coopEnded = true;
-      coopSession.sendEnd("won");
-    }
+    if (this.isHost) this.coopLink?.finish("won");
     this.physics.pause();
     this.emitHud();
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "level-transition");
@@ -1609,10 +1579,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.player.markDefeated();
     this.player2?.markDefeated();
     gameSaveStore.save(this.save);
-    if (this.isHost) {
-      this.coopEnded = true;
-      coopSession.sendEnd("lost");
-    }
+    if (this.isHost) this.coopLink?.finish("lost");
     this.physics.pause();
     this.playSfx("game-over");
     gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
@@ -1722,9 +1689,7 @@ export class PuzzleScene extends Phaser.Scene {
       this.unbindContinue?.();
       this.unbindMenu?.();
       this.unbindCameraZoom?.();
-      for (const unbind of this.coopUnbinds) unbind();
-      this.coopUnbinds.length = 0;
-      if (this.coop) coopSession.leave();
+      this.coopLink?.dispose();
       touchInputStore.reset();
       this.scene.stop("UIScene");
     });
@@ -1737,76 +1702,13 @@ export class PuzzleScene extends Phaser.Scene {
   // ======================= Capa de co-op online =======================
 
   private bindCoopNet(): void {
-    if (this.isHost) {
-      this.coopUnbinds.push(
-        coopSession.onInput((message) => {
-          if (message.seq <= this.lastRemoteSeq) return;
-          this.lastRemoteSeq = message.seq;
-          this.remoteHeld = unpackInputState(message.bits);
-        }),
-      );
-    }
-    if (this.isGuest) {
-      this.coopUnbinds.push(
-        coopSession.onSnapshot<WorldSnapshot>((snapshot) => {
-          if (this.latestSnapshot && snapshot.seq <= this.latestSnapshot.seq) return;
-          this.prevSnapshot = this.latestSnapshot;
-          this.latestSnapshot = snapshot;
-          this.snapshotRecvAt = this.time.now;
-        }),
-      );
-    }
-    this.coopUnbinds.push(coopSession.onEnd((message) => this.handleRemoteEnd(message.reason)));
-    this.coopUnbinds.push(coopSession.onPeerLeft(() => this.endCoopToMenu()));
+    this.coopLink?.bind({
+      onRemoteEnd: (reason) => this.handleRemoteEnd(reason),
+      onPeerLeft: () => this.endCoopToMenu(),
+    });
   }
 
-  // Host: convierte el ultimo estado sostenido recibido del guest en un frame con
-  // flancos "justPressed" derivados de la transicion respecto del frame anterior.
-  private consumeRemoteInputFrame(): GameplayInputFrame {
-    const held = this.remoteHeld;
-    const prev = this.remotePrevHeld;
-    const frame: GameplayInputFrame = {
-      ...held,
-      jumpJustPressed: held.jump && !prev.jump,
-      meleeJustPressed: held.melee && !prev.melee,
-      spinJustPressed: held.spin && !prev.spin,
-      healJustPressed: held.heal && !prev.heal,
-      powerJustPressed: held.power && !prev.power,
-      pauseJustPressed: held.pause && !prev.pause,
-    };
-    this.remotePrevHeld = { ...held };
-    return frame;
-  }
-
-  private maybeSendSnapshot(time: number): void {
-    if (!this.player2) return;
-    if (time - this.lastSnapshotAt < 1000 / COOP_SNAPSHOT_RATE_HZ) return;
-    this.lastSnapshotAt = time;
-    coopSession.sendSnapshot(this.buildSnapshot());
-  }
-
-  private toNetPlayer(
-    player: Player,
-    charges: { healingCharges: number; powerCharges: number },
-  ): NetPlayerState {
-    const body = player.body as Phaser.Physics.Arcade.Body;
-    return {
-      x: Math.round(player.x),
-      y: Math.round(player.y),
-      vx: Math.round(body.velocity.x),
-      vy: Math.round(body.velocity.y),
-      facing: player.facing,
-      state: player.state,
-      health: player.stats.health,
-      maxHealth: player.stats.maxHealth,
-      healCharges: charges.healingCharges,
-      powerCharges: charges.powerCharges,
-      spinCdMs: Math.round(player.getSpinCooldownRemaining(this.time.now)),
-    };
-  }
-
-  private buildSnapshot(): WorldSnapshot {
-    this.snapshotSeq += 1;
+  private buildSnapshot(seq: number): WorldSnapshot {
     const p1Charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
     const enemies: Array<[number, number, number]> = [];
     this.enemies.children.each((obj) => {
@@ -1819,10 +1721,10 @@ export class PuzzleScene extends Phaser.Scene {
     });
     const active = this.level.requiredActivations.filter((id) => this.activations.isActive(id));
     return {
-      seq: this.snapshotSeq,
+      seq,
       players: [
-        this.toNetPlayer(this.player, p1Charges),
-        this.toNetPlayer(this.player2!, this.p2Charges),
+        toNetPlayer(this.player, p1Charges, this.time.now),
+        toNetPlayer(this.player2!, this.p2Charges, this.time.now),
       ],
       crates: this.crates.map((crate) => [Math.round(crate.x), Math.round(crate.y)]),
       enemies,
@@ -1843,18 +1745,11 @@ export class PuzzleScene extends Phaser.Scene {
       this.handlePausePressed();
       return;
     }
-    // Enviar mi input al host cuando cambia o al menos al ritmo minimo.
-    const bits = packInputState(input);
-    if (bits !== this.lastInputBits || time - this.lastInputSentAt >= 1000 / COOP_INPUT_RATE_HZ) {
-      this.lastInputBits = bits;
-      this.lastInputSentAt = time;
-      this.inputSeq += 1;
-      coopSession.sendInput({ seq: this.inputSeq, bits });
-    }
-
-    if (this.latestSnapshot) {
-      this.applySnapshot(this.latestSnapshot);
-      this.remainingTimeMs = this.latestSnapshot.timeMs;
+    this.coopLink?.sendLocalInput(time, input);
+    const snapshot = this.coopLink?.latestSnapshot;
+    if (snapshot) {
+      this.applySnapshot(snapshot);
+      this.remainingTimeMs = snapshot.timeMs;
     }
     this.updatePlateKeyInterface();
     this.updateObjectiveText();
@@ -1863,8 +1758,8 @@ export class PuzzleScene extends Phaser.Scene {
 
   private applySnapshot(snap: WorldSnapshot): void {
     const smoothing = 0.4;
-    this.applyNetPlayer(this.player, snap.players[0], smoothing);
-    if (this.player2) this.applyNetPlayer(this.player2, snap.players[1], smoothing);
+    applyNetPlayer(this.player, snap.players[0], smoothing);
+    if (this.player2) applyNetPlayer(this.player2, snap.players[1], smoothing);
 
     // Deteccion de dano propio (slot B) para el destello local del guest.
     const self = snap.players[1];
@@ -1917,15 +1812,8 @@ export class PuzzleScene extends Phaser.Scene {
     if (snap.goalOpen) this.openGoalGate();
   }
 
-  private applyNetPlayer(player: Player, net: NetPlayerState, smoothing: number): void {
-    player.x = Phaser.Math.Linear(player.x, net.x, smoothing);
-    player.y = Phaser.Math.Linear(player.y, net.y, smoothing);
-    player.stats.health = net.health;
-    player.renderNetState(net.state, net.facing);
-  }
-
   private emitGuestHud(): void {
-    const snap = this.latestSnapshot;
+    const snap = this.coopLink?.latestSnapshot;
     const self = snap?.players[1];
     const hud: HudState = {
       ...this.save.player,
@@ -1969,9 +1857,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   // Pausa en co-op: salir de la sesion (no se puede pausar sin desincronizar).
   private leaveCoop(): void {
-    if (this.coopEnded) return;
-    this.coopEnded = true;
-    coopSession.sendEnd("left");
+    if (!this.coopLink?.finish("left")) return;
     if (!this.levelFinished) {
       this.recordRunStatistics("abandoned");
       gameSaveStore.save(this.save);
@@ -1981,8 +1867,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   // El peer se fue o cerro: terminamos la sesion y volvemos al menu.
   private endCoopToMenu(): void {
-    if (this.coopEnded) return;
-    this.coopEnded = true;
+    if (!this.coopLink?.markEnded()) return;
     if (!this.levelFinished) {
       this.recordRunStatistics("abandoned");
       gameSaveStore.save(this.save);

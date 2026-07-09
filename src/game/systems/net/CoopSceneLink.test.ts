@@ -1,0 +1,191 @@
+import { describe, expect, it } from "vitest";
+import { emptyGameplayInputState, type GameplayInputState } from "../../../shared/types/input";
+import { CoopSceneLink, type CoopLinkTransport } from "./CoopSceneLink";
+import {
+  packInputState,
+  type CoopEndMessage,
+  type CoopEndReason,
+  type GuestInputMessage,
+} from "./coopMessages";
+
+interface TestSnapshot {
+  seq: number;
+  value: string;
+}
+
+class FakeTransport implements CoopLinkTransport {
+  readonly inputHandlers = new Set<(message: GuestInputMessage) => void>();
+  readonly snapshotHandlers = new Set<(snapshot: unknown) => void>();
+  readonly endHandlers = new Set<(message: CoopEndMessage) => void>();
+  readonly peerLeftHandlers = new Set<() => void>();
+  readonly sentInputs: GuestInputMessage[] = [];
+  readonly sentSnapshots: unknown[] = [];
+  readonly sentEnds: CoopEndReason[] = [];
+  leaveCalls = 0;
+
+  onInput(cb: (message: GuestInputMessage) => void): () => void {
+    this.inputHandlers.add(cb);
+    return () => this.inputHandlers.delete(cb);
+  }
+  onSnapshot<T>(cb: (snapshot: T) => void): () => void {
+    const wrapped = cb as (snapshot: unknown) => void;
+    this.snapshotHandlers.add(wrapped);
+    return () => this.snapshotHandlers.delete(wrapped);
+  }
+  onEnd(cb: (message: CoopEndMessage) => void): () => void {
+    this.endHandlers.add(cb);
+    return () => this.endHandlers.delete(cb);
+  }
+  onPeerLeft(cb: () => void): () => void {
+    this.peerLeftHandlers.add(cb);
+    return () => this.peerLeftHandlers.delete(cb);
+  }
+  sendInput(message: GuestInputMessage): void {
+    this.sentInputs.push(message);
+  }
+  sendSnapshot(snapshot: unknown): void {
+    this.sentSnapshots.push(snapshot);
+  }
+  sendEnd(reason: CoopEndReason): void {
+    this.sentEnds.push(reason);
+  }
+  leave(): void {
+    this.leaveCalls += 1;
+  }
+
+  emitInput(message: GuestInputMessage): void {
+    this.inputHandlers.forEach((cb) => cb(message));
+  }
+  emitSnapshot(snapshot: TestSnapshot): void {
+    this.snapshotHandlers.forEach((cb) => cb(snapshot));
+  }
+  emitEnd(reason: CoopEndReason): void {
+    this.endHandlers.forEach((cb) => cb({ reason }));
+  }
+}
+
+const noopHooks = { onRemoteEnd: () => undefined, onPeerLeft: () => undefined };
+
+function makeHost(transport: FakeTransport): CoopSceneLink<TestSnapshot> {
+  return new CoopSceneLink<TestSnapshot>({ role: "host", code: "ABCD" }, transport);
+}
+
+function makeGuest(transport: FakeTransport): CoopSceneLink<TestSnapshot> {
+  return new CoopSceneLink<TestSnapshot>({ role: "guest", code: "ABCD" }, transport);
+}
+
+describe("CoopSceneLink host", () => {
+  it("descarta inputs con seq viejo y conserva el mas reciente", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    link.bind(noopHooks);
+
+    transport.emitInput({ seq: 2, bits: packInputState({ ...emptyGameplayInputState, right: true }) });
+    transport.emitInput({ seq: 1, bits: packInputState({ ...emptyGameplayInputState, left: true }) });
+
+    const frame = link.consumeRemoteInputFrame();
+    expect(frame.right).toBe(true);
+    expect(frame.left).toBe(false);
+  });
+
+  it("reconstruye flancos justPressed solo en la transicion", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    link.bind(noopHooks);
+
+    transport.emitInput({ seq: 1, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
+    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(true);
+    // El mismo estado sostenido no vuelve a disparar el flanco.
+    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(false);
+
+    transport.emitInput({ seq: 2, bits: 0 });
+    expect(link.consumeRemoteInputFrame().jump).toBe(false);
+    transport.emitInput({ seq: 3, bits: packInputState({ ...emptyGameplayInputState, jump: true }) });
+    expect(link.consumeRemoteInputFrame().jumpJustPressed).toBe(true);
+  });
+
+  it("limita los snapshots a la frecuencia configurada con seq creciente", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    const build = (seq: number): TestSnapshot => ({ seq, value: "estado" });
+
+    link.maybeSendSnapshot(50, build);
+    link.maybeSendSnapshot(80, build); // 30 ms despues: descartado (20 Hz = 50 ms)
+    link.maybeSendSnapshot(105, build);
+
+    expect(transport.sentSnapshots).toEqual([
+      { seq: 1, value: "estado" },
+      { seq: 2, value: "estado" },
+    ]);
+  });
+});
+
+describe("CoopSceneLink guest", () => {
+  it("envia el input inmediatamente al cambiar y como keepalive espaciado sin cambios", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    const idle: GameplayInputState = { ...emptyGameplayInputState };
+    const running: GameplayInputState = { ...emptyGameplayInputState, right: true };
+
+    link.sendLocalInput(100, running); // cambio inicial: se envia
+    link.sendLocalInput(120, running); // sin cambios, 20 ms: silencio
+    link.sendLocalInput(180, running); // sin cambios, 80 ms: silencio (keepalive 100 ms)
+    link.sendLocalInput(210, running); // sin cambios, 110 ms: keepalive
+    link.sendLocalInput(220, idle); // cambio, pero a 10 ms del ultimo envio: espera
+    link.sendLocalInput(250, idle); // cambio pendiente, 40 ms: se envia
+
+    expect(transport.sentInputs.map((message) => message.seq)).toEqual([1, 2, 3]);
+    expect(transport.sentInputs[0].bits).toBe(packInputState(running));
+    expect(transport.sentInputs[2].bits).toBe(packInputState(idle));
+  });
+
+  it("ignora snapshots con seq viejo o repetido", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    link.bind(noopHooks);
+
+    transport.emitSnapshot({ seq: 1, value: "a" });
+    transport.emitSnapshot({ seq: 3, value: "c" });
+    transport.emitSnapshot({ seq: 2, value: "b" });
+    transport.emitSnapshot({ seq: 3, value: "duplicado" });
+
+    expect(link.latestSnapshot).toEqual({ seq: 3, value: "c" });
+  });
+});
+
+describe("CoopSceneLink fin de sesion", () => {
+  it("finish notifica una sola vez y bloquea cierres repetidos", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+
+    expect(link.finish("won")).toBe(true);
+    expect(link.finish("left")).toBe(false);
+    expect(link.markEnded()).toBe(false);
+    expect(transport.sentEnds).toEqual(["won"]);
+  });
+
+  it("markEnded no notifica pero bloquea un finish posterior", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+
+    expect(link.markEnded()).toBe(true);
+    expect(link.finish("left")).toBe(false);
+    expect(transport.sentEnds).toEqual([]);
+  });
+
+  it("dispose desuscribe los callbacks y abandona la sesion", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    let remoteEnds = 0;
+    link.bind({ onRemoteEnd: () => { remoteEnds += 1; }, onPeerLeft: () => undefined });
+
+    transport.emitEnd("won");
+    link.dispose();
+    transport.emitEnd("lost");
+    transport.emitSnapshot({ seq: 9, value: "tarde" });
+
+    expect(remoteEnds).toBe(1);
+    expect(link.latestSnapshot).toBeUndefined();
+    expect(transport.leaveCalls).toBe(1);
+  });
+});
