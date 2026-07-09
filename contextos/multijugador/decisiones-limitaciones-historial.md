@@ -10,7 +10,8 @@
 | **Fin de partida compartido** | Co-op cooperativo: si uno cae o se agota el tiempo, ambos pierden; la meta se gana juntos. |
 | **Presión (Explorar) sigue al jugador más atrasado** | Con cámaras independientes, una línea atada a cámara mataría al que se queda atrás. Anclarla al más lento conserva la mecánica sin castigar la exploración. Decisión explícita del usuario. |
 | **Cargas de poder/vida no persistidas en co-op** | Evita doble contabilidad entre dos saves; el host mantiene contadores vivos para el HUD. |
-| **Co-op por nivel** | Continuar/reintentar desde el resumen sale del co-op (la sesión de red se cierra en el `SHUTDOWN` de la escena). Mantiene el alcance acotado. |
+| **Co-op encadenado por el host** | Tras la victoria, `Próximo` avanza a toda la sala: el host reenvía `start` con el próximo nivel y el roster vigente, y la sesión sobrevive al reinicio de escena (`coopLink.dispose(keepSession)`); el botón del guest espera al host. Tras derrota, `Reintentar` vuelve al menú (retry co-op no soportado aún). |
+| **Tienda de cargas deshabilitada en co-op** | El botón `+` se oculta y el evento se ignora: las cargas de los guests viven en el host y una compra descontaría ORO sin entregar cargas. |
 | **Modo red solo con `coop` presente** | Garantiza regresión cero: single-player de Explorar y Desafío quedan idénticos. |
 | **Versión de protocolo + presence por clientId** | La versión evita que builds incompatibles emparejen en silencio (aviso claro). La key por clientId (no por rol) permite más de un guest y evita colisiones. |
 | **Modelo de slots (protocolo N-ready antes que gameplay N)** | Separar la generalización del protocolo (slots, `players[]`, input con emisor) del render de 3-4 jugadores permite subir versión una sola vez y validar el modelo con tests, manteniendo el gameplay de 2 idéntico. |
@@ -70,6 +71,16 @@
    (slot + héroe) que fija el host, viajando en `CoopSessionInfo.roster`. `COOP_MAX_PLAYERS = 4`
    con tope de sala (`onSessionError` "La sala está llena") y lobby con lista de participantes
    (`onRoster`).
+8. **Fase 4A/4B/4C (commits del usuario):** tienda de cargas deshabilitada en co-op (UI + guard);
+   `RESTART_GAME`/`CONTINUE_LEVEL` protegidos en co-op; `end` con slot emisor y detección de
+   desconexiones súbitas por presence (`onParticipantLeft`), congelando al que se va en salas 3-4;
+   bloqueo de late joins con roster autorizado al iniciar la partida.
+9. **Encadenado de niveles co-op (protocolo v6) + fix de regresión:** `Próximo` del host reenvía
+   `start` con el roster vigente y la sesión sobrevive al reinicio de escena
+   (`coopLink.dispose(keepSession)` + hook `onStartNextLevel` en el guest). Se corrigió una
+   regresión de 4B: `applySnapshot` usaba `allPlayers()` (que filtra abandonos) como índice de
+   slots y, tras un abandono en salas 3-4, aplicaba el estado de red al jugador equivocado; ahora
+   resuelve por `playerAtSlot(slot)`.
 
 ## Continuidad / próximos pasos sugeridos
 

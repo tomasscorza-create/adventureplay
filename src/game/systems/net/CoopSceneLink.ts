@@ -15,6 +15,7 @@ import {
   type CoopEndReason,
   type CoopInputMessage,
   type CoopRole,
+  type CoopStartMessage,
 } from "./coopMessages";
 
 // Transporte minimo que necesita el link. CoopSession lo satisface tal cual;
@@ -25,6 +26,7 @@ export interface CoopLinkTransport {
   onEnd(cb: (message: CoopEndMessage) => void): () => void;
   onPeerLeft(cb: () => void): () => void;
   onParticipantLeft?(cb: (slot: number) => void): () => void;
+  onStart?(cb: (message: CoopStartMessage) => void): () => void;
   sendInput(message: CoopInputMessage): void;
   sendSnapshot(snapshot: unknown): void;
   sendEnd(reason: CoopEndReason, slot?: number): void;
@@ -35,6 +37,9 @@ export interface CoopLinkHooks {
   onRemoteEnd: (reason: CoopEndReason, slot?: number) => void;
   onPeerLeft: () => void;
   onParticipantLeft?: (slot: number) => void;
+  // El host reutiliza el mensaje `start` para encadenar el siguiente nivel de
+  // la sala; los guests lo reciben aqui una vez terminado el nivel actual.
+  onStartNextLevel?: (message: CoopStartMessage) => void;
 }
 
 const MIN_INPUT_INTERVAL_MS = 1000 / COOP_INPUT_RATE_HZ;
@@ -130,6 +135,9 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     if (this.transport.onParticipantLeft && hooks.onParticipantLeft) {
       this.unbinds.push(this.transport.onParticipantLeft((slot) => hooks.onParticipantLeft!(slot)));
     }
+    if (this.transport.onStart && hooks.onStartNextLevel) {
+      this.unbinds.push(this.transport.onStart((message) => hooks.onStartNextLevel!(message)));
+    }
   }
 
   private remoteSlot(slot: number): RemoteInputSlot {
@@ -213,9 +221,12 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     return true;
   }
 
-  dispose(): void {
+  // `keepSession = true` desuscribe los callbacks pero conserva el canal vivo:
+  // se usa al encadenar el siguiente nivel co-op, donde la nueva escena crea un
+  // link nuevo sobre la misma sala.
+  dispose(keepSession = false): void {
     for (const unbind of this.unbinds) unbind();
     this.unbinds.length = 0;
-    this.transport.leave();
+    if (!keepSession) this.transport.leave();
   }
 }

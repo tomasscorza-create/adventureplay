@@ -72,7 +72,7 @@ describe("coopMessages room codes", () => {
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(5);
+    expect(COOP_PROTOCOL_VERSION).toBe(6);
   });
 
   it("excluye la propia key y normaliza los payloads de los peers", () => {

@@ -49,7 +49,7 @@ import type { CoopSessionInfo } from "../events/EventBus";
 import { CoopSceneLink } from "../systems/net/CoopSceneLink";
 import { CoopProjectilePuppets } from "../systems/net/CoopProjectilePuppets";
 import { applyNetPlayer, toNetPlayer } from "../systems/net/coopPlayerNet";
-import type { NetProjectile } from "../systems/net/coopMessages";
+import type { CoopStartPlayer, NetProjectile } from "../systems/net/coopMessages";
 import type { LevelSnapshot } from "../systems/net/levelCoopMessages";
 
 // Margen fijo (px) que la linea de presion co-op mantiene detras del jugador mas
@@ -120,6 +120,8 @@ export class LevelScene extends Phaser.Scene {
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
   private projectilePuppets?: CoopProjectilePuppets;
   private nextProjectileNetId = 1;
+  // Al encadenar el siguiente nivel co-op, el SHUTDOWN no debe cerrar la sala.
+  private keepCoopSessionOnShutdown = false;
   private coopPressureX = 0;
   // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
   private pressureCooldownSlot0 = 0;
@@ -150,6 +152,7 @@ export class LevelScene extends Phaser.Scene {
       ? new CoopProjectilePuppets(this, () => this.playSfx("lethal-power"))
       : undefined;
     this.nextProjectileNetId = 1;
+    this.keepCoopSessionOnShutdown = false;
     this.coopPressureX = 0;
     this.pressureCooldownSlot0 = 0;
     this.damageTakenThisLevel = false;
@@ -231,7 +234,9 @@ export class LevelScene extends Phaser.Scene {
 
     if (this.isHost && this.coopLink) {
       // El host simula cada guest (slots 1..N) desde su input remoto por slot.
+      // Los que abandonaron quedan inactivos: no se simulan ni actuan.
       this.remotePlayers.forEach((player, index) => {
+        if (!player.active) return;
         const slot = index + 1;
         const remoteFrame = this.coopLink!.consumeRemoteInputFrame(slot);
         const didJumpRemote = this.remoteMovement[index].update(player, remoteFrame, delta);
@@ -620,12 +625,19 @@ export class LevelScene extends Phaser.Scene {
     this.unbindContinue = gameEvents.on(
       EVENTS.CONTINUE_LEVEL,
       ({ completedLevelId, nextLevelId }) => {
-        if (this.coop) {
-          gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        if (!this.levelFinished || completedLevelId !== this.level.id) {
           return;
         }
 
-        if (!this.levelFinished || completedLevelId !== this.level.id) {
+        if (this.coop) {
+          // Co-op encadenado: el host avanza la sala completa reutilizando el
+          // mensaje `start`; el boton del guest no avanza (espera al host).
+          // Sin siguiente nivel, la expedicion termina y se vuelve al menu.
+          if (nextLevelId && levelDefinitions[nextLevelId]) {
+            if (this.isHost) this.startNextCoopLevel(nextLevelId);
+            return;
+          }
+          gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
           return;
         }
 
@@ -658,7 +670,7 @@ export class LevelScene extends Phaser.Scene {
       this.unbindContinue?.();
       this.unbindMenu?.();
       this.unbindCameraZoom?.();
-      this.coopLink?.dispose();
+      this.coopLink?.dispose(this.keepCoopSessionOnShutdown);
       touchInputStore.reset();
       this.scene.stop("UIScene");
     });
@@ -2058,6 +2070,41 @@ export class LevelScene extends Phaser.Scene {
       onRemoteEnd: (reason, slot) => this.handleRemoteEnd(reason, slot),
       onPeerLeft: () => this.endCoopToMenu(),
       onParticipantLeft: (slot) => this.handleParticipantLeft(slot),
+      onStartNextLevel: (message) => {
+        // El host encadeno el siguiente nivel: el guest lo sigue solo cuando su
+        // propio nivel ya termino (evita reinicios a mitad de partida).
+        if (!this.isGuest || !this.levelFinished) return;
+        this.restartCoopScene(message.levelId, message.roster);
+      },
+    });
+  }
+
+  // Host: encadena el siguiente nivel para toda la sala reutilizando el mensaje
+  // `start` (misma sala y canal); la sesion sobrevive al reinicio de escena.
+  private startNextCoopLevel(nextLevelId: string): void {
+    coopSession.sendStart(nextLevelId);
+    this.restartCoopScene(
+      nextLevelId,
+      coopSession.participants.map((entry) => ({
+        slot: entry.slot,
+        characterId: entry.characterId,
+      })),
+    );
+  }
+
+  private restartCoopScene(levelId: string, roster: CoopStartPlayer[]): void {
+    if (!this.coop) return;
+    this.keepCoopSessionOnShutdown = true;
+    this.scene.start("LevelScene", {
+      levelId,
+      coop: {
+        role: this.coop.role,
+        code: this.coop.code,
+        // El slot y el roster se toman frescos: si alguien abandono durante el
+        // nivel, la sala se compacta para el siguiente.
+        localSlot: coopSession.localSlot,
+        roster,
+      },
     });
   }
 
@@ -2157,10 +2204,12 @@ export class LevelScene extends Phaser.Scene {
 
   private applySnapshot(snap: LevelSnapshot): void {
     const s = 0.4;
-    // players[slot] casa con allPlayers()[slot] (slot 0 = this.player).
-    this.allPlayers().forEach((player, slot) => {
-      const net = snap.players[slot];
-      if (net) applyNetPlayer(player, net, s);
+    // players[] esta indexado por slot: se resuelve cada jugador por su slot y
+    // NO por posicion en allPlayers(), que filtra a los que abandonaron y
+    // desalinearia los estados (aplicaria el estado del que se fue al siguiente).
+    snap.players.forEach((net, slot) => {
+      const target = this.playerAtSlot(slot);
+      if (target && net) applyNetPlayer(target, net, s);
     });
     this.projectilePuppets?.apply(snap.projectiles, s);
 

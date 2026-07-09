@@ -64,7 +64,7 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `5`. Subirla ante cualquier cambio incompatible de mensajes/presencia. |
+| `COOP_PROTOCOL_VERSION` | `6`. Subirla ante cualquier cambio incompatible de mensajes/presencia (v6: `end` con slot emisor y `start` reutilizado a mitad de sesión para encadenar niveles). |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
 | `CoopStartMessage` | `{ levelId, roster: { slot, characterId }[] }` — roster autoritativo del host. |
 | `HOST_SLOT` | `0`. Los guests ocupan slots `1..N`. |

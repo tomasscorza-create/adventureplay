@@ -10,6 +10,7 @@ import {
   type CoopEndMessage,
   type CoopEndReason,
   type CoopInputMessage,
+  type CoopStartMessage,
 } from "./coopMessages";
 
 interface TestSnapshot {
@@ -23,6 +24,7 @@ class FakeTransport implements CoopLinkTransport {
   readonly endHandlers = new Set<(message: CoopEndMessage) => void>();
   readonly peerLeftHandlers = new Set<() => void>();
   readonly participantLeftHandlers = new Set<(slot: number) => void>();
+  readonly startHandlers = new Set<(message: CoopStartMessage) => void>();
   readonly sentInputs: CoopInputMessage[] = [];
   readonly sentSnapshots: unknown[] = [];
   readonly sentEnds: { reason: CoopEndReason; slot?: number }[] = [];
@@ -49,6 +51,10 @@ class FakeTransport implements CoopLinkTransport {
     this.participantLeftHandlers.add(cb);
     return () => this.participantLeftHandlers.delete(cb);
   }
+  onStart(cb: (message: CoopStartMessage) => void): () => void {
+    this.startHandlers.add(cb);
+    return () => this.startHandlers.delete(cb);
+  }
   sendInput(message: CoopInputMessage): void {
     this.sentInputs.push(message);
   }
@@ -73,6 +79,9 @@ class FakeTransport implements CoopLinkTransport {
   }
   emitParticipantLeft(slot: number): void {
     this.participantLeftHandlers.forEach((cb) => cb(slot));
+  }
+  emitStart(message: CoopStartMessage): void {
+    this.startHandlers.forEach((cb) => cb(message));
   }
 }
 
@@ -267,6 +276,34 @@ describe("CoopSceneLink guest", () => {
     link.bind({ ...noopHooks, onParticipantLeft: (slot) => { leftSlot = slot; } });
     transport.emitParticipantLeft(1);
     expect(leftSlot).toBe(1);
+  });
+
+  // Encadenado de niveles: el host reenvia `start` con el proximo nivel y el
+  // roster vigente; el guest lo recibe por este hook para reiniciar su escena.
+  it("propaga el start del host como encadenado de siguiente nivel", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    let received: CoopStartMessage | undefined;
+    link.bind({ ...noopHooks, onStartNextLevel: (message) => { received = message; } });
+
+    transport.emitStart({ levelId: "trialChamber2", roster: [{ slot: 0, characterId: "ruder" }] });
+
+    expect(received).toEqual({
+      levelId: "trialChamber2",
+      roster: [{ slot: 0, characterId: "ruder" }],
+    });
+  });
+
+  it("dispose con keepSession desuscribe callbacks pero conserva la sala", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    link.bind(noopHooks);
+
+    link.dispose(true);
+
+    expect(transport.leaveCalls).toBe(0);
+    transport.emitSnapshot({ seq: 1, value: "tarde" });
+    expect(link.latestSnapshot).toBeUndefined();
   });
 
   it("incluye el localSlot al enviar fin voluntario", () => {

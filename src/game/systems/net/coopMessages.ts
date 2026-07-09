@@ -22,7 +22,9 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 // v3: snapshots con proyectiles de poder letal ([netId, x, y, dir]).
 // v4: modelo de slots N jugadores: input con slot emisor y players como arreglo.
 // v5: gameplay N jugadores: el inicio lleva el roster autoritativo (slot+heroe).
-export const COOP_PROTOCOL_VERSION = 5;
+// v6: `end` lleva el slot emisor (salidas individuales) y `start` se reutiliza
+//     a mitad de sesion para encadenar el siguiente nivel de la sala.
+export const COOP_PROTOCOL_VERSION = 6;
 
 export type CoopRole = "host" | "guest";
 

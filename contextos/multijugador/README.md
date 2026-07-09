@@ -7,7 +7,8 @@ valores y nombres exactos del código fuente.
 > **Estado (actualizado):** co-op online **funcional** de **2 a 4 jugadores** en los dos modos
 > jugables: **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Host-autoritativo sobre
 > Supabase Realtime, cámara independiente por dispositivo, fin de partida compartido. Protocolo
-> **v5** con modelo de slots (`COOP_MAX_PLAYERS = 4`). Ver historial de fases en
+> **v6** con modelo de slots (`COOP_MAX_PLAYERS = 4`), niveles encadenados por el host y manejo de
+> salidas individuales. Ver historial de fases en
 > `decisiones-limitaciones-historial.md`.
 
 ## Índice del área

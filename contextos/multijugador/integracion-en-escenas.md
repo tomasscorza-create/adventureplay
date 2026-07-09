@@ -104,7 +104,14 @@ objetivos en simultáneo sin conflicto.
 - **Victoria:** llegar a la meta con objetivos cumplidos → `completeLevel`/`finalizeCompletion`.
   El host transmite `end("won")`; cada cliente hace su **propio** bookkeeping de guardado y emite
   `LEVEL_COMPLETED` para ver el resumen.
-- **Salida:** `leave`/`peerLeft` → ambos vuelven al menú (`endCoopToMenu`).
+- **Salida individual:** el `end("left")` lleva el slot del que se va y las desconexiones súbitas
+  se detectan por presence (`onParticipantLeft`). En salas de 3-4, el que se va queda congelado e
+  invisible (`handleParticipantLeft`) y la partida sigue; si sale el host o la sala es de 2, todos
+  vuelven al menú (`endCoopToMenu`).
+- **Siguiente nivel (encadenado):** solo el host avanza con `Próximo` → `startNextCoopLevel` reenvía
+  `start` con el roster vigente de `coopSession.participants` (compactado si alguien abandonó) y
+  reinicia su escena con `keepCoopSessionOnShutdown = true` para no cerrar la sala; el guest recibe
+  el `start` por el hook `onStartNextLevel` del link (solo si `levelFinished`) y lo sigue.
 
 ## Especificidades de Explorar (`LevelScene`)
 
