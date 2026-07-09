@@ -42,6 +42,7 @@ interface CoopCallbacks {
   sessionError: Set<(message: string) => void>;
   // Cambios en el roster (slots/heroes presentes), para la lista del lobby.
   roster: Set<(participants: CoopParticipant[]) => void>;
+  participantLeft: Set<(slot: number) => void>;
 }
 
 // Identidad unica del cliente dentro del canal de presence. La key ya no es el
@@ -83,8 +84,10 @@ class CoopSession {
     end: new Set(),
     sessionError: new Set(),
     roster: new Set(),
+    participantLeft: new Set(),
   };
   private participantsKey = "";
+  private authorizedParticipantKeys: Set<string> | null = null;
 
   get role(): CoopRole | null {
     return this._role;
@@ -180,6 +183,7 @@ class CoopSession {
     });
     channel.on("broadcast", { event: COOP_EVENTS.start }, ({ payload }) => {
       this._connectionState = "in-game";
+      this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
       this.callbacks.start.forEach((cb) => cb(payload as CoopStartMessage));
     });
     channel.on("broadcast", { event: COOP_EVENTS.end }, ({ payload }) => {
@@ -214,7 +218,12 @@ class CoopSession {
       string,
       Array<Record<string, unknown>>
     >;
-    const peers = collectPeerPresences(presence, this.clientKey);
+    const rawPeers = collectPeerPresences(presence, this.clientKey);
+    
+    // FASE 4C: Ignorar peers nuevos si la partida ya empezo (late joins).
+    const peers = this.authorizedParticipantKeys
+      ? rawPeers.filter((p) => this.authorizedParticipantKeys!.has(p.key))
+      : rawPeers;
 
     // Version incompatible (incluye builds previos sin campo protocol): error
     // claro una sola vez en lugar de una sala que espera para siempre.
@@ -246,7 +255,19 @@ class CoopSession {
       }
       return;
     }
+    const oldParticipants = this._participants;
     this._participants = roster.filter((entry) => entry.slot < COOP_MAX_PLAYERS);
+    
+    // Detectar desconexiones subitas comparando roster
+    if (this._connectionState === "in-game" || this._connectionState === "ready") {
+      const currentKeys = new Set(this._participants.map((p) => p.key));
+      for (const old of oldParticipants) {
+        if (!currentKeys.has(old.key)) {
+          this.callbacks.participantLeft.forEach((cb) => cb(old.slot));
+        }
+      }
+    }
+
     const key = this._participants.map((entry) => `${entry.slot}:${entry.characterId}`).join("|");
     if (key !== this.participantsKey) {
       this.participantsKey = key;
@@ -292,14 +313,15 @@ class CoopSession {
 
   sendStart(levelId: string): void {
     this._connectionState = "in-game";
+    this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
     const roster: CoopStartPlayer[] = this._participants
       .filter((entry) => entry.slot < COOP_MAX_PLAYERS)
       .map((entry) => ({ slot: entry.slot, characterId: entry.characterId }));
     this.broadcast(COOP_EVENTS.start, { levelId, roster } satisfies CoopStartMessage);
   }
 
-  sendEnd(reason: CoopEndReason): void {
-    this.broadcast(COOP_EVENTS.end, { reason } satisfies CoopEndMessage);
+  sendEnd(reason: CoopEndReason, slot?: number): void {
+    this.broadcast(COOP_EVENTS.end, { reason, slot } satisfies CoopEndMessage);
   }
 
   private broadcast(event: string, payload: unknown): void {
@@ -321,6 +343,7 @@ class CoopSession {
     this.roomFull = false;
     this._participants = [];
     this.participantsKey = "";
+    this.authorizedParticipantKeys = null;
     this._localSlot = HOST_SLOT;
     this.setConnectionState("idle");
   }
@@ -361,6 +384,9 @@ class CoopSession {
   }
   onRoster(cb: (participants: CoopParticipant[]) => void): () => void {
     return this.subscribe("roster", cb);
+  }
+  onParticipantLeft(cb: (slot: number) => void): () => void {
+    return this.subscribe("participantLeft", cb);
   }
 
   private subscribe<K extends keyof CoopCallbacks>(

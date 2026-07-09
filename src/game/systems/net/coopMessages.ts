@@ -121,6 +121,7 @@ export interface CoopStartMessage {
 export type CoopEndReason = "won" | "lost" | "left";
 export interface CoopEndMessage {
   reason: CoopEndReason;
+  slot?: number;
 }
 
 // Input del guest empaquetado en bits para mensajes minimos. El host reconstruye

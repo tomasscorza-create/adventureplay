@@ -522,7 +522,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   // Todos los jugadores en orden de slot (0 primero).
   private allPlayers(): Player[] {
-    return [this.player, ...this.remotePlayers];
+    return [this.player, ...this.remotePlayers].filter((p) => p && p.active);
   }
 
   private playerAtSlot(slot: number): Player | undefined {
@@ -1766,8 +1766,9 @@ export class PuzzleScene extends Phaser.Scene {
 
   private bindCoopNet(): void {
     this.coopLink?.bind({
-      onRemoteEnd: (reason) => this.handleRemoteEnd(reason),
+      onRemoteEnd: (reason, slot) => this.handleRemoteEnd(reason, slot),
       onPeerLeft: () => this.endCoopToMenu(),
+      onParticipantLeft: (slot) => this.handleParticipantLeft(slot),
     });
   }
 
@@ -1916,9 +1917,21 @@ export class PuzzleScene extends Phaser.Scene {
     gameEvents.emit(EVENTS.HUD_UPDATED, hud);
   }
 
+  private handleParticipantLeft(slot: number): void {
+    if (slot === 0 || this.remotePlayers.length < 2) {
+      this.endCoopToMenu();
+      return;
+    }
+    const target = this.playerAtSlot(slot);
+    if (!target) return;
+    this.freezePuppet(target);
+    target.setActive(false);
+    target.setVisible(false);
+  }
+
   // El guest ejecuta el cierre de nivel al recibir end("won") del host, y su
   // derrota al recibir end("lost"). "left" termina la sesion para ambos lados.
-  private handleRemoteEnd(reason: "won" | "lost" | "left"): void {
+  private handleRemoteEnd(reason: "won" | "lost" | "left", slot?: number): void {
     if (reason === "won") {
       if (this.levelFinished) return;
       this.levelFinished = true;
@@ -1936,7 +1949,11 @@ export class PuzzleScene extends Phaser.Scene {
       this.playSfx("game-over");
       gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
     } else {
-      this.endCoopToMenu();
+      if (typeof slot === "number") {
+        this.handleParticipantLeft(slot);
+      } else {
+        this.endCoopToMenu();
+      }
     }
   }
 

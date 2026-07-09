@@ -22,9 +22,10 @@ class FakeTransport implements CoopLinkTransport {
   readonly snapshotHandlers = new Set<(snapshot: unknown) => void>();
   readonly endHandlers = new Set<(message: CoopEndMessage) => void>();
   readonly peerLeftHandlers = new Set<() => void>();
+  readonly participantLeftHandlers = new Set<(slot: number) => void>();
   readonly sentInputs: CoopInputMessage[] = [];
   readonly sentSnapshots: unknown[] = [];
-  readonly sentEnds: CoopEndReason[] = [];
+  readonly sentEnds: { reason: CoopEndReason; slot?: number }[] = [];
   leaveCalls = 0;
 
   onInput(cb: (message: CoopInputMessage) => void): () => void {
@@ -44,14 +45,18 @@ class FakeTransport implements CoopLinkTransport {
     this.peerLeftHandlers.add(cb);
     return () => this.peerLeftHandlers.delete(cb);
   }
+  onParticipantLeft(cb: (slot: number) => void): () => void {
+    this.participantLeftHandlers.add(cb);
+    return () => this.participantLeftHandlers.delete(cb);
+  }
   sendInput(message: CoopInputMessage): void {
     this.sentInputs.push(message);
   }
   sendSnapshot(snapshot: unknown): void {
     this.sentSnapshots.push(snapshot);
   }
-  sendEnd(reason: CoopEndReason): void {
-    this.sentEnds.push(reason);
+  sendEnd(reason: CoopEndReason, slot?: number): void {
+    this.sentEnds.push({ reason, slot });
   }
   leave(): void {
     this.leaveCalls += 1;
@@ -63,8 +68,11 @@ class FakeTransport implements CoopLinkTransport {
   emitSnapshot(snapshot: TestSnapshot): void {
     this.snapshotHandlers.forEach((cb) => cb(snapshot));
   }
-  emitEnd(reason: CoopEndReason): void {
-    this.endHandlers.forEach((cb) => cb({ reason }));
+  emitEnd(reason: CoopEndReason, slot?: number): void {
+    this.endHandlers.forEach((cb) => cb({ reason, slot }));
+  }
+  emitParticipantLeft(slot: number): void {
+    this.participantLeftHandlers.forEach((cb) => cb(slot));
   }
 }
 
@@ -244,6 +252,30 @@ describe("CoopSceneLink guest", () => {
     expect(transport.sentInputs[1].bits).toBe(0);
   });
 
+  it("no dispara nada si se llama a dispose por segunda vez", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    link.dispose();
+    link.dispose();
+    expect(transport.leaveCalls).toBe(2);
+  });
+
+  it("propaga onParticipantLeft desde el transport si se bind", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    let leftSlot = -1;
+    link.bind({ ...noopHooks, onParticipantLeft: (slot) => { leftSlot = slot; } });
+    transport.emitParticipantLeft(1);
+    expect(leftSlot).toBe(1);
+  });
+
+  it("incluye el localSlot al enviar fin voluntario", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport, 2);
+    link.finish("left");
+    expect(transport.sentEnds).toEqual([{ reason: "left", slot: 2 }]);
+  });
+
   it("ignora snapshots con seq viejo o repetido", () => {
     const transport = new FakeTransport();
     const link = makeGuest(transport);
@@ -266,7 +298,7 @@ describe("CoopSceneLink fin de sesion", () => {
     expect(link.finish("won")).toBe(true);
     expect(link.finish("left")).toBe(false);
     expect(link.markEnded()).toBe(false);
-    expect(transport.sentEnds).toEqual(["won"]);
+    expect(transport.sentEnds).toEqual([{ reason: "won", slot: 0 }]);
   });
 
   it("markEnded no notifica pero bloquea un finish posterior", () => {

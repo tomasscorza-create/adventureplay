@@ -365,7 +365,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private allPlayers(): Player[] {
-    return [this.player, ...this.remotePlayers];
+    return [this.player, ...this.remotePlayers].filter((p) => p && p.active);
   }
 
   private playerAtSlot(slot: number): Player | undefined {
@@ -2055,8 +2055,9 @@ export class LevelScene extends Phaser.Scene {
 
   private bindCoopNet(): void {
     this.coopLink?.bind({
-      onRemoteEnd: (reason) => this.handleRemoteEnd(reason),
+      onRemoteEnd: (reason, slot) => this.handleRemoteEnd(reason, slot),
       onPeerLeft: () => this.endCoopToMenu(),
+      onParticipantLeft: (slot) => this.handleParticipantLeft(slot),
     });
   }
 
@@ -2293,7 +2294,19 @@ export class LevelScene extends Phaser.Scene {
     else this.remotePressureCooldown[slot - 1] = 1000;
   }
 
-  private handleRemoteEnd(reason: "won" | "lost" | "left"): void {
+  private handleParticipantLeft(slot: number): void {
+    if (slot === 0 || this.remotePlayers.length < 2) {
+      this.endCoopToMenu();
+      return;
+    }
+    const target = this.playerAtSlot(slot);
+    if (!target) return;
+    this.freezePuppet(target);
+    target.setActive(false);
+    target.setVisible(false);
+  }
+
+  private handleRemoteEnd(reason: "won" | "lost" | "left", slot?: number): void {
     if (reason === "won") {
       if (this.levelFinished) return;
       this.levelFinished = true;
@@ -2308,7 +2321,11 @@ export class LevelScene extends Phaser.Scene {
         this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
       });
     } else {
-      this.endCoopToMenu();
+      if (typeof slot === "number") {
+        this.handleParticipantLeft(slot);
+      } else {
+        this.endCoopToMenu();
+      }
     }
   }
 

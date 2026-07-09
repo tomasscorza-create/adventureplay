@@ -24,15 +24,17 @@ export interface CoopLinkTransport {
   onSnapshot<T>(cb: (snapshot: T) => void): () => void;
   onEnd(cb: (message: CoopEndMessage) => void): () => void;
   onPeerLeft(cb: () => void): () => void;
+  onParticipantLeft?(cb: (slot: number) => void): () => void;
   sendInput(message: CoopInputMessage): void;
   sendSnapshot(snapshot: unknown): void;
-  sendEnd(reason: CoopEndReason): void;
+  sendEnd(reason: CoopEndReason, slot?: number): void;
   leave(): void;
 }
 
 export interface CoopLinkHooks {
-  onRemoteEnd: (reason: CoopEndReason) => void;
+  onRemoteEnd: (reason: CoopEndReason, slot?: number) => void;
   onPeerLeft: () => void;
+  onParticipantLeft?: (slot: number) => void;
 }
 
 const MIN_INPUT_INTERVAL_MS = 1000 / COOP_INPUT_RATE_HZ;
@@ -123,8 +125,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
         }),
       );
     }
-    this.unbinds.push(this.transport.onEnd((message) => hooks.onRemoteEnd(message.reason)));
+    this.unbinds.push(this.transport.onEnd((message) => hooks.onRemoteEnd(message.reason, message.slot)));
     this.unbinds.push(this.transport.onPeerLeft(() => hooks.onPeerLeft()));
+    if (this.transport.onParticipantLeft && hooks.onParticipantLeft) {
+      this.unbinds.push(this.transport.onParticipantLeft((slot) => hooks.onParticipantLeft!(slot)));
+    }
   }
 
   private remoteSlot(slot: number): RemoteInputSlot {
@@ -197,7 +202,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   finish(reason: CoopEndReason): boolean {
     if (this.ended) return false;
     this.ended = true;
-    this.transport.sendEnd(reason);
+    this.transport.sendEnd(reason, this.localSlot);
     return true;
   }
 
