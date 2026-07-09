@@ -11,15 +11,17 @@ Ambas escenas jugables integran el co-op con el **mismo patrón** host-autoritat
 2. `App.startGame(levelId, coop?)` emite `START_GAME` con `coop`.
 3. `MainMenuScene` reenvía `{ levelId, coop }` a `PuzzleScene` o `LevelScene` según el id.
 4. La escena, en `create()`, activa el modo red **solo si** `coop && coopSession.isActive`, crea su
-   `CoopSceneLink<Snapshot>` y guarda `coopSelfSlot = coop.localSlot`.
+   `CoopSceneLink<Snapshot>` y guarda `coopSelfSlot = coop.localSlot`. `createPlayer` instancia un
+   `Player` por entrada del `coop.roster` (slot 0 → `this.player`; slots 1..N-1 → `remotePlayers[]`
+   con sus `remoteMovement[]`/`remoteCharges[]` hermanos).
 
 ## Ciclo de `update()` por rol
 
 | Rol | Qué hace cada frame |
 |---|---|
 | **single** | Igual que antes del co-op (sin cambios). |
-| **host** | Lee input local (slot 0) + `coopLink.consumeRemoteInputFrame(1)` (slot 1) → mueve ambos → simula mundo → `coopLink.maybeSendSnapshot`. |
-| **guest** | `updateGuest`: `coopLink.sendLocalInput(time, frame)`; aplica `coopLink.latestSnapshot` (`applySnapshot`) + `emitGuestHud`. No simula. |
+| **host** | Lee input local (slot 0) + `coopLink.consumeRemoteInputFrame(slot)` por cada guest de `remotePlayers` → mueve a todos → simula mundo → `coopLink.maybeSendSnapshot`. |
+| **guest** | `updateGuest`: `coopLink.sendLocalInput(time, frame)`; aplica `coopLink.latestSnapshot` (`applySnapshot` recorre `allPlayers()`) + `emitGuestHud`. No simula. |
 
 `pauseJustPressed` en co-op → emite `SCREEN_CHANGED "coop-exit-confirm"`: la partida **sigue
 corriendo** detrás de una confirmación React (`CoopExitConfirmScreen`), porque pausar la escena
@@ -43,8 +45,9 @@ transporte inyectado). La escena solo aporta cómo construir/aplicar su snapshot
 
 | Helper | Función |
 |---|---|
-| `forEachPlayer(cb)` | Itera `player` (slot 0) y `player2` (slot 1). Base de colisiones y daño por jugador. |
-| `nearestPlayerTo(enemy)` | Objetivo del enemigo = jugador más cercano (solo host). |
+| `allPlayers()` / `playerAtSlot(slot)` | Arreglo de jugadores en orden de slot / acceso por slot. |
+| `forEachPlayer(cb)` | Itera `player` (slot 0) y cada `remotePlayers[i]` (slot i+1). Base de colisiones y daño por jugador. |
+| `nearestPlayerTo(enemy)` | Objetivo del enemigo = jugador más cercano de N (solo host). |
 | `freezePuppet(obj)` | `body.enable = false` en el guest para no simular localmente. |
 | `bindCoopNet` | Conecta los hooks de la escena al `coopLink`. |
 | `toNetPlayer` / `applyNetPlayer` | (En `coopPlayerNet.ts`) serializa / aplica interpolado el estado de un jugador. |
@@ -74,9 +77,10 @@ Identidad estable: cada entidad sincronizada lleva `setData("netId", i)` (o `coi
 
 ## Objetivos concurrentes (solo Desafío)
 
-`PuzzleActivationSystem` (mapa `Map<PuzzleActivationId, Set<string>>`) ya soportaba múltiples
-participantes. El host alimenta placas/palancas por `"player-1"` / `"player-2"`; el guest refleja
-el conjunto `active` del snapshot. Así ambos pueden activar objetivos en simultáneo sin conflicto.
+`PuzzleActivationSystem` (mapa `Map<PuzzleActivationId, Set<string>>`) soporta múltiples
+participantes. El host alimenta placas/palancas por `participantForSlot(slot)` (`"player-1"`,
+`"player-2"`, …); el guest refleja el conjunto `active` del snapshot. Así todos pueden activar
+objetivos en simultáneo sin conflicto.
 
 ## Colisiones y daño por jugador
 
@@ -89,8 +93,8 @@ el conjunto `active` del snapshot. Así ambos pueden activar objetivos en simult
 - **Nivel perfecto por jugador:** `damageTakenThisLevel` se marca solo por el daño del personaje
   local (el del compañero no arruina el logro del host). El guest, que no simula, lo marca al
   detectar su propia baja en el snapshot.
-- Vida independiente por jugador. Cargas del slot 1: el host las siembra en `p2Charges` desde su
-  propio save (el gasto en co-op **no** se persiste al save del guest).
+- Vida independiente por jugador. Cargas de cada guest: el host las siembra en `remoteCharges[]`
+  desde su propio save (el gasto en co-op **no** se persiste al save del guest).
 
 ## Fin de partida (compartido)
 
@@ -107,8 +111,9 @@ el conjunto `active` del snapshot. Así ambos pueden activar objetivos en simult
 - **Cámara:** en co-op se usa `startFollow(localPlayer)` (independiente). En single-player la
   cámara se mueve manualmente por la presión (`updateCameraPressure`) — eso **no se toca**.
 - **Presión co-op** (`updateCoopPressure`): la línea es un objeto de mundo que avanza a
-  `autoScrollSpeed` pero se clampa para no superar `min(player.x, player2.x) − COOP_PRESSURE_MARGIN`
-  (`560`). Nunca mata al instante; solo penaliza retroceder. Cooldown de daño por slot.
+  `autoScrollSpeed` pero se clampa para no superar `min(x de todos los jugadores) −
+  COOP_PRESSURE_MARGIN` (`560`). Nunca mata al instante; solo penaliza retroceder. Cooldown de daño
+  por slot (`pressureCooldownSlot0` + `remotePressureCooldown[]`).
 - **Pozos:** respawn por jugador anclado a su propia `x` (`handlePitFall(player, slot)`); en
   single-player conserva el respawn anclado a la vista.
 - **Sin checkpoint persistente** en co-op: ambos arrancan en el inicio del nivel.

@@ -8,7 +8,7 @@ import type { AchievementIconId, AchievementReward } from "../data/achievements"
 import type { LevelRewardDefinition } from "../data/progression";
 import type { SfxCue } from "../data/sfx";
 import type { HapticCue } from "../../shared/haptics/GameHaptics";
-import type { CoopRole } from "../systems/net/coopMessages";
+import type { CoopRole, CoopStartPlayer } from "../systems/net/coopMessages";
 import { EVENTS } from "../../shared/constants/events";
 
 export interface CoopSessionInfo {
@@ -16,6 +16,8 @@ export interface CoopSessionInfo {
   code: string;
   // Slot del jugador local dentro de la sala (0 = host, 1..N = guests).
   localSlot: number;
+  // Roster autoritativo de la partida (slot + heroe), tal como lo fijo el host.
+  roster: CoopStartPlayer[];
 }
 
 type GameEventMap = {

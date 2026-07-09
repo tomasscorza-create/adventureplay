@@ -85,11 +85,17 @@ function asFrame(state: Partial<GameplayInputState>): GameplayInputFrame {
 }
 
 function makeHost(transport: FakeTransport): CoopSceneLink<TestSnapshot> {
-  return new CoopSceneLink<TestSnapshot>({ role: "host", code: "ABCD", localSlot: 0 }, transport);
+  return new CoopSceneLink<TestSnapshot>(
+    { role: "host", code: "ABCD", localSlot: 0, roster: [] },
+    transport,
+  );
 }
 
 function makeGuest(transport: FakeTransport, localSlot = 1): CoopSceneLink<TestSnapshot> {
-  return new CoopSceneLink<TestSnapshot>({ role: "guest", code: "ABCD", localSlot }, transport);
+  return new CoopSceneLink<TestSnapshot>(
+    { role: "guest", code: "ABCD", localSlot, roster: [] },
+    transport,
+  );
 }
 
 describe("CoopSceneLink host", () => {

@@ -4,6 +4,7 @@ import {
   assignSlots,
   collectPeerPresences,
   COOP_EVENTS,
+  COOP_MAX_PLAYERS,
   COOP_PROTOCOL_VERSION,
   generateRoomCode,
   HOST_SLOT,
@@ -15,6 +16,7 @@ import {
   type CoopParticipant,
   type CoopRole,
   type CoopStartMessage,
+  type CoopStartPlayer,
 } from "./coopMessages";
 
 export type CoopConnectionState =
@@ -38,6 +40,8 @@ interface CoopCallbacks {
   end: Set<(message: CoopEndMessage) => void>;
   // Errores fatales de la sala (por ejemplo versiones de protocolo distintas).
   sessionError: Set<(message: string) => void>;
+  // Cambios en el roster (slots/heroes presentes), para la lista del lobby.
+  roster: Set<(participants: CoopParticipant[]) => void>;
 }
 
 // Identidad unica del cliente dentro del canal de presence. La key ya no es el
@@ -64,6 +68,7 @@ class CoopSession {
   private peerHello: CoopHello | null = null;
   private clientKey = "";
   private protocolMismatch = false;
+  private roomFull = false;
   // Roster con slots asignados (0 = host, 1..N = guests) y el slot local.
   private _participants: CoopParticipant[] = [];
   private _localSlot = HOST_SLOT;
@@ -77,7 +82,9 @@ class CoopSession {
     start: new Set(),
     end: new Set(),
     sessionError: new Set(),
+    roster: new Set(),
   };
+  private participantsKey = "";
 
   get role(): CoopRole | null {
     return this._role;
@@ -118,6 +125,11 @@ class CoopSession {
     return this._participants.find((entry) => entry.slot === slot)?.characterId ?? null;
   }
 
+  // Cantidad de jugadores presentes (para el lobby: "x/COOP_MAX_PLAYERS").
+  get participantCount(): number {
+    return this._participants.length;
+  }
+
   async host(hello: CoopHello): Promise<string> {
     const code = generateRoomCode();
     await this.connect("host", code, hello);
@@ -141,6 +153,7 @@ class CoopSession {
     this.peerHello = null;
     this._peerPresent = false;
     this.protocolMismatch = false;
+    this.roomFull = false;
     this.clientKey = generateClientKey();
     // Slot provisional segun el rol; syncPresence lo confirma con el roster real.
     this._localSlot = role === "host" ? HOST_SLOT : HOST_SLOT + 1;
@@ -218,12 +231,27 @@ class CoopSession {
 
     // Roster determinista incluyendo al jugador local, para fijar el slot propio
     // y el de cada peer igual en todos los dispositivos.
-    this._participants = assignSlots([
+    const roster = assignSlots([
       { key: this.clientKey, role: this._role, characterId: this.localHello.characterId },
       ...peers,
     ]);
-    this._localSlot = this._participants.find((entry) => entry.key === this.clientKey)?.slot
-      ?? this._localSlot;
+    this._localSlot = roster.find((entry) => entry.key === this.clientKey)?.slot ?? this._localSlot;
+    // La sala solo cuenta los slots dentro del tope; un cliente que cae fuera
+    // (llego cuando ya estaba llena) recibe un error claro y no juega.
+    if (this._localSlot >= COOP_MAX_PLAYERS) {
+      if (!this.roomFull) {
+        this.roomFull = true;
+        this.callbacks.sessionError.forEach((cb) => cb("La sala esta llena."));
+        this.setConnectionState("error");
+      }
+      return;
+    }
+    this._participants = roster.filter((entry) => entry.slot < COOP_MAX_PLAYERS);
+    const key = this._participants.map((entry) => `${entry.slot}:${entry.characterId}`).join("|");
+    if (key !== this.participantsKey) {
+      this.participantsKey = key;
+      this.callbacks.roster.forEach((cb) => cb(this._participants));
+    }
 
     const otherRole: CoopRole = this._role === "host" ? "guest" : "host";
     const peer = peers.find((entry) => entry.role === otherRole);
@@ -264,7 +292,10 @@ class CoopSession {
 
   sendStart(levelId: string): void {
     this._connectionState = "in-game";
-    this.broadcast(COOP_EVENTS.start, { levelId } satisfies CoopStartMessage);
+    const roster: CoopStartPlayer[] = this._participants
+      .filter((entry) => entry.slot < COOP_MAX_PLAYERS)
+      .map((entry) => ({ slot: entry.slot, characterId: entry.characterId }));
+    this.broadcast(COOP_EVENTS.start, { levelId, roster } satisfies CoopStartMessage);
   }
 
   sendEnd(reason: CoopEndReason): void {
@@ -287,7 +318,9 @@ class CoopSession {
     this._peerPresent = false;
     this.peerHello = null;
     this.protocolMismatch = false;
+    this.roomFull = false;
     this._participants = [];
+    this.participantsKey = "";
     this._localSlot = HOST_SLOT;
     this.setConnectionState("idle");
   }
@@ -325,6 +358,9 @@ class CoopSession {
   }
   onSessionError(cb: (message: string) => void): () => void {
     return this.subscribe("sessionError", cb);
+  }
+  onRoster(cb: (participants: CoopParticipant[]) => void): () => void {
+    return this.subscribe("roster", cb);
   }
 
   private subscribe<K extends keyof CoopCallbacks>(

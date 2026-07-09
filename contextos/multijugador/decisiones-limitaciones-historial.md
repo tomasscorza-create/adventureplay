@@ -25,9 +25,10 @@
   la animación puntual difiera.
 - **Sin reconexión automática ni anti-cheat.**
 - **Ambos clientes deben apuntar al mismo proyecto Supabase.**
-- **Gameplay acotado a 2 jugadores:** el protocolo y la sesión ya usan slots N-ready, pero las
-  escenas todavía instancian `player`/`player2` fijos y `COOP_MAX_PLAYERS = 2`. Renderizar 3-4 es
-  la fase siguiente.
+- **Gameplay de 2 a 4 jugadores** (`COOP_MAX_PLAYERS = 4`). Con salas de 4, revisar el costo de
+  broadcasts contra las cuotas de Supabase Realtime antes de promocionar el modo (Fase 4).
+- **Sin join a mitad de partida:** el roster se fija en el inicio; quien se una después queda en
+  "esperando" y no entra. Un quinto en el lobby recibe "La sala está llena".
 - **Pausa real no sincronizada:** en co-op no se puede pausar; solo existe la confirmación de
   salida. Una pausa acordada entre peers queda pendiente.
 
@@ -59,16 +60,22 @@
    (`CoopInputMessage { slot, seq, bits }`), `players` como arreglo indexado por slot, roster
    determinista (`assignSlots`, host = slot 0, guests por clientId), `CoopSession` con
    `localSlot`/`participants`/`characterIdForSlot`, e input remoto enrutado por slot en
-   `CoopSceneLink`. Gameplay sigue siendo de 2 jugadores, idéntico, sobre el nuevo modelo.
+   `CoopSceneLink`. Gameplay siguió siendo de 2 jugadores, idéntico, sobre el nuevo modelo.
+7. **Fase 3 de escalado — gameplay y lobby 2-4 jugadores (protocolo v5):** las escenas usan
+   `this.player` (slot 0) más arreglos `remotePlayers`/`remoteMovement`/`remoteCharges` (y en
+   Explorar `remoteRecoveringFromPit`/`remotePressureCooldown`) por slot, con helpers
+   `allPlayers()`/`playerAtSlot()`/`forEachPlayer` y colisiones jugador-jugador entre todos los
+   pares. El host simula cada guest por slot y arma `players[]` de N; el guest aplica todos por
+   slot. Presión y objetivo de enemigos sobre N. `CoopStartMessage` lleva el roster autoritativo
+   (slot + héroe) que fija el host, viajando en `CoopSessionInfo.roster`. `COOP_MAX_PLAYERS = 4`
+   con tope de sala (`onSessionError` "La sala está llena") y lobby con lista de participantes
+   (`onRoster`).
 
 ## Continuidad / próximos pasos sugeridos
 
-- **Fase 3 — gameplay y lobby 3-4 jugadores:** reemplazar `player`/`player2` fijos por un arreglo,
-  cooldowns/cargas por slot, presión sobre el más atrasado de N, lobby con lista de participantes y
-  límite de sala. Subir `COOP_MAX_PLAYERS`.
-- **Fase 4 — costo y robustez:** delta-encoding de snapshots, revisar cuotas de Supabase Realtime,
-  reconexión ante caídas, pausa co-op acordada, sala llena / expulsión.
-- **HUD del compañero:** mostrar ícono y vida del otro jugador en una esquina secundaria.
+- **Fase 4 — costo y robustez:** delta-encoding de snapshots, revisar cuotas de Supabase Realtime
+  con salas de 4, reconexión ante caídas, pausa co-op acordada, expulsión por el host.
+- **HUD del compañero:** mostrar ícono y vida de los demás jugadores en una esquina secundaria.
 - **Predicción de cliente** para el personaje del guest (reduce la latencia percibida).
 - **Estados de animación finos** de enemigos complejos en el guest.
 

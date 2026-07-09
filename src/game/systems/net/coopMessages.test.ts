@@ -3,6 +3,7 @@ import { emptyGameplayInputState, type GameplayInputState } from "../../../share
 import {
   assignSlots,
   collectPeerPresences,
+  COOP_MAX_PLAYERS,
   COOP_PROTOCOL_VERSION,
   generateRoomCode,
   isValidRoomCode,
@@ -71,7 +72,7 @@ describe("coopMessages room codes", () => {
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(4);
+    expect(COOP_PROTOCOL_VERSION).toBe(5);
   });
 
   it("excluye la propia key y normaliza los payloads de los peers", () => {
@@ -130,5 +131,22 @@ describe("coopMessages slots", () => {
     ]);
     expect(roster.map((entry) => entry.slot)).toEqual([1, 2]);
     expect(roster[0].key).toBe("a");
+  });
+
+  it("asigna slots contiguos a una sala completa (host + 3 guests)", () => {
+    const roster = assignSlots([
+      { key: "host", role: "host", characterId: "ruder" },
+      { key: "g3", role: "guest", characterId: "amy" },
+      { key: "g1", role: "guest", characterId: "sarix" },
+      { key: "g2", role: "guest", characterId: "dunel" },
+    ]);
+    expect(roster.map((entry) => entry.slot)).toEqual([0, 1, 2, 3]);
+    // Un quinto jugador caeria en el slot 4, fuera de COOP_MAX_PLAYERS = 4:
+    // la sesion lo rechaza como "sala llena".
+    expect(roster.every((entry) => entry.slot < COOP_MAX_PLAYERS)).toBe(true);
+  });
+
+  it("COOP_MAX_PLAYERS admite hasta 4 jugadores", () => {
+    expect(COOP_MAX_PLAYERS).toBe(4);
   });
 });

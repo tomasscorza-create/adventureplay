@@ -16,7 +16,7 @@ No hay sockets acoplados dentro de escenas ni entidades.
 | `src/game/systems/net/CoopSceneLink.ts` | **Plumbing compartido** por ambas escenas: dedupe por seq, flancos del input remoto por slot, throttling de envíos, guardas de fin de sesión. Testeable con transporte inyectado. |
 | `src/game/systems/net/coopPlayerNet.ts` | `toNetPlayer` / `applyNetPlayer` compartidos. |
 | `src/game/systems/net/CoopProjectilePuppets.ts` | Sprites sin física que representan los proyectiles del host en el guest (interpola + destello al desaparecer). |
-| `src/game/events/EventBus.ts` | `START_GAME` lleva `coop?: CoopSessionInfo` (`{ role, code, localSlot }`). |
+| `src/game/events/EventBus.ts` | `START_GAME` lleva `coop?: CoopSessionInfo` (`{ role, code, localSlot, roster }`). |
 | `src/shared/supabase/client.ts` | Cliente Supabase reutilizado (`@supabase/supabase-js`, Realtime incluido). |
 
 ## Transporte: Supabase Realtime
@@ -30,6 +30,8 @@ No hay sockets acoplados dentro de escenas ni entidades.
 - **Versión de protocolo** (`COOP_PROTOCOL_VERSION`): si un peer trae una versión distinta (incluye
   builds previos sin el campo), `onSessionError` avisa una vez y el lobby lo muestra en lugar de
   quedar esperando para siempre.
+- **Tope de sala** (`COOP_MAX_PLAYERS = 4`): un cliente cuyo slot determinista cae fuera del tope
+  (llegó cuando la sala ya estaba llena) recibe `onSessionError` "La sala está llena" y no juega.
 - Elección del transporte: cero infraestructura nueva (no requiere tablas ni RLS), funciona con la
   anon key y con la autenticación existente.
 
@@ -41,13 +43,13 @@ No hay sockets acoplados dentro de escenas ni entidades.
 | `join(code, hello)` → `Promise<void>` | Se une a la sala como `guest`. |
 | `sendInput(msg)` | Guest → host: `{ slot, seq, bits }` (el slot identifica al emisor). |
 | `sendSnapshot(snapshot)` | Host → guest: estado autoritativo (payload genérico `unknown`). |
-| `sendStart(levelId)` | Host anuncia el inicio del nivel elegido. |
+| `sendStart(levelId)` | Host anuncia el inicio: incluye el **roster autoritativo** (slot + héroe). |
 | `sendEnd(reason)` | Fin de sesión: `"won" \| "lost" \| "left"`. |
-| `onConnectionState / onPeerJoined / onPeerLeft / onSessionError` | Estado de sala y errores fatales para la UI. |
-| `onInput / onSnapshot<T> / onStart / onEnd` | Suscripciones de la escena. `onSnapshot` es **genérico**. |
+| `onConnectionState / onPeerJoined / onPeerLeft / onSessionError / onRoster` | Estado de sala, errores fatales y cambios de roster para la UI. |
+| `onInput / onSnapshot<T> / onStart / onEnd` | Suscripciones de la escena. `onSnapshot` es **genérico**; `onStart` trae `{ levelId, roster }`. |
 | `leave()` | Cierra el canal y resetea el estado. |
 | `role`, `code`, `connectionState`, `isActive`, `peerPresent`, `peerCharacterId` | Getters básicos. |
-| `localSlot`, `participants`, `characterIdForSlot(slot)` | **Modelo de slots**: slot propio, roster con slots asignados y héroe por slot. |
+| `localSlot`, `participants`, `participantCount`, `characterIdForSlot(slot)` | **Modelo de slots**: slot propio, roster con slots asignados, conteo y héroe por slot. |
 
 `hello = { characterId, protocol }`: cada jugador anuncia su héroe y su versión para que el otro lo
 instancie y valide compatibilidad.
@@ -62,8 +64,9 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `4`. Subirla ante cualquier cambio incompatible de mensajes/presencia. |
-| `COOP_MAX_PLAYERS` | `2` (tope actual del gameplay; el modelo de slots admite más). |
+| `COOP_PROTOCOL_VERSION` | `5`. Subirla ante cualquier cambio incompatible de mensajes/presencia. |
+| `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
+| `CoopStartMessage` | `{ levelId, roster: { slot, characterId }[] }` — roster autoritativo del host. |
 | `HOST_SLOT` | `0`. Los guests ocupan slots `1..N`. |
 | `COOP_INPUT_RATE_HZ` / `COOP_INPUT_KEEPALIVE_MS` | `30` (tope al cambiar) / `100` (keepalive sin cambios). |
 | `COOP_SNAPSHOT_RATE_HZ` | `20` (host → guest) |
@@ -116,10 +119,10 @@ GUEST                              HOST (CoopSceneLink)
   end local ◀──sendEnd──────────  finishWithDefeat / completeLevel
 ```
 
-- **Slots:** `this.player` = slot 0 = host; `this.player2` = slot 1 = (único) guest. El arreglo
+- **Slots:** `this.player` = slot 0 = host; `remotePlayers[i]` = slot i+1 = guest. El arreglo
   `players` del snapshot está indexado por slot; el guest lee su propio estado en
-  `snap.players[coopSelfSlot]` (`= coopSession.localSlot`). El gameplay usa 2, pero el protocolo ya
-  admite más.
+  `snap.players[coopSelfSlot]` (`= coopSession.localSlot`). `COOP_MAX_PLAYERS = 4`; la cantidad y
+  los héroes vienen del roster autoritativo del host.
 - El guest **congela** sus cuerpos (`freezePuppet` → `body.enable = false`) y solo mueve los
   sprites por interpolación (`Phaser.Math.Linear`, factor `0.4`) + `Player.renderNetState`
   (facing + animación). Los proyectiles del host se dibujan con `CoopProjectilePuppets`.

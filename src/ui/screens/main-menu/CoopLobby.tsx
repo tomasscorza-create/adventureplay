@@ -9,9 +9,13 @@ import type { CoopSessionInfo } from "../../../game/events/EventBus";
 import { coopSession, type CoopConnectionState } from "../../../game/systems/net/CoopSession";
 import { isSupabaseConfigured } from "../../../shared/supabase/client";
 import {
+  COOP_MAX_PLAYERS,
   normalizeRoomCode,
   ROOM_CODE_LENGTH,
+  type CoopParticipant,
 } from "../../../game/systems/net/coopMessages";
+import { getCharacterDefinition } from "../../../game/data/characters";
+import type { CharacterId } from "../../../shared/types/game";
 import { MenuHeading } from "./MenuPrimitives";
 
 export type CoopLobbyMode = "challenge" | "explore";
@@ -65,6 +69,7 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
   const [connection, setConnection] = useState<CoopConnectionState>(coopSession.connectionState);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [roster, setRoster] = useState<CoopParticipant[]>([]);
   const startedRef = useRef(false);
 
   const selectableLevels = useMemo(
@@ -77,6 +82,9 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
 
   // Mantener el estado de conexion sincronizado con la sesion singleton.
   useEffect(() => coopSession.onConnectionState(setConnection), []);
+
+  // Lista de participantes de la sala (host + guests), para mostrar quien esta.
+  useEffect(() => coopSession.onRoster(setRoster), []);
 
   // Errores fatales de la sala (por ejemplo versiones distintas del juego).
   useEffect(() => {
@@ -99,14 +107,16 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
     return () => window.clearTimeout(timer);
   }, [step, connection]);
 
-  // El guest arranca la partida cuando el host envia el inicio.
+  // El guest arranca la partida cuando el host envia el inicio, usando el roster
+  // autoritativo que viene en el mensaje (no su vista local de presence).
   useEffect(() => {
-    return coopSession.onStart(({ levelId }) => {
+    return coopSession.onStart(({ levelId, roster: startRoster }) => {
       startedRef.current = true;
       onStartLevel(levelId, {
         role: "guest",
         code: coopSession.code,
         localSlot: coopSession.localSlot,
+        roster: startRoster,
       });
     });
   }, [onStartLevel]);
@@ -160,6 +170,10 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
       role: "host",
       code: coopSession.code,
       localSlot: coopSession.localSlot,
+      roster: coopSession.participants.map((entry) => ({
+        slot: entry.slot,
+        characterId: entry.characterId,
+      })),
     });
   };
 
@@ -167,8 +181,26 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
     coopSession.leave();
     setStep("choose");
     setCode("");
+    setRoster([]);
     setError(null);
   };
+
+  // Lista de jugadores presentes con su heroe, para el panel del anfitrion/guest.
+  const rosterList = roster.length > 0 && (
+    <ul className="coop-lobby__roster" aria-label="Jugadores en la sala">
+      {roster.map((participant) => (
+        <li key={participant.slot} className="coop-lobby__roster-item">
+          <span className="coop-lobby__roster-slot">
+            {participant.slot === 0 ? "Anfitrion" : `Jugador ${participant.slot + 1}`}
+          </span>
+          <span className="coop-lobby__roster-hero">
+            {getCharacterDefinition(participant.characterId as CharacterId).name}
+          </span>
+        </li>
+      ))}
+      <li className="coop-lobby__roster-count">{roster.length}/{COOP_MAX_PLAYERS} jugadores</li>
+    </ul>
+  );
 
   return (
     <div className="menu-chamber menu-chamber--challenge">
@@ -224,8 +256,12 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
             <p className="coop-lobby__label">Codigo de la sala</p>
             <p className="coop-lobby__code" aria-live="polite">{code || "…"}</p>
             <p className="coop-lobby__status">
-              {peerReady ? "Companero conectado. Elige el nivel y comienza." : "Esperando a que se una otro jugador…"}
+              {peerReady
+                ? `Pueden unirse hasta ${COOP_MAX_PLAYERS} jugadores. Elige el nivel y comienza cuando esten listos.`
+                : "Esperando a que se una otro jugador…"}
             </p>
+
+            {rosterList}
 
             {peerReady && (
               <>
@@ -259,6 +295,7 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
               {peerReady && "Listo. Esperando que el anfitrion inicie el nivel…"}
               {connection === "error" && "No se pudo conectar. Revisa el codigo."}
             </p>
+            {rosterList}
           </div>
         )}
 

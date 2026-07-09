@@ -110,16 +110,19 @@ export class LevelScene extends Phaser.Scene {
   // Slot del jugador local en el modelo de red (0 = host, 1..N = guests). El
   // gameplay sigue siendo de 2, pero el "self" del guest se lee por su slot.
   private coopSelfSlot = 0;
-  private player2?: Player;
-  private readonly movement2 = new MovementSystem();
-  private p2Charges = { healingCharges: 0, powerCharges: 0 };
-  private recoveringFromPit2 = false;
+  // Jugadores co-op en los slots 1..N-1 (el slot 0 es siempre `this.player`).
+  // Los arreglos hermanos estan alineados por indice = slot - 1.
+  private remotePlayers: Player[] = [];
+  private remoteMovement: MovementSystem[] = [];
+  private remoteCharges: Array<{ healingCharges: number; powerCharges: number }> = [];
+  private remoteRecoveringFromPit: boolean[] = [];
+  private remotePressureCooldown: number[] = [];
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
   private projectilePuppets?: CoopProjectilePuppets;
   private nextProjectileNetId = 1;
   private coopPressureX = 0;
-  private coopPressureCooldown1 = 0;
-  private coopPressureCooldown2 = 0;
+  // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
+  private pressureCooldownSlot0 = 0;
 
   constructor() {
     super("LevelScene");
@@ -137,17 +140,18 @@ export class LevelScene extends Phaser.Scene {
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
     this.coopSelfSlot = this.coop?.localSlot ?? 0;
-    this.player2 = undefined;
+    this.remotePlayers = [];
+    this.remoteMovement = [];
+    this.remoteCharges = [];
+    this.remoteRecoveringFromPit = [];
+    this.remotePressureCooldown = [];
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
     this.projectilePuppets = this.isGuest
       ? new CoopProjectilePuppets(this, () => this.playSfx("lethal-power"))
       : undefined;
     this.nextProjectileNetId = 1;
     this.coopPressureX = 0;
-    this.coopPressureCooldown1 = 0;
-    this.coopPressureCooldown2 = 0;
-    this.recoveringFromPit2 = false;
-    this.movement2.reset();
+    this.pressureCooldownSlot0 = 0;
     this.damageTakenThisLevel = false;
     this.recoveringFromPit = false;
     this.monstersDefeatedThisLevel = 0;
@@ -163,13 +167,6 @@ export class LevelScene extends Phaser.Scene {
       : undefined;
     if (this.save.checkpointId && !this.activeCheckpoint) {
       this.save.checkpointId = undefined;
-    }
-    if (this.isHost) {
-      const guestCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-      this.p2Charges = {
-        healingCharges: guestCharges?.healingCharges ?? 0,
-        powerCharges: guestCharges?.powerCharges ?? 0,
-      };
     }
     gameSaveStore.save(this.save);
     this.rewardBox = undefined;
@@ -232,12 +229,15 @@ export class LevelScene extends Phaser.Scene {
     }
     this.handleActionsFor(this.player, input, 0, true);
 
-    if (this.isHost && this.player2 && this.coopLink) {
-      // player2 es el unico guest (slot 1) en el modelo actual de 2 jugadores.
-      const remoteFrame = this.coopLink.consumeRemoteInputFrame(1);
-      const didJump2 = this.movement2.update(this.player2, remoteFrame, delta);
-      if (didJump2) this.playSfx("jump");
-      this.handleActionsFor(this.player2, remoteFrame, 1, false);
+    if (this.isHost && this.coopLink) {
+      // El host simula cada guest (slots 1..N) desde su input remoto por slot.
+      this.remotePlayers.forEach((player, index) => {
+        const slot = index + 1;
+        const remoteFrame = this.coopLink!.consumeRemoteInputFrame(slot);
+        const didJumpRemote = this.remoteMovement[index].update(player, remoteFrame, delta);
+        if (didJumpRemote) this.playSfx("jump");
+        this.handleActionsFor(player, remoteFrame, slot, false);
+      });
     }
 
     this.updateSpinCooldownHud();
@@ -259,14 +259,11 @@ export class LevelScene extends Phaser.Scene {
       return true;
     });
 
-    if (this.player.y > GAME_HEIGHT + 80) {
-      this.handlePitFall(this.player, 0);
-    }
-    if (this.player2 && this.player2.y > GAME_HEIGHT + 80) {
-      this.handlePitFall(this.player2, 1);
-    }
+    this.forEachPlayer((player, slot) => {
+      if (player.y > GAME_HEIGHT + 80) this.handlePitFall(player, slot);
+    });
 
-    if (this.isHost && this.player2) {
+    if (this.isHost && this.remotePlayers.length > 0) {
       this.coopLink?.maybeSendSnapshot(time, (seq) => this.buildSnapshot(seq));
     }
   }
@@ -323,29 +320,56 @@ export class LevelScene extends Phaser.Scene {
   private createPlayer(): void {
     const start = this.activeCheckpoint ?? this.level.playerStart;
     const startY = this.activeCheckpoint ? start.y - 60 : start.y;
-    // Slot A = personaje del host; Slot B = personaje del guest. `this.player` es
-    // siempre el slot A, sin importar quien soy.
-    const localChar = this.save.selectedCharacterId;
-    const peerChar = (coopSession.peerCharacterId as CharacterId | null) ?? localChar;
-    const slotAChar = this.isGuest ? peerChar : localChar;
-    const slotBChar = this.isHost ? peerChar : localChar;
+    // Roster autoritativo (slot + heroe). En single-player es solo el slot 0.
+    // `this.player` es siempre el slot 0; los slots 1..N-1 van a `remotePlayers`.
+    const roster = this.coop?.roster
+      ?? [{ slot: 0, characterId: this.save.selectedCharacterId }];
+    const seededCharges = this.seedRemoteCharges();
 
-    this.player = new Player(this, start.x, startY, this.save.player, getCharacterDefinition(slotAChar));
+    for (const entry of [...roster].sort((a, b) => a.slot - b.slot)) {
+      const character = getCharacterDefinition(entry.characterId as CharacterId);
+      const isLocal = entry.slot === this.coopSelfSlot;
+      const stats: PlayerStats = isLocal
+        ? this.save.player
+        : { ...this.save.player, health: this.save.player.maxHealth };
+      const player = new Player(this, start.x - 70 * entry.slot, startY, stats, character);
+      if (entry.slot === 0) {
+        this.player = player;
+      } else {
+        this.remotePlayers.push(player);
+        this.remoteMovement.push(new MovementSystem());
+        this.remoteCharges.push({ ...seededCharges });
+        this.remoteRecoveringFromPit.push(false);
+        this.remotePressureCooldown.push(0);
+      }
+    }
+
     this.cameraSystem.setBounds(this, this.level.worldWidth);
 
     if (this.coop) {
-      const stats2: PlayerStats = { ...this.save.player, health: this.save.player.maxHealth };
-      this.player2 = new Player(this, start.x - 70, startY, stats2, getCharacterDefinition(slotBChar));
-      if (this.isGuest) {
-        this.freezePuppet(this.player);
-        this.freezePuppet(this.player2);
-      }
+      if (this.isGuest) this.allPlayers().forEach((player) => this.freezePuppet(player));
       // Camara independiente por dispositivo: cada pantalla ancla a su propio
-      // personaje local. En single-player la camara se controla manualmente por
-      // la presion, asi que no se toca.
-      const cameraTarget = this.isGuest && this.player2 ? this.player2 : this.player;
+      // personaje local (slot `coopSelfSlot`). En single-player la camara se
+      // controla manualmente por la presion, asi que no se toca.
+      const cameraTarget = this.playerAtSlot(this.coopSelfSlot) ?? this.player;
       this.cameras.main.startFollow(cameraTarget, true, 0.1, 0.1, 0, 0);
     }
+  }
+
+  // Cargas iniciales que el host siembra para cada guest (toma las suyas; no
+  // tiene el save del guest). En el guest/single devuelve ceros.
+  private seedRemoteCharges(): { healingCharges: number; powerCharges: number } {
+    if (!this.isHost) return { healingCharges: 0, powerCharges: 0 };
+    const own = this.save.characterPowerCharges[this.save.selectedCharacterId];
+    return { healingCharges: own?.healingCharges ?? 0, powerCharges: own?.powerCharges ?? 0 };
+  }
+
+  private allPlayers(): Player[] {
+    return [this.player, ...this.remotePlayers];
+  }
+
+  private playerAtSlot(slot: number): Player | undefined {
+    return slot === 0 ? this.player : this.remotePlayers[slot - 1];
   }
 
   private freezePuppet(target: Phaser.GameObjects.GameObject): void {
@@ -354,16 +378,22 @@ export class LevelScene extends Phaser.Scene {
     body.enable = false;
   }
 
-  private forEachPlayer(callback: (player: Player, slot: 0 | 1) => void): void {
+  private forEachPlayer(callback: (player: Player, slot: number) => void): void {
     callback(this.player, 0);
-    if (this.player2) callback(this.player2, 1);
+    this.remotePlayers.forEach((player, index) => callback(player, index + 1));
   }
 
   private nearestPlayerTo(target: BaseEnemy): Player {
-    if (!this.player2) return this.player;
-    const toA = Phaser.Math.Distance.Between(target.x, target.y, this.player.x, this.player.y);
-    const toB = Phaser.Math.Distance.Between(target.x, target.y, this.player2.x, this.player2.y);
-    return toB < toA ? this.player2 : this.player;
+    let nearest = this.player;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (const player of this.allPlayers()) {
+      const dist = Phaser.Math.Distance.Between(target.x, target.y, player.x, player.y);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = player;
+      }
+    }
+    return nearest;
   }
 
   private createEntities(): void {
@@ -506,8 +536,11 @@ export class LevelScene extends Phaser.Scene {
       undefined,
       (enemyA, enemyB) => enemyA instanceof M3Enemy && enemyB instanceof M3Enemy,
     );
-    if (this.player2) {
-      this.physics.add.collider(this.player, this.player2);
+    const players = this.allPlayers();
+    for (let i = 0; i < players.length; i += 1) {
+      for (let j = i + 1; j < players.length; j += 1) {
+        this.physics.add.collider(players[i], players[j]);
+      }
     }
 
     this.forEachPlayer((player, slot) => {
@@ -639,7 +672,7 @@ export class LevelScene extends Phaser.Scene {
   private handleActionsFor(
     player: Player,
     input: GameplayInputFrame,
-    slot: 0 | 1,
+    slot: number,
     useBuffer: boolean,
   ): void {
     const now = this.time.now;
@@ -680,11 +713,11 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
-  private chargesForSlot(slot: 0 | 1): { healingCharges: number; powerCharges: number } {
-    return slot === 0 ? this.getActivePowerCharges() : this.p2Charges;
+  private chargesForSlot(slot: number): { healingCharges: number; powerCharges: number } {
+    return slot === 0 ? this.getActivePowerCharges() : this.remoteCharges[slot - 1];
   }
 
-  private useHealingPowerFor(player: Player, slot: 0 | 1): void {
+  private useHealingPowerFor(player: Player, slot: number): void {
     const powerCharges = this.chargesForSlot(slot);
     if (powerCharges.healingCharges <= 0 || player.stats.health >= player.stats.maxHealth) {
       return;
@@ -698,7 +731,7 @@ export class LevelScene extends Phaser.Scene {
     this.emitHud();
   }
 
-  private useLethalPowerFor(player: Player, slot: 0 | 1): void {
+  private useLethalPowerFor(player: Player, slot: number): void {
     const powerCharges = this.chargesForSlot(slot);
     if (powerCharges.powerCharges <= 0 || !player.canUsePower(this.time.now)) {
       return;
@@ -1469,7 +1502,7 @@ export class LevelScene extends Phaser.Scene {
     });
   }
 
-  private handlePlayerEnemyOverlap(enemy: BaseEnemy, player: Player, slot: 0 | 1): void {
+  private handlePlayerEnemyOverlap(enemy: BaseEnemy, player: Player, slot: number): void {
     if (this.tryStompEnemy(enemy, player)) {
       return;
     }
@@ -1619,7 +1652,7 @@ export class LevelScene extends Phaser.Scene {
     this.damagePlayerSlot(this.player, 0, amount);
   }
 
-  private damagePlayerSlot(player: Player, slot: 0 | 1, amount: number): void {
+  private damagePlayerSlot(player: Player, slot: number, amount: number): void {
     if (this.levelFinished) {
       return;
     }
@@ -1650,7 +1683,7 @@ export class LevelScene extends Phaser.Scene {
   private handleHazardOverlap(
     hazard: Phaser.GameObjects.GameObject,
     player: Player,
-    slot: 0 | 1,
+    slot: number,
   ): void {
     const damage = hazard.getData("damage") as number | undefined;
     const hazardType = hazard.getData("hazardType") as LevelHazardDefinition["type"] | undefined;
@@ -1723,16 +1756,16 @@ export class LevelScene extends Phaser.Scene {
     this.emitHud();
   }
 
-  private handlePitFall(player: Player, slot: 0 | 1): void {
+  private handlePitFall(player: Player, slot: number): void {
     if (this.levelFinished) {
       return;
     }
-    const recovering = slot === 0 ? this.recoveringFromPit : this.recoveringFromPit2;
+    const recovering = slot === 0 ? this.recoveringFromPit : this.remoteRecoveringFromPit[slot - 1];
     if (recovering) {
       return;
     }
     if (slot === 0) this.recoveringFromPit = true;
-    else this.recoveringFromPit2 = true;
+    else this.remoteRecoveringFromPit[slot - 1] = true;
 
     const previousHealth = player.stats.health;
     player.stats.health = Math.max(0, player.stats.health - 1);
@@ -1761,11 +1794,11 @@ export class LevelScene extends Phaser.Scene {
     player.setPosition(safePoint.x, safePoint.y);
     player.setVelocity(0, 0);
     if (slot === 0) this.pressureDamageCooldownMs = 1500;
-    if (slot === 0) this.coopPressureCooldown1 = 1500;
-    else this.coopPressureCooldown2 = 1500;
+    if (slot === 0) this.pressureCooldownSlot0 = 1500;
+    else this.remotePressureCooldown[slot - 1] = 1500;
     this.time.delayedCall(250, () => {
       if (slot === 0) this.recoveringFromPit = false;
-      else this.recoveringFromPit2 = false;
+      else this.remoteRecoveringFromPit[slot - 1] = false;
     });
   }
 
@@ -1840,10 +1873,10 @@ export class LevelScene extends Phaser.Scene {
     this.save.checkpointId = undefined;
     this.recordRunStatistics("defeat");
     gameSaveStore.save(this.save);
-    this.player.markDefeated();
-    this.player2?.markDefeated();
-    (this.player.body as Phaser.Physics.Arcade.Body).enable = false;
-    if (this.player2) (this.player2.body as Phaser.Physics.Arcade.Body).enable = false;
+    this.allPlayers().forEach((player) => {
+      player.markDefeated();
+      (player.body as Phaser.Physics.Arcade.Body).enable = false;
+    });
     if (this.isHost) this.coopLink?.finish("lost");
     this.time.delayedCall(620, () => {
       this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id, coop: this.coop });
@@ -2020,7 +2053,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private buildSnapshot(seq: number): LevelSnapshot {
-    const p1Charges = this.getActivePowerCharges();
+    const hostCharges = this.getActivePowerCharges();
     const enemies: Array<[number, number, number, number]> = [];
     this.enemies.children.each((obj) => {
       const enemy = obj as BaseEnemy;
@@ -2074,12 +2107,16 @@ export class LevelScene extends Phaser.Scene {
       }
       return true;
     });
+    // players indexado por slot (0 = host, 1..N = guests).
+    const players = [
+      toNetPlayer(this.player, hostCharges, this.time.now),
+      ...this.remotePlayers.map((player, index) =>
+        toNetPlayer(player, this.remoteCharges[index], this.time.now),
+      ),
+    ];
     return {
       seq,
-      players: [
-        toNetPlayer(this.player, p1Charges, this.time.now),
-        toNetPlayer(this.player2!, this.p2Charges, this.time.now),
-      ],
+      players,
       enemies,
       platforms,
       hazards,
@@ -2111,8 +2148,11 @@ export class LevelScene extends Phaser.Scene {
 
   private applySnapshot(snap: LevelSnapshot): void {
     const s = 0.4;
-    if (snap.players[0]) applyNetPlayer(this.player, snap.players[0], s);
-    if (this.player2 && snap.players[1]) applyNetPlayer(this.player2, snap.players[1], s);
+    // players[slot] casa con allPlayers()[slot] (slot 0 = this.player).
+    this.allPlayers().forEach((player, slot) => {
+      const net = snap.players[slot];
+      if (net) applyNetPlayer(player, net, s);
+    });
     this.projectilePuppets?.apply(snap.projectiles, s);
 
     // Deteccion de dano propio para el destello/sacudida local del guest, leido
@@ -2220,28 +2260,29 @@ export class LevelScene extends Phaser.Scene {
   // Presion co-op: linea de mundo que avanza pero nunca sobrepasa al jugador mas
   // atrasado (margen fijo). Desacoplada de la camara, que es por dispositivo.
   private updateCoopPressure(delta: number): void {
-    if (!this.player2) return;
-    const trailingX = Math.min(this.player.x, this.player2.x);
+    if (this.remotePlayers.length === 0) return;
+    const trailingX = Math.min(...this.allPlayers().map((player) => player.x));
     const cap = trailingX - COOP_PRESSURE_MARGIN;
     const advanced = this.coopPressureX + this.level.autoScrollSpeed * (delta / 1000);
     this.coopPressureX = Math.max(0, Math.max(this.coopPressureX, Math.min(advanced, cap)));
     this.pressureLine.x = this.coopPressureX + this.pressureLine.width / 2;
 
-    this.coopPressureCooldown1 = Math.max(0, this.coopPressureCooldown1 - delta);
-    this.coopPressureCooldown2 = Math.max(0, this.coopPressureCooldown2 - delta);
-    this.applyCoopPressureDamage(this.player, 0);
-    if (this.player2) this.applyCoopPressureDamage(this.player2, 1);
+    this.pressureCooldownSlot0 = Math.max(0, this.pressureCooldownSlot0 - delta);
+    for (let i = 0; i < this.remotePressureCooldown.length; i += 1) {
+      this.remotePressureCooldown[i] = Math.max(0, this.remotePressureCooldown[i] - delta);
+    }
+    this.forEachPlayer((player, slot) => this.applyCoopPressureDamage(player, slot));
   }
 
-  private applyCoopPressureDamage(player: Player, slot: 0 | 1): void {
+  private applyCoopPressureDamage(player: Player, slot: number): void {
     const body = player.body as Phaser.Physics.Arcade.Body;
     const lineRight = this.pressureLine.x + this.pressureLine.width / 2;
     if (body.left > lineRight) return;
-    const cooldown = slot === 0 ? this.coopPressureCooldown1 : this.coopPressureCooldown2;
+    const cooldown = slot === 0 ? this.pressureCooldownSlot0 : this.remotePressureCooldown[slot - 1];
     if (cooldown > 0) return;
     this.damagePlayerSlot(player, slot, 1);
-    if (slot === 0) this.coopPressureCooldown1 = 1000;
-    else this.coopPressureCooldown2 = 1000;
+    if (slot === 0) this.pressureCooldownSlot0 = 1000;
+    else this.remotePressureCooldown[slot - 1] = 1000;
   }
 
   private handleRemoteEnd(reason: "won" | "lost" | "left"): void {
@@ -2253,8 +2294,7 @@ export class LevelScene extends Phaser.Scene {
     } else if (reason === "lost") {
       if (this.levelFinished) return;
       this.levelFinished = true;
-      this.player.markDefeated();
-      this.player2?.markDefeated();
+      this.allPlayers().forEach((player) => player.markDefeated());
       this.playSfx("game-over");
       this.time.delayedCall(620, () => {
         this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });

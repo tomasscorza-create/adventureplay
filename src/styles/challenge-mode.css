@@ -382,6 +382,43 @@
   line-height: 1.5;
 }
 
+.coop-lobby__roster {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.coop-lobby__roster-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.coop-lobby__roster-slot {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.coop-lobby__roster-hero {
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+.coop-lobby__roster-count {
+  margin-top: 0.15rem;
+  text-align: center;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
 .coop-lobby__code-input {
   width: 100%;
   padding: 10px 12px;

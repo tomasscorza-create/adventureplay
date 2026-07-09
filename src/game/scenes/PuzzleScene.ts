@@ -139,11 +139,13 @@ export class PuzzleScene extends Phaser.Scene {
   private isGuest = false;
   // Slot del jugador local en el modelo de red (0 = host, 1..N = guests).
   private coopSelfSlot = 0;
-  private player2?: Player;
-  private readonly movement2 = new MovementSystem();
-  // Host: cargas vivas del jugador 2 (sembradas desde el save del host).
-  private p2Charges = { healingCharges: 0, powerCharges: 0 };
-  private damageCooldownUntil2 = 0;
+  // Jugadores co-op en los slots 1..N-1 (el slot 0 es siempre `this.player`).
+  // Los arreglos hermanos estan alineados por indice = slot - 1.
+  private remotePlayers: Player[] = [];
+  private remoteMovement: MovementSystem[] = [];
+  // Host: cargas vivas de cada guest (sembradas desde el save del host).
+  private remoteCharges: Array<{ healingCharges: number; powerCharges: number }> = [];
+  private remoteDamageCooldownUntil: number[] = [];
   private guestPrevSelfHealth = Number.POSITIVE_INFINITY;
   private projectilePuppets?: CoopProjectilePuppets;
   private nextProjectileNetId = 1;
@@ -166,7 +168,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.runTracker.reset();
     this.activations.reset(this.level.requiredActivations);
     this.movement.reset();
-    this.movement2.reset();
     touchInputStore.reset();
     gameSaveStore.save(this.save);
 
@@ -177,19 +178,15 @@ export class PuzzleScene extends Phaser.Scene {
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
     this.coopSelfSlot = this.coop?.localSlot ?? 0;
-    this.player2 = undefined;
+    this.remotePlayers = [];
+    this.remoteMovement = [];
+    this.remoteCharges = [];
+    this.remoteDamageCooldownUntil = [];
     this.guestPrevSelfHealth = Number.POSITIVE_INFINITY;
     this.projectilePuppets = this.isGuest
       ? new CoopProjectilePuppets(this, () => this.playSfx("lethal-power"))
       : undefined;
     this.nextProjectileNetId = 1;
-    if (this.isHost) {
-      const guestCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-      this.p2Charges = {
-        healingCharges: guestCharges?.healingCharges ?? 0,
-        powerCharges: guestCharges?.powerCharges ?? 0,
-      };
-    }
 
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.inputSystem = new GameplayInputSystem(this);
@@ -229,14 +226,17 @@ export class PuzzleScene extends Phaser.Scene {
     }
     const jumped = this.movement.update(this.player, input, delta);
     if (jumped) this.playSfx("jump");
-    this.handleActionsFor(this.player, input, "player-1");
+    this.handleActionsFor(this.player, input, 0);
 
-    if (this.isHost && this.player2 && this.coopLink) {
-      // player2 es el unico guest (slot 1) en el modelo actual de 2 jugadores.
-      const remoteFrame = this.coopLink.consumeRemoteInputFrame(1);
-      const jumped2 = this.movement2.update(this.player2, remoteFrame, delta);
-      if (jumped2) this.playSfx("jump");
-      this.handleActionsFor(this.player2, remoteFrame, "player-2");
+    if (this.isHost && this.coopLink) {
+      // El host simula cada guest (slots 1..N) desde su input remoto por slot.
+      this.remotePlayers.forEach((player, index) => {
+        const slot = index + 1;
+        const remoteFrame = this.coopLink!.consumeRemoteInputFrame(slot);
+        const jumpedRemote = this.remoteMovement[index].update(player, remoteFrame, delta);
+        if (jumpedRemote) this.playSfx("jump");
+        this.handleActionsFor(player, remoteFrame, slot);
+      });
     }
 
     this.updateCrateSolidity();
@@ -252,7 +252,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
 
-    if (this.isHost && this.player2) {
+    if (this.isHost && this.remotePlayers.length > 0) {
       this.coopLink?.maybeSendSnapshot(time, (seq) => this.buildSnapshot(seq));
     }
 
@@ -276,10 +276,16 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private nearestPlayerTo(target: BaseEnemy): Player {
-    if (!this.player2) return this.player;
-    const toA = Phaser.Math.Distance.Between(target.x, target.y, this.player.x, this.player.y);
-    const toB = Phaser.Math.Distance.Between(target.x, target.y, this.player2.x, this.player2.y);
-    return toB < toA ? this.player2 : this.player;
+    let nearest = this.player;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (const player of this.allPlayers()) {
+      const dist = Phaser.Math.Distance.Between(target.x, target.y, player.x, player.y);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = player;
+      }
+    }
+    return nearest;
   }
 
   private createWorld(): void {
@@ -471,41 +477,61 @@ export class PuzzleScene extends Phaser.Scene {
 
   private createPlayer(): void {
     const start = this.level.playerStart;
-    // Slot A = personaje del host; Slot B = personaje del guest. `this.player`
-    // es siempre el slot A y `this.player2` el slot B, sin importar quien soy.
-    const localChar = this.save.selectedCharacterId;
-    const peerChar = (coopSession.peerCharacterId as CharacterId | null) ?? localChar;
-    const slotAChar = this.isGuest ? peerChar : localChar;
-    const slotBChar = this.isHost ? peerChar : localChar;
+    // Roster autoritativo (slot + heroe). En single-player es solo el slot 0 con
+    // el heroe local. `this.player` es siempre el slot 0; los slots 1..N-1 van a
+    // `remotePlayers` (alineados por indice = slot - 1), sin importar quien soy.
+    const roster = this.coop?.roster
+      ?? [{ slot: 0, characterId: this.save.selectedCharacterId }];
+    const seededCharges = this.seedRemoteCharges();
 
-    this.player = new Player(
-      this,
-      start.x,
-      start.y,
-      this.save.player,
-      getCharacterDefinition(slotAChar),
-    );
-
-    if (this.coop) {
-      const stats2: PlayerStats = { ...this.save.player, health: this.save.player.maxHealth };
-      this.player2 = new Player(
-        this,
-        start.x - 70,
-        start.y,
-        stats2,
-        getCharacterDefinition(slotBChar),
-      );
-      if (this.isGuest) {
-        this.freezePuppet(this.player);
-        this.freezePuppet(this.player2);
+    for (const entry of [...roster].sort((a, b) => a.slot - b.slot)) {
+      const character = getCharacterDefinition(entry.characterId as CharacterId);
+      const isLocal = entry.slot === this.coopSelfSlot;
+      // El jugador local usa el save real; los demas, una copia a vida llena
+      // (el host no tiene el save de los guests: limitacion aceptada).
+      const stats: PlayerStats = isLocal
+        ? this.save.player
+        : { ...this.save.player, health: this.save.player.maxHealth };
+      const player = new Player(this, start.x - 70 * entry.slot, start.y, stats, character);
+      if (entry.slot === 0) {
+        this.player = player;
+      } else {
+        this.remotePlayers.push(player);
+        this.remoteMovement.push(new MovementSystem());
+        this.remoteCharges.push({ ...seededCharges });
+        this.remoteDamageCooldownUntil.push(0);
       }
     }
 
+    // El guest no simula ningun cuerpo autoritativo: los congela todos.
+    if (this.isGuest) this.allPlayers().forEach((player) => this.freezePuppet(player));
+
     // Camara independiente por dispositivo: cada pantalla ancla a su propio
-    // personaje local (host/single -> player, guest -> player2), sin punto medio
-    // compartido, para que cada quien explore el mapa libremente.
-    const cameraTarget = this.isGuest && this.player2 ? this.player2 : this.player;
+    // personaje local (el del slot `coopSelfSlot`), sin punto medio compartido.
+    const cameraTarget = this.playerAtSlot(this.coopSelfSlot) ?? this.player;
     this.cameras.main.startFollow(cameraTarget, true, 0.08, 0.08, -180, 40);
+  }
+
+  // Cargas iniciales que el host siembra para cada guest: toma las suyas propias
+  // (no tiene el save del guest). En el guest/single devuelve ceros.
+  private seedRemoteCharges(): { healingCharges: number; powerCharges: number } {
+    if (!this.isHost) return { healingCharges: 0, powerCharges: 0 };
+    const own = this.save.characterPowerCharges[this.save.selectedCharacterId];
+    return { healingCharges: own?.healingCharges ?? 0, powerCharges: own?.powerCharges ?? 0 };
+  }
+
+  // Todos los jugadores en orden de slot (0 primero).
+  private allPlayers(): Player[] {
+    return [this.player, ...this.remotePlayers];
+  }
+
+  private playerAtSlot(slot: number): Player | undefined {
+    return slot === 0 ? this.player : this.remotePlayers[slot - 1];
+  }
+
+  // Id de participante estable por slot para PuzzleActivationSystem.
+  private participantForSlot(slot: number): string {
+    return `player-${slot + 1}`;
   }
 
   // El guest no simula la fisica de los cuerpos autoritativos: deshabilita su
@@ -517,9 +543,9 @@ export class PuzzleScene extends Phaser.Scene {
     body.enable = false;
   }
 
-  private forEachPlayer(callback: (player: Player, slot: 0 | 1) => void): void {
+  private forEachPlayer(callback: (player: Player, slot: number) => void): void {
     callback(this.player, 0);
-    if (this.player2) callback(this.player2, 1);
+    this.remotePlayers.forEach((player, index) => callback(player, index + 1));
   }
 
   private createPuzzleObjects(): void {
@@ -941,8 +967,11 @@ export class PuzzleScene extends Phaser.Scene {
     this.physics.add.collider(this.crates, this.crates); // Apilamiento de cajas!
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.collider(this.enemies, this.crates);
-    if (this.player2) {
-      this.physics.add.collider(this.player, this.player2);
+    const players = this.allPlayers();
+    for (let i = 0; i < players.length; i += 1) {
+      for (let j = i + 1; j < players.length; j += 1) {
+        this.physics.add.collider(players[i], players[j]);
+      }
     }
     this.forEachPlayer((player) => {
       this.physics.add.collider(player, this.platforms);
@@ -1106,7 +1135,8 @@ export class PuzzleScene extends Phaser.Scene {
     return candidate instanceof Phaser.GameObjects.GameObject ? candidate : undefined;
   }
 
-  private handleActionsFor(player: Player, input: GameplayInputFrame, participant: string): void {
+  private handleActionsFor(player: Player, input: GameplayInputFrame, slot: number): void {
+    const participant = this.participantForSlot(slot);
     if (input.meleeJustPressed && player.canMelee(this.time.now)) {
       this.playSfx("sword-swing");
       this.combat.meleeAttack(this, player, this.enemies, (enemy) => {
@@ -1133,8 +1163,8 @@ export class PuzzleScene extends Phaser.Scene {
         }
       }
     }
-    if (input.healJustPressed) this.useHealingPowerFor(player, participant);
-    if (input.powerJustPressed) this.useLethalPowerFor(player, participant);
+    if (input.healJustPressed) this.useHealingPowerFor(player, slot);
+    if (input.powerJustPressed) this.useLethalPowerFor(player, slot);
   }
 
   private tryStompEnemy(enemy: BaseEnemy, player: Player): boolean {
@@ -1462,24 +1492,26 @@ export class PuzzleScene extends Phaser.Scene {
     this.objectiveText.setText(nextText);
   }
 
-  private chargesForParticipant(participant: string): { healingCharges: number; powerCharges: number } {
-    return participant === "player-1"
+  // Cargas del slot: el slot 0 (jugador local del host) usa el save; los guests
+  // usan sus contadores vivos sembrados por el host (no se persisten).
+  private chargesForSlot(slot: number): { healingCharges: number; powerCharges: number } {
+    return slot === 0
       ? this.save.characterPowerCharges[this.save.selectedCharacterId]
-      : this.p2Charges;
+      : this.remoteCharges[slot - 1];
   }
 
-  private useHealingPowerFor(player: Player, participant: string): void {
-    const charges = this.chargesForParticipant(participant);
+  private useHealingPowerFor(player: Player, slot: number): void {
+    const charges = this.chargesForSlot(slot);
     if (charges.healingCharges <= 0 || player.stats.health >= player.stats.maxHealth) return;
     charges.healingCharges -= 1;
     player.stats.health = player.stats.maxHealth;
     this.playSfx("heal");
-    if (participant === "player-1") gameSaveStore.save(this.save);
+    if (slot === 0) gameSaveStore.save(this.save);
     this.emitHud();
   }
 
-  private useLethalPowerFor(player: Player, participant: string): void {
-    const charges = this.chargesForParticipant(participant);
+  private useLethalPowerFor(player: Player, slot: number): void {
+    const charges = this.chargesForSlot(slot);
     if (charges.powerCharges <= 0 || !player.canUsePower(this.time.now)) return;
     charges.powerCharges -= 1;
     player.markUsingPower(this.time.now);
@@ -1498,7 +1530,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.projectiles.add(projectile);
     projectile.launch();
     this.playSfx("lethal-power");
-    if (participant === "player-1") gameSaveStore.save(this.save);
+    if (slot === 0) gameSaveStore.save(this.save);
     this.emitHud();
   }
 
@@ -1513,23 +1545,22 @@ export class PuzzleScene extends Phaser.Scene {
     gameSaveStore.save(this.save);
   }
 
-  private damagePlayerSlot(player: Player, slot: 0 | 1, amount: number): void {
-    if (slot === 0) {
-      if (this.time.now < this.damageCooldownUntil) return;
-    } else if (this.time.now < this.damageCooldownUntil2) {
-      return;
-    }
+  private damagePlayerSlot(player: Player, slot: number, amount: number): void {
+    const cooldownUntil = slot === 0
+      ? this.damageCooldownUntil
+      : this.remoteDamageCooldownUntil[slot - 1] ?? 0;
+    if (this.time.now < cooldownUntil) return;
     const previousHealth = player.stats.health;
     const defeated = player.takeDamage(amount);
     if (player.stats.health === previousHealth) return;
     if (slot === 0) {
       this.damageCooldownUntil = this.time.now + 900;
     } else {
-      this.damageCooldownUntil2 = this.time.now + 900;
+      this.remoteDamageCooldownUntil[slot - 1] = this.time.now + 900;
     }
     this.playSfx("player-hit");
     // El destello rojo es un efecto local del cliente: en host/single solo el
-    // slot A es "mi" personaje. El guest lo dispara al detectar su propia baja.
+    // slot 0 es "mi" personaje. El guest lo dispara al detectar su propia baja.
     if (slot === 0) {
       gameEvents.emit(EVENTS.PLAYER_DAMAGED, { amount: previousHealth - player.stats.health });
       gameSaveStore.save(this.save);
@@ -1590,8 +1621,7 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.levelFinished) return;
     this.levelFinished = true;
     this.recordRunStatistics("defeat");
-    this.player.markDefeated();
-    this.player2?.markDefeated();
+    this.allPlayers().forEach((player) => player.markDefeated());
     gameSaveStore.save(this.save);
     if (this.isHost) this.coopLink?.finish("lost");
     this.physics.pause();
@@ -1735,7 +1765,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private buildSnapshot(seq: number): WorldSnapshot {
-    const p1Charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
+    const hostCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
     const enemies: Array<[number, number, number]> = [];
     this.enemies.children.each((obj) => {
       const enemy = obj as BaseEnemy;
@@ -1760,12 +1790,16 @@ export class PuzzleScene extends Phaser.Scene {
       return true;
     });
     const active = this.level.requiredActivations.filter((id) => this.activations.isActive(id));
+    // players indexado por slot (0 = host, 1..N = guests).
+    const players = [
+      toNetPlayer(this.player, hostCharges, this.time.now),
+      ...this.remotePlayers.map((player, index) =>
+        toNetPlayer(player, this.remoteCharges[index], this.time.now),
+      ),
+    ];
     return {
       seq,
-      players: [
-        toNetPlayer(this.player, p1Charges, this.time.now),
-        toNetPlayer(this.player2!, this.p2Charges, this.time.now),
-      ],
+      players,
       crates: this.crates.map((crate) => [Math.round(crate.x), Math.round(crate.y)]),
       enemies,
       projectiles,
@@ -1799,8 +1833,11 @@ export class PuzzleScene extends Phaser.Scene {
 
   private applySnapshot(snap: WorldSnapshot): void {
     const smoothing = 0.4;
-    if (snap.players[0]) applyNetPlayer(this.player, snap.players[0], smoothing);
-    if (this.player2 && snap.players[1]) applyNetPlayer(this.player2, snap.players[1], smoothing);
+    // players[slot] casa con allPlayers()[slot] (slot 0 = this.player).
+    this.allPlayers().forEach((player, slot) => {
+      const net = snap.players[slot];
+      if (net) applyNetPlayer(player, net, smoothing);
+    });
     this.projectilePuppets?.apply(snap.projectiles, smoothing);
 
     // Deteccion de dano propio para el destello local del guest, leido en su slot.
@@ -1886,8 +1923,7 @@ export class PuzzleScene extends Phaser.Scene {
       if (this.levelFinished) return;
       this.levelFinished = true;
       this.recordRunStatistics("defeat");
-      this.player.markDefeated();
-      this.player2?.markDefeated();
+      this.allPlayers().forEach((player) => player.markDefeated());
       gameSaveStore.save(this.save);
       this.physics.pause();
       this.playSfx("game-over");

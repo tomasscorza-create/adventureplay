@@ -21,14 +21,14 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 // v2: presencia con key por clientId y payload {role, characterId, protocol}.
 // v3: snapshots con proyectiles de poder letal ([netId, x, y, dir]).
 // v4: modelo de slots N jugadores: input con slot emisor y players como arreglo.
-export const COOP_PROTOCOL_VERSION = 4;
+// v5: gameplay N jugadores: el inicio lleva el roster autoritativo (slot+heroe).
+export const COOP_PROTOCOL_VERSION = 5;
 
 export type CoopRole = "host" | "guest";
 
-// Cantidad de jugadores admitida en una sala. Hoy el gameplay usa 2; el modelo
-// de slots ya esta preparado para crecer. Subir este tope es parte de la Fase 3
-// (gameplay y lobby N jugadores), no de la generalizacion del protocolo.
-export const COOP_MAX_PLAYERS = 2;
+// Cantidad maxima de jugadores por sala (host + guests). El modelo de slots
+// admite crecer; este tope acota el gameplay y el lobby.
+export const COOP_MAX_PLAYERS = 4;
 
 // Slot fijo del anfitrion. Los guests ocupan slots 1..N segun `assignSlots`.
 export const HOST_SLOT = 0;
@@ -105,8 +105,17 @@ export function assignSlots(
   return roster;
 }
 
+// Entrada compacta del roster que el host transmite al iniciar: define cuantos
+// jugadores hay, en que slot y con que heroe, de forma autoritativa para que
+// todos instancien exactamente lo mismo sin depender del timing de presence.
+export interface CoopStartPlayer {
+  slot: number;
+  characterId: string;
+}
+
 export interface CoopStartMessage {
   levelId: string;
+  roster: CoopStartPlayer[];
 }
 
 export type CoopEndReason = "won" | "lost" | "left";
