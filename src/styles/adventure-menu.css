@@ -1953,19 +1953,11 @@
 
 .mode-tile--entry-hint {
   z-index: 1;
-  animation: explore-mode-entry-hint 1.45s cubic-bezier(0.22, 0.78, 0.2, 1) 180ms both;
+  animation: explore-mode-entry-hint 1.45s cubic-bezier(0.22, 0.78, 0.2, 1) infinite alternate;
 }
 
 @keyframes explore-mode-entry-hint {
   0% {
-    border-color: var(--line);
-    box-shadow:
-      inset 0 1px 0 rgba(238, 244, 251, 0.1),
-      inset 0 -14px 28px rgba(2, 6, 12, 0.25),
-      0 14px 30px rgba(2, 6, 12, 0.34);
-    transform: translateY(0) scale(1);
-  }
-  38% {
     border-color: var(--theme-accent-bright);
     box-shadow:
       inset 0 1px 0 rgba(238, 244, 251, 0.2),
@@ -1975,7 +1967,7 @@
       0 0 34px rgba(var(--theme-accent-rgb), 0.6);
     transform: translateY(-8px) scale(1.045);
   }
-  68% {
+  100% {
     border-color: var(--theme-accent);
     box-shadow:
       inset 0 1px 0 rgba(238, 244, 251, 0.15),
@@ -1985,20 +1977,53 @@
       0 0 18px rgba(var(--theme-accent-rgb), 0.36);
     transform: translateY(-3px) scale(1.018);
   }
-  100% {
-    border-color: var(--line);
-    box-shadow:
-      inset 0 1px 0 rgba(238, 244, 251, 0.1),
-      inset 0 -14px 28px rgba(2, 6, 12, 0.25),
-      0 14px 30px rgba(2, 6, 12, 0.34);
-    transform: translateY(0) scale(1);
-  }
+}
+
+.mode-tile__entry-arrow {
+  position: absolute;
+  top: -8%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #fff;
+  filter: drop-shadow(0 4px 12px rgba(var(--theme-accent-rgb), 0.8));
+  animation: bounce-entry-arrow 0.6s cubic-bezier(0.2, 0.8, 0.4, 1) infinite alternate;
+  z-index: 10;
+}
+
+.mode-tile__entry-arrow svg {
+  width: 42px;
+  height: 42px;
+  color: var(--theme-accent-bright);
+}
+
+.mode-tile__entry-text {
+  font-family: var(--font-heading, inherit);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  white-space: nowrap;
+}
+
+@keyframes bounce-entry-arrow {
+  0% { transform: translate(-50%, 0); }
+  100% { transform: translate(-50%, -12px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mode-tile--entry-hint {
-    animation-delay: 0ms;
-    animation-duration: 1ms;
+    animation: none;
+    border-color: var(--theme-accent-bright);
+    transform: scale(1.045);
+  }
+  .mode-tile__entry-arrow {
+    animation: none;
   }
 }
 
@@ -2236,6 +2261,15 @@
     grid-template-columns: 1fr;
   }
 
+  .menu-chamber--map .explore-layout {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .map-column {
+    min-height: 260px;
+  }
+
   .mode-tile {
     min-height: 132px;
   }
@@ -2470,4 +2504,63 @@
     gap: 6px;
     padding: 9px 11px 7px;
   }
+}
+
+/* Explore Tutorial */
+.explore-map__tutorial-arrow {
+  position: absolute;
+  top: 15%;
+  left: 45%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #fff;
+  filter: drop-shadow(0 4px 12px rgba(var(--theme-accent-rgb), 0.8));
+  animation: bounce-entry-arrow 0.6s cubic-bezier(0.2, 0.8, 0.4, 1) infinite alternate;
+  z-index: 20;
+}
+
+.explore-map__tutorial-arrow svg {
+  width: 42px;
+  height: 42px;
+  color: var(--theme-accent-bright);
+}
+
+.level-card--tutorial-hint {
+  position: relative;
+  z-index: 10;
+  animation: explore-mode-entry-hint 1.45s cubic-bezier(0.22, 0.78, 0.2, 1) infinite alternate;
+}
+
+.level-card__tutorial-arrow {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  filter: drop-shadow(0 4px 12px rgba(var(--theme-accent-rgb), 0.8));
+  animation: bounce-level-arrow 0.6s cubic-bezier(0.2, 0.8, 0.4, 1) infinite alternate;
+  z-index: 20;
+}
+
+.level-card__tutorial-arrow svg {
+  transform: rotate(90deg);
+  width: 28px;
+  height: 28px;
+  color: var(--theme-accent-bright);
+}
+
+.level-card__tutorial-arrow .mode-tile__entry-text {
+  font-size: 0.85rem;
+}
+
+@keyframes bounce-level-arrow {
+  0% { transform: translateY(-50%) translate(0, 0); }
+  100% { transform: translateY(-50%) translate(-8px, 0); }
 }

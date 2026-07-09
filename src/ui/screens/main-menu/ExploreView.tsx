@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import exploreMapUrl from "../../../assets/menu/explore-map/complete.webp";
 import activeVolcanoMapUrl from "../../../assets/menu/explore-map/active-volcano.webp";
 import enchantedForestMapUrl from "../../../assets/menu/explore-map/enchanted-forest.webp";
@@ -111,6 +111,11 @@ export function ExploreView({
   onStartLevel,
   onOpenCoop,
 }: ExploreViewProps) {
+  const isFirstTime = save.completedLevels.length === 0;
+  const [tutorialStep, setTutorialStep] = useState<"region" | "level" | "done">(
+    isFirstTime ? "region" : "done"
+  );
+  
   const selectedRegion = regions.find((region) => region.id === activeRegionId) ?? regions[0];
   const activeRegion = regions.find((region) => region.id === previewRegionId) ?? selectedRegion;
   const activeLevelSlots = activeRegion.levels;
@@ -129,9 +134,9 @@ export function ExploreView({
 
   return (
     <div className="menu-chamber menu-chamber--map">
-      <MenuHeading title="Explorar" variant="explore" onBack={onBack} backLabel="Modos" />
+      <MenuHeading title="Explorar" variant="explore" onBack={onBack} backLabel="Modos" hideBack={tutorialStep !== "done"} />
       <div className="explore-coop-access">
-        <button type="button" className="explore-coop-access__button" onClick={onOpenCoop}>
+        <button type="button" className="explore-coop-access__button" onClick={onOpenCoop} disabled={tutorialStep !== "done"}>
           Jugar en cooperativo
         </button>
       </div>
@@ -150,13 +155,17 @@ export function ExploreView({
               />
               {regions.map((region) => {
                 const locked = isRegionLocked(region);
+                const isTutorialRegion = tutorialStep === "region" && region.id === "verdant-frontier";
+                const isDisabled = locked || tutorialStep === "level" || (tutorialStep === "region" && !isTutorialRegion);
                 return (
                   <button
                     className={`explore-map__region explore-map__region--${region.id}${region.id === activeRegion.id ? " explore-map__region--active" : ""}${locked ? " explore-map__region--locked" : ""}`}
                     type="button"
                     key={region.id}
+                    disabled={isDisabled}
                     onClick={() => {
-                      if (!locked) onActiveRegionChange(region.id);
+                      if (isTutorialRegion) setTutorialStep("level");
+                      if (!locked && !isDisabled) onActiveRegionChange(region.id);
                     }}
                     onPointerEnter={() => onPreviewRegionChange(region.id)}
                     onPointerLeave={() => onPreviewRegionChange()}
@@ -167,6 +176,14 @@ export function ExploreView({
                   />
                 );
               })}
+              {tutorialStep === "region" && (
+                <div className="explore-map__tutorial-arrow" aria-hidden="true">
+                  <div className="mode-tile__entry-text">¡Entra aquí!</div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 4v16m0 0l-6-6m6 6l6-6" />
+                  </svg>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -191,17 +208,32 @@ export function ExploreView({
                 const isCompleted = Boolean(slot.levelId && save.completedLevels.includes(slot.levelId));
                 const canPlay = levelExists && isUnlocked;
                 const status = getLevelStatus({ levelExists, isCompleted, isCurrent: slot.levelId === nextPlayableLevelId, isUnlocked });
+                
+                const isTutorialLevel = tutorialStep === "level" && slot.number === 1;
+                const isDisabled = !canPlay || tutorialStep === "region" || (tutorialStep === "level" && !isTutorialLevel);
+
                 return (
                   <button
-                    className={`level-card level-card--${status.kind}`}
+                    className={`level-card level-card--${status.kind}${isTutorialLevel ? " level-card--tutorial-hint" : ""}`}
                     type="button"
                     key={slot.number}
-                    disabled={!canPlay}
-                    onClick={() => { if (slot.levelId) onStartLevel(slot.levelId); }}
+                    disabled={isDisabled}
+                    onClick={() => { 
+                      if (isTutorialLevel) setTutorialStep("done");
+                      if (slot.levelId && !isDisabled) onStartLevel(slot.levelId); 
+                    }}
                   >
                     <span className="level-card__number">LV {slot.number}</span>
                     <span className="level-card__name">{slot.name}</span>
                     <span className="level-card__status">{status.label}</span>
+                    {isTutorialLevel && (
+                      <div className="level-card__tutorial-arrow" aria-hidden="true">
+                        <div className="mode-tile__entry-text">¡Jugar!</div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 4v16m0 0l-6-6m6 6l6-6" />
+                        </svg>
+                      </div>
+                    )}
                   </button>
                 );
               })

@@ -819,26 +819,37 @@ export function MainMenuScreen({
 
           {view === "modes" && (
             <div className="menu-chamber menu-chamber--modes">
-              <MenuHeading title="Modos de juego" variant="modes" onBack={() => setView("main")} />
-
+              <MenuHeading title="Modos de juego" variant="modes" onBack={() => setView("main")} hideBack={showExploreEntryHint} />
               <div className="mode-grid">
+                <div style={{ position: "relative", display: "flex" }}>
+                  {showExploreEntryHint && (
+                    <div className="mode-tile__entry-arrow" aria-hidden="true" style={{ pointerEvents: "none" }}>
+                      <div className="mode-tile__entry-text">¡Entra aquí!</div>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 4v16m0 0l-6-6m6 6l6-6" />
+                      </svg>
+                    </div>
+                  )}
+                  <button
+                    className={`mode-tile mode-tile--active${showExploreEntryHint ? " mode-tile--entry-hint" : ""}`}
+                    type="button"
+                    style={{ flex: 1 }}
+                    onClick={() => runMenuAction(() => {
+                      if (showExploreEntryHint) {
+                        setShowExploreEntryHint(false);
+                      }
+                      setView("explore");
+                    })}
+                  >
+                    <img className="mode-tile__art" src={modeExploreUrl} alt="" aria-hidden="true" />
+                    <span>Explorar</span>
+                    <strong>Campaña del continente</strong>
+                  </button>
+                </div>
                 <button
-                  className={`mode-tile mode-tile--active${showExploreEntryHint ? " mode-tile--entry-hint" : ""}`}
+                  className={`mode-tile ${showExploreEntryHint ? "mode-tile--locked" : "mode-tile--active mode-tile--challenge"}`}
                   type="button"
-                  onAnimationEnd={(event) => {
-                    if (event.animationName === "explore-mode-entry-hint") {
-                      setShowExploreEntryHint(false);
-                    }
-                  }}
-                  onClick={() => runMenuAction(() => setView("explore"))}
-                >
-                  <img className="mode-tile__art" src={modeExploreUrl} alt="" aria-hidden="true" />
-                  <span>Explorar</span>
-                  <strong>Campana del continente</strong>
-                </button>
-                <button
-                  className="mode-tile mode-tile--active mode-tile--challenge"
-                  type="button"
+                  disabled={showExploreEntryHint}
                   onClick={() => runMenuAction(() => setView("challenge"))}
                 >
                   <span className="mode-tile__sigil" aria-hidden="true" />
