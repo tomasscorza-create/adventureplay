@@ -17,6 +17,7 @@ import {
 } from "./mobileControlsInput";
 import { useMobileGameplaySettings } from "../hooks/useMobileGameplaySettings";
 import { gameHaptics } from "../../shared/haptics/GameHaptics";
+import { coopSession } from "../../game/systems/net/CoopSession";
 
 const TOUCH_ACTION_REACH_PX = 10;
 const PRIMARY_TOUCH_ACTION_REACH_PX = 16;
@@ -441,7 +442,7 @@ function TouchButton({
       {(ability || variant === "combat") && <span className="touch-button__key">{label}</span>}
       {ability && (
         isShopMode ? (
-          <span className="touch-button__shop-icon">+</span>
+          !coopSession.isActive ? <span className="touch-button__shop-icon">+</span> : null
         ) : (
           <small className="touch-button__count">x{count}</small>
         )

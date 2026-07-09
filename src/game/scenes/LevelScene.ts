@@ -596,7 +596,7 @@ export class LevelScene extends Phaser.Scene {
     });
 
     this.unbindPowerShop = gameEvents.on(EVENTS.PAUSE_FOR_POWER_SHOP, () => {
-      if (this.levelFinished || this.scene.isPaused()) {
+      if (this.coop || this.levelFinished || this.scene.isPaused()) {
         return;
       }
 
@@ -605,30 +605,38 @@ export class LevelScene extends Phaser.Scene {
     });
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
+      if (this.coop) {
+        gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        return;
+      }
       const restartLevelId = levelDefinitions[levelId] ? levelId : this.level.id;
       if (!this.levelFinished) {
         this.recordRunStatistics("abandoned");
         gameSaveStore.save(this.save);
       }
-      this.scene.start("LevelScene", { levelId: restartLevelId, coop: this.coop });
+      this.scene.start("LevelScene", { levelId: restartLevelId });
     });
 
     this.unbindContinue = gameEvents.on(
       EVENTS.CONTINUE_LEVEL,
       ({ completedLevelId, nextLevelId }) => {
+        if (this.coop) {
+          gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+          return;
+        }
+
         if (!this.levelFinished || completedLevelId !== this.level.id) {
           return;
         }
 
         if (nextLevelId && levelDefinitions[nextLevelId]) {
-          this.scene.start("LevelScene", { levelId: nextLevelId, coop: this.coop });
+          this.scene.start("LevelScene", { levelId: nextLevelId });
           return;
         }
 
         this.scene.start("GameOverScene", {
           result: "victory",
           restartLevelId: this.level.id,
-          coop: this.coop,
         });
       },
     );

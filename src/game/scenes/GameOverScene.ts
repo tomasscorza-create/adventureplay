@@ -22,12 +22,16 @@ export class GameOverScene extends Phaser.Scene {
     gameEvents.emit(EVENTS.SCREEN_CHANGED, data.result === "victory" ? "victory" : "game-over");
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
+      if (this.coop) {
+        gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        return;
+      }
       const restartLevelId = levelDefinitions[levelId] ? levelId : sceneRestartLevelId;
       if (!restartLevelId) {
         this.scene.start("MainMenuScene");
         return;
       }
-      this.scene.start("LevelScene", { levelId: restartLevelId, coop: this.coop });
+      this.scene.start("LevelScene", { levelId: restartLevelId });
     });
 
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {

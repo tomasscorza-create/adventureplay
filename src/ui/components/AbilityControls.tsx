@@ -8,6 +8,7 @@ import { CombatActionIcon } from "./CombatActionIcon";
 import { SpinCooldownIndicator } from "./SpinCooldownIndicator";
 import { getCompactActionBinding } from "../../game/systems/input/KeyboardBindingStore";
 import { useKeyboardBindings } from "../hooks/useKeyboardBindings";
+import { coopSession } from "../../game/systems/net/CoopSession";
 
 interface AbilityControlsProps {
   hud: HudState;
@@ -142,15 +143,17 @@ function AbilityButton({
           +{rewardAmount}
         </span>
       )}
-      <button
-        className="ability-button__shop"
-        type="button"
-        onClick={onOpenShop}
-        aria-label={`Comprar cargas de ${name}`}
-        title={`Comprar ${name}`}
-      >
-        +
-      </button>
+      {!coopSession.isActive && (
+        <button
+          className="ability-button__shop"
+          type="button"
+          onClick={onOpenShop}
+          aria-label={`Comprar cargas de ${name}`}
+          title={`Comprar ${name}`}
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }

@@ -1705,28 +1705,35 @@ export class PuzzleScene extends Phaser.Scene {
       this.emitHud();
     });
     this.unbindPowerShop = gameEvents.on(EVENTS.PAUSE_FOR_POWER_SHOP, () => {
-      if (this.levelFinished || this.scene.isPaused()) return;
+      if (this.coop || this.levelFinished || this.scene.isPaused()) return;
       gameEvents.emit(EVENTS.SCREEN_CHANGED, "power-shop");
       this.scene.pause();
     });
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
+      if (this.coop) {
+        gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        return;
+      }
       if (!this.levelFinished) {
         this.recordRunStatistics("abandoned");
         gameSaveStore.save(this.save);
       }
       const nextId = puzzleLevelDefinitions[levelId] ? levelId : this.level.id;
-      this.scene.start("PuzzleScene", { levelId: nextId, coop: this.coop });
+      this.scene.start("PuzzleScene", { levelId: nextId });
     });
     this.unbindContinue = gameEvents.on(EVENTS.CONTINUE_LEVEL, ({ completedLevelId, nextLevelId }) => {
+      if (this.coop) {
+        gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        return;
+      }
       if (!this.levelFinished || completedLevelId !== this.level.id) return;
       if (nextLevelId && puzzleLevelDefinitions[nextLevelId]) {
-        this.scene.start("PuzzleScene", { levelId: nextLevelId, coop: this.coop });
+        this.scene.start("PuzzleScene", { levelId: nextLevelId });
         return;
       }
       this.scene.start("GameOverScene", {
         result: "victory",
         restartLevelId: this.level.id,
-        coop: this.coop,
       });
     });
     this.unbindMenu = gameEvents.on(EVENTS.GO_TO_MENU, () => {
