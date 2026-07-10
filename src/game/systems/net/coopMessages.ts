@@ -26,7 +26,8 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 //     a mitad de sesion para encadenar el siguiente nivel de la sala.
 // v7: cada jugador reporta sus cargas reales (presence + roster del start) y
 //     las compras del guest viajan como delta `charges` hacia el host.
-export const COOP_PROTOCOL_VERSION = 7;
+// v8: canal de input separado y snapshots con delta en arrays (secciones opcionales).
+export const COOP_PROTOCOL_VERSION = 8;
 
 export type CoopRole = "host" | "guest";
 
@@ -213,13 +214,13 @@ export type NetProjectile = [number, number, number, -1 | 1];
 export interface WorldSnapshot {
   seq: number;
   players: NetPlayerState[];
-  crates: Array<[number, number]>;
+  crates?: Array<[number, number]>;
   // [netId, x, y] por enemigo vivo; los ausentes fueron derrotados.
-  enemies: Array<[number, number, number]>;
+  enemies?: Array<[number, number, number]>;
   projectiles: NetProjectile[];
-  active: string[];
-  gatesOpen: boolean[];
-  sealsAlive: boolean[];
+  active?: string[];
+  gatesOpen?: boolean[];
+  sealsAlive?: boolean[];
   goalOpen: boolean;
   timeMs: number;
 }

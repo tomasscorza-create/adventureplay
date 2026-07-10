@@ -21,7 +21,7 @@ No hay sockets acoplados dentro de escenas ni entidades.
 
 ## Transporte: Supabase Realtime
 
-- Un canal por sala: `supabase.channel("coop-room-<CÓDIGO>")`.
+- Dos canales por sala: `supabase.channel("coop-room-<CÓDIGO>")` (para broadcast general y presence) y `supabase.channel("coop-room-<CÓDIGO>-input")` (exclusivo para que los guests envien input al host, evitando broadcast cruzado entre guests).
 - Config: `broadcast: { self: false, ack: false }` + `presence: { key: clientId }`. La key es un
   **clientId único por dispositivo** (no el rol): admite más de un guest y evita colisiones. El rol
   viaja dentro del payload de presence junto con `characterId`, `protocol` y las **cargas reales
@@ -66,7 +66,7 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `7`. Subirla ante cualquier cambio incompatible de mensajes/presencia (v7: cada jugador reporta sus cargas reales en presence y en el roster del `start`; las compras del guest viajan como delta `charges` al host). |
+| `COOP_PROTOCOL_VERSION` | `8`. Subirla ante cualquier cambio incompatible de mensajes/presencia (v8: canal de input separado y compresión delta en snapshots). |
 | `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
 | `CoopStartMessage` | `{ levelId, roster: { slot, characterId }[] }` — roster autoritativo del host. |
@@ -79,7 +79,7 @@ instancie y valide compatibilidad.
 | `assignSlots(entries)` | Roster determinista: host → slot 0; guests ordenados por clientId → 1..N. Igual en todos los clientes. |
 | `NetPlayerState` | `{ x, y, vx, vy, facing, state, health, maxHealth, healCharges, powerCharges, spinCdMs }` |
 | `NetProjectile` | `[netId, x, y, dir]` por proyectil de poder letal vivo. |
-| `WorldSnapshot` (Desafío) | `{ seq, players[], crates, enemies, projectiles, active[], gatesOpen[], sealsAlive[], goalOpen, timeMs }` — `players` indexado por slot. |
+| `WorldSnapshot` (Desafío) | `{ seq, players[], crates?, enemies?, projectiles, active?, gatesOpen?, sealsAlive?, goalOpen, timeMs }` — Usa campos opcionales para compresión delta (solo se envían si cambiaron respecto al último snapshot). |
 | Código de sala | `ROOM_CODE_LENGTH = 4`, alfabeto sin caracteres ambiguos; `generateRoomCode` / `normalizeRoomCode` / `isValidRoomCode`. |
 
 **Input robusto ante pérdidas (`CoopSceneLink`):** el guest envía su input **solo al cambiar**
@@ -96,12 +96,12 @@ entidades de `LevelScene`:
 
 ```
 { seq, players[],                   // indexado por slot (0 = host, 1..N = guests)
-  enemies:     [netId, x, y, flip][],
-  platforms:   [netId, x, y][],     // plataformas móviles
-  hazards:     [netId, x, y][],     // peligros móviles
+  enemies?:     [netId, x, y, flip][],
+  platforms?:   [netId, x, y][],     // plataformas móviles
+  hazards?:     [netId, x, y][],     // peligros móviles
   projectiles: [netId, x, y, dir][],// proyectiles de poder letal
-  coins:  number[],                 // índices aún presentes
-  hearts: number[],                 // índices aún presentes
+  coins?:  number[],                 // índices aún presentes
+  hearts?: number[],                 // índices aún presentes
   rewardBox: boolean,               // caja de recompensa disponible
   checkpointActive: boolean,
   pressureX: number,                // posición mundial de la línea roja

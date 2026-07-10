@@ -2280,7 +2280,7 @@ export class LevelScene extends Phaser.Scene {
     if (self) this.guestPrevSelfHealth = self.health;
 
     const aliveEnemies = new Map<number, [number, number, number]>();
-    for (const [id, x, y, flip] of snap.enemies) aliveEnemies.set(id, [x, y, flip]);
+    for (const [id, x, y, flip] of snap.enemies ?? []) aliveEnemies.set(id, [x, y, flip]);
     this.enemies.children.each((obj) => {
       const enemy = obj as BaseEnemy;
       const netId = enemy.getData("netId") as number | undefined;
@@ -2296,10 +2296,10 @@ export class LevelScene extends Phaser.Scene {
       return true;
     });
 
-    this.applyNetTransforms(this.movingPlatforms, snap.platforms, s);
-    this.applyNetTransforms(this.movingHazards, snap.hazards, s);
+    this.applyNetTransforms(this.movingPlatforms, snap.platforms ?? [], s);
+    this.applyNetTransforms(this.movingHazards, snap.hazards ?? [], s);
 
-    const coinsPresent = new Set(snap.coins);
+    const coinsPresent = new Set(snap.coins ?? []);
     this.coins.children.each((obj) => {
       const coin = obj as Coin;
       const index = coin.getData("coinIndex") as number | undefined;
@@ -2308,7 +2308,7 @@ export class LevelScene extends Phaser.Scene {
       }
       return true;
     });
-    const heartsPresent = new Set(snap.hearts);
+    const heartsPresent = new Set(snap.hearts ?? []);
     this.healthPickups.children.each((obj) => {
       const heart = obj as Phaser.Physics.Arcade.Sprite;
       const index = heart.getData("heartIndex") as number | undefined;

@@ -1953,7 +1953,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
     if (self) this.guestPrevSelfHealth = self.health;
 
-    snap.crates.forEach(([x, y], index) => {
+    (snap.crates ?? []).forEach(([x, y], index) => {
       const crate = this.crates[index];
       if (!crate) return;
       crate.x = Phaser.Math.Linear(crate.x, x, smoothing);
@@ -1961,7 +1961,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
 
     const aliveEnemies = new Map<number, [number, number]>();
-    for (const [netId, x, y] of snap.enemies) aliveEnemies.set(netId, [x, y]);
+    for (const [netId, x, y] of snap.enemies ?? []) aliveEnemies.set(netId, [x, y]);
     this.enemies.children.each((obj) => {
       const enemy = obj as BaseEnemy;
       const netId = enemy.getData("netId") as number | undefined;
@@ -1978,16 +1978,16 @@ export class PuzzleScene extends Phaser.Scene {
 
     // Estado de objetivos: activaciones, placas, puertas, sellos y portal.
     this.activations.reset(this.level.requiredActivations);
-    for (const id of snap.active) this.activations.setParticipantActive(id, "net", true);
+    for (const id of snap.active ?? []) this.activations.setParticipantActive(id, "net", true);
     for (const plate of this.plates) {
       const active = this.activations.isActive(plate.id);
       plate.rect.setFillStyle(active ? 0x3f8d6e : this.visualPalette.lowerFace);
       plate.visual.setTint(active ? 0x9ff0c5 : this.visualPalette.objectTint);
     }
-    snap.gatesOpen.forEach((open, index) => {
+    (snap.gatesOpen ?? []).forEach((open, index) => {
       if (open && this.gates[index]) this.openGate(this.gates[index]);
     });
-    snap.sealsAlive.forEach((alive, index) => {
+    (snap.sealsAlive ?? []).forEach((alive, index) => {
       if (alive) return;
       const seal = this.seals.find((candidate) => candidate.index === index);
       if (seal) this.breakSeal(seal);

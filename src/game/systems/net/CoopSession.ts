@@ -60,10 +60,17 @@ function generateClientKey(): string {
 
 // Capa de red del co-op. Vive completamente fuera de Phaser (regla de arquitectura):
 // React la maneja desde el lobby y la escena Phaser solo se suscribe a sus callbacks.
-// Usa un unico canal de Supabase Realtime por codigo de sala con broadcast + presence,
-// sin tablas ni RLS.
+// Usa dos canales de Supabase Realtime por codigo de sala: principal (broadcast + presence)
+// e input (para evitar trafico innecesario a los guests), sin tablas ni RLS.
 class CoopSession {
   private channel: RealtimeChannel | null = null;
+  private inputChannel: RealtimeChannel | null = null;
+  public networkStats = {
+    sent: { count: 0, bytes: 0 },
+    received: { count: 0, bytes: 0 },
+    events: {} as Record<string, { sentCount: number; sentBytes: number; recvCount: number; recvBytes: number }>,
+  };
+  private statsInterval = 0;
   private _role: CoopRole | null = null;
   private _code = "";
   private _connectionState: CoopConnectionState = "idle";
@@ -143,6 +150,22 @@ class CoopSession {
     return code;
   }
 
+  private trackStat(type: "sent" | "received", event: string, payload: unknown) {
+    const bytes = JSON.stringify(payload).length;
+    this.networkStats[type].count++;
+    this.networkStats[type].bytes += bytes;
+    if (!this.networkStats.events[event]) {
+      this.networkStats.events[event] = { sentCount: 0, sentBytes: 0, recvCount: 0, recvBytes: 0 };
+    }
+    if (type === "sent") {
+      this.networkStats.events[event].sentCount++;
+      this.networkStats.events[event].sentBytes += bytes;
+    } else {
+      this.networkStats.events[event].recvCount++;
+      this.networkStats.events[event].recvBytes += bytes;
+    }
+  }
+
   async join(rawCode: string, hello: CoopHello): Promise<void> {
     const code = normalizeRoomCode(rawCode);
     await this.connect("guest", code, hello);
@@ -175,25 +198,47 @@ class CoopSession {
     });
     this.channel = channel;
 
+    const inputChannel = supabase.channel(`coop-room-${code}-input`, {
+      config: { broadcast: { self: false, ack: false } },
+    });
+    this.inputChannel = inputChannel;
+
+    this.networkStats = { sent: { count: 0, bytes: 0 }, received: { count: 0, bytes: 0 }, events: {} };
+    if (import.meta.env.DEV) {
+      this.statsInterval = window.setInterval(() => {
+        console.log("📊 Network Stats (30s):", this.networkStats);
+      }, 30000);
+    }
+
     channel.on("broadcast", { event: COOP_EVENTS.hello }, ({ payload }) => {
+      this.trackStat("received", COOP_EVENTS.hello, payload);
       this.peerHello = payload as CoopHello;
       this.emitPeerJoined();
     });
-    channel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
-      this.callbacks.input.forEach((cb) => cb(payload as CoopInputMessage));
-    });
+    
+    if (role === "host") {
+      inputChannel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
+        this.trackStat("received", COOP_EVENTS.input, payload);
+        this.callbacks.input.forEach((cb) => cb(payload as CoopInputMessage));
+      });
+    }
+
     channel.on("broadcast", { event: COOP_EVENTS.snapshot }, ({ payload }) => {
+      this.trackStat("received", COOP_EVENTS.snapshot, payload);
       this.callbacks.snapshot.forEach((cb) => cb(payload));
     });
     channel.on("broadcast", { event: COOP_EVENTS.start }, ({ payload }) => {
+      this.trackStat("received", COOP_EVENTS.start, payload);
       this._connectionState = "in-game";
       this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
       this.callbacks.start.forEach((cb) => cb(payload as CoopStartMessage));
     });
     channel.on("broadcast", { event: COOP_EVENTS.end }, ({ payload }) => {
+      this.trackStat("received", COOP_EVENTS.end, payload);
       this.callbacks.end.forEach((cb) => cb(payload as CoopEndMessage));
     });
     channel.on("broadcast", { event: COOP_EVENTS.charges }, ({ payload }) => {
+      this.trackStat("received", COOP_EVENTS.charges, payload);
       this.callbacks.charges.forEach((cb) => cb(payload as CoopChargesMessage));
     });
 
@@ -201,23 +246,36 @@ class CoopSession {
     channel.on("presence", { event: "join" }, () => this.syncPresence());
     channel.on("presence", { event: "leave" }, () => this.syncPresence());
 
-    await new Promise<void>((resolve, reject) => {
-      channel.subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          void channel.track({
-            role,
-            characterId: hello.characterId,
-            protocol: COOP_PROTOCOL_VERSION,
-            healingCharges: hello.healingCharges ?? 0,
-            powerCharges: hello.powerCharges ?? 0,
-          });
-          this.setConnectionState("waiting");
-          resolve();
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          this.setConnectionState("error");
-          reject(new Error(`No se pudo conectar a la sala (${status}).`));
-        }
-      });
+    await Promise.all([
+      new Promise<void>((resolve, reject) => {
+        channel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void channel.track({
+              role,
+              characterId: hello.characterId,
+              protocol: COOP_PROTOCOL_VERSION,
+              healingCharges: hello.healingCharges ?? 0,
+              powerCharges: hello.powerCharges ?? 0,
+            });
+            resolve();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            reject(new Error(`No se pudo conectar a la sala (${status}).`));
+          }
+        });
+      }),
+      new Promise<void>((resolve, reject) => {
+        inputChannel.subscribe((status) => {
+          if (status === "SUBSCRIBED") resolve();
+          else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            reject(new Error(`No se pudo conectar al canal de input (${status}).`));
+          }
+        });
+      })
+    ]).then(() => {
+      this.setConnectionState("waiting");
+    }).catch(err => {
+      this.setConnectionState("error");
+      throw err;
     });
   }
 
@@ -320,7 +378,9 @@ class CoopSession {
   }
 
   sendInput(message: CoopInputMessage): void {
-    this.broadcast(COOP_EVENTS.input, message);
+    if (!this.inputChannel) return;
+    this.trackStat("sent", COOP_EVENTS.input, message);
+    void this.inputChannel.send({ type: "broadcast", event: COOP_EVENTS.input, payload: message });
   }
 
   sendSnapshot(snapshot: unknown): void {
@@ -353,14 +413,24 @@ class CoopSession {
 
   private broadcast(event: string, payload: unknown): void {
     if (!this.channel) return;
+    this.trackStat("sent", event, payload);
     void this.channel.send({ type: "broadcast", event, payload });
   }
 
   leave(): void {
+    if (this.statsInterval) {
+      window.clearInterval(this.statsInterval);
+      this.statsInterval = 0;
+    }
     if (this.channel) {
       void this.channel.unsubscribe();
       supabase?.removeChannel(this.channel);
       this.channel = null;
+    }
+    if (this.inputChannel) {
+      void this.inputChannel.unsubscribe();
+      supabase?.removeChannel(this.inputChannel);
+      this.inputChannel = null;
     }
     this._role = null;
     this._code = "";

@@ -68,6 +68,18 @@ function createRemoteInputSlot(): RemoteInputSlot {
   };
 }
 
+const OPTIONAL_SECTIONS = new Set([
+  "enemies",
+  "platforms",
+  "hazards",
+  "crates",
+  "coins",
+  "hearts",
+  "gatesOpen",
+  "sealsAlive",
+  "active",
+]);
+
 // Plumbing co-op compartido por las escenas (Desafio y Explorar): deduplicacion
 // por seq en ambas direcciones, reconstruccion de flancos del input remoto,
 // throttling de envios y guardas de fin de sesion. Vive fuera de Phaser: las
@@ -90,6 +102,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   // Host: throttling y numeracion de snapshots salientes.
   private lastSnapshotSentAt = 0;
   private snapshotSeq = 0;
+  private lastSentSections: Record<string, string> = {};
 
   private ended = false;
   private readonly unbinds: Array<() => void> = [];
@@ -131,6 +144,17 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
       this.unbinds.push(
         this.transport.onSnapshot<TSnapshot>((snapshot) => {
           if (this.latest && snapshot.seq <= this.latest.seq) return;
+          
+          if (this.latest) {
+            const snapAny = snapshot as Record<string, unknown>;
+            const latestAny = this.latest as Record<string, unknown>;
+            for (const key of OPTIONAL_SECTIONS) {
+              if (!(key in snapAny) && (key in latestAny)) {
+                snapAny[key] = latestAny[key];
+              }
+            }
+          }
+          
           this.latest = snapshot;
         }),
       );
@@ -216,7 +240,23 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     if (timeMs - this.lastSnapshotSentAt < SNAPSHOT_INTERVAL_MS) return;
     this.lastSnapshotSentAt = timeMs;
     this.snapshotSeq += 1;
-    this.transport.sendSnapshot(build(this.snapshotSeq));
+    
+    const snap = build(this.snapshotSeq) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    
+    for (const key of Object.keys(snap)) {
+      if (OPTIONAL_SECTIONS.has(key)) {
+        const serialized = JSON.stringify(snap[key]);
+        if (this.lastSentSections[key] !== serialized) {
+          out[key] = snap[key];
+          this.lastSentSections[key] = serialized;
+        }
+      } else {
+        out[key] = snap[key];
+      }
+    }
+    
+    this.transport.sendSnapshot(out as TSnapshot);
   }
 
   // Notifica el fin de partida exactamente una vez. Devuelve false si la sesion

@@ -9,16 +9,16 @@ export interface LevelSnapshot {
   // Indexado por slot (0 = host, 1..N = guests); hoy son 2.
   players: NetPlayerState[];
   // [netId, x, y, flip] por enemigo vivo (flip 0/1); los ausentes fueron derrotados.
-  enemies: Array<[number, number, number, number]>;
+  enemies?: Array<[number, number, number, number]>;
   // [netId, x, y] por plataforma movil.
-  platforms: Array<[number, number, number]>;
+  platforms?: Array<[number, number, number]>;
   // [netId, x, y] por peligro movil.
-  hazards: Array<[number, number, number]>;
+  hazards?: Array<[number, number, number]>;
   // [netId, x, y, direccion] por proyectil de poder letal vivo.
   projectiles: NetProjectile[];
   // indices (segun orden de creacion) de monedas y corazones aun presentes.
-  coins: number[];
-  hearts: number[];
+  coins?: number[];
+  hearts?: number[];
   // la caja de recompensa sigue disponible.
   rewardBox: boolean;
   // el checkpoint del nivel ya fue activado.
