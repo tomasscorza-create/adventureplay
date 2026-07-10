@@ -2279,44 +2279,50 @@ export class LevelScene extends Phaser.Scene {
     }
     if (self) this.guestPrevSelfHealth = self.health;
 
-    const aliveEnemies = new Map<number, [number, number, number]>();
-    for (const [id, x, y, flip] of snap.enemies ?? []) aliveEnemies.set(id, [x, y, flip]);
-    this.enemies.children.each((obj) => {
-      const enemy = obj as BaseEnemy;
-      const netId = enemy.getData("netId") as number | undefined;
-      if (typeof netId !== "number") return true;
-      const target = aliveEnemies.get(netId);
-      if (!target) {
-        enemy.destroy();
+    if (snap.enemies !== undefined) {
+      const aliveEnemies = new Map<number, [number, number, number]>();
+      for (const [id, x, y, flip] of snap.enemies) aliveEnemies.set(id, [x, y, flip]);
+      this.enemies.children.each((obj) => {
+        const enemy = obj as BaseEnemy;
+        const netId = enemy.getData("netId") as number | undefined;
+        if (typeof netId !== "number") return true;
+        const target = aliveEnemies.get(netId);
+        if (!target) {
+          enemy.destroy();
+          return true;
+        }
+        enemy.x = Phaser.Math.Linear(enemy.x, target[0], s);
+        enemy.y = Phaser.Math.Linear(enemy.y, target[1], s);
+        enemy.setFlipX(target[2] === 1);
         return true;
-      }
-      enemy.x = Phaser.Math.Linear(enemy.x, target[0], s);
-      enemy.y = Phaser.Math.Linear(enemy.y, target[1], s);
-      enemy.setFlipX(target[2] === 1);
-      return true;
-    });
+      });
+    }
 
-    this.applyNetTransforms(this.movingPlatforms, snap.platforms ?? [], s);
-    this.applyNetTransforms(this.movingHazards, snap.hazards ?? [], s);
+    if (snap.platforms !== undefined) this.applyNetTransforms(this.movingPlatforms, snap.platforms, s);
+    if (snap.hazards !== undefined) this.applyNetTransforms(this.movingHazards, snap.hazards, s);
 
-    const coinsPresent = new Set(snap.coins ?? []);
-    this.coins.children.each((obj) => {
-      const coin = obj as Coin;
-      const index = coin.getData("coinIndex") as number | undefined;
-      if (typeof index === "number" && coin.active && !coinsPresent.has(index)) {
-        coin.disableBody(true, true);
-      }
-      return true;
-    });
-    const heartsPresent = new Set(snap.hearts ?? []);
-    this.healthPickups.children.each((obj) => {
-      const heart = obj as Phaser.Physics.Arcade.Sprite;
-      const index = heart.getData("heartIndex") as number | undefined;
-      if (typeof index === "number" && heart.active && !heartsPresent.has(index)) {
-        heart.disableBody(true, true);
-      }
-      return true;
-    });
+    if (snap.coins !== undefined) {
+      const coinsPresent = new Set(snap.coins);
+      this.coins.children.each((obj) => {
+        const coin = obj as Coin;
+        const index = coin.getData("coinIndex") as number | undefined;
+        if (typeof index === "number" && coin.active && !coinsPresent.has(index)) {
+          coin.disableBody(true, true);
+        }
+        return true;
+      });
+    }
+    if (snap.hearts !== undefined) {
+      const heartsPresent = new Set(snap.hearts);
+      this.healthPickups.children.each((obj) => {
+        const heart = obj as Phaser.Physics.Arcade.Sprite;
+        const index = heart.getData("heartIndex") as number | undefined;
+        if (typeof index === "number" && heart.active && !heartsPresent.has(index)) {
+          heart.disableBody(true, true);
+        }
+        return true;
+      });
+    }
 
     if (this.rewardBox?.active && !snap.rewardBox) this.rewardBox.disableBody(true, true);
     if (snap.checkpointActive) this.checkpoint.setTint(0xffffff);

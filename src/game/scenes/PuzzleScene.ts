@@ -1953,45 +1953,55 @@ export class PuzzleScene extends Phaser.Scene {
     }
     if (self) this.guestPrevSelfHealth = self.health;
 
-    (snap.crates ?? []).forEach(([x, y], index) => {
-      const crate = this.crates[index];
-      if (!crate) return;
-      crate.x = Phaser.Math.Linear(crate.x, x, smoothing);
-      crate.y = Phaser.Math.Linear(crate.y, y, smoothing);
-    });
+    if (snap.crates !== undefined) {
+      snap.crates.forEach(([x, y], index) => {
+        const crate = this.crates[index];
+        if (!crate) return;
+        crate.x = Phaser.Math.Linear(crate.x, x, smoothing);
+        crate.y = Phaser.Math.Linear(crate.y, y, smoothing);
+      });
+    }
 
-    const aliveEnemies = new Map<number, [number, number]>();
-    for (const [netId, x, y] of snap.enemies ?? []) aliveEnemies.set(netId, [x, y]);
-    this.enemies.children.each((obj) => {
-      const enemy = obj as BaseEnemy;
-      const netId = enemy.getData("netId") as number | undefined;
-      if (typeof netId !== "number") return true;
-      const target = aliveEnemies.get(netId);
-      if (!target) {
-        enemy.destroy();
+    if (snap.enemies !== undefined) {
+      const aliveEnemies = new Map<number, [number, number]>();
+      for (const [netId, x, y] of snap.enemies) aliveEnemies.set(netId, [x, y]);
+      this.enemies.children.each((obj) => {
+        const enemy = obj as BaseEnemy;
+        const netId = enemy.getData("netId") as number | undefined;
+        if (typeof netId !== "number") return true;
+        const target = aliveEnemies.get(netId);
+        if (!target) {
+          enemy.destroy();
+          return true;
+        }
+        enemy.x = Phaser.Math.Linear(enemy.x, target[0], smoothing);
+        enemy.y = Phaser.Math.Linear(enemy.y, target[1], smoothing);
         return true;
-      }
-      enemy.x = Phaser.Math.Linear(enemy.x, target[0], smoothing);
-      enemy.y = Phaser.Math.Linear(enemy.y, target[1], smoothing);
-      return true;
-    });
+      });
+    }
 
     // Estado de objetivos: activaciones, placas, puertas, sellos y portal.
-    this.activations.reset(this.level.requiredActivations);
-    for (const id of snap.active ?? []) this.activations.setParticipantActive(id, "net", true);
-    for (const plate of this.plates) {
-      const active = this.activations.isActive(plate.id);
-      plate.rect.setFillStyle(active ? 0x3f8d6e : this.visualPalette.lowerFace);
-      plate.visual.setTint(active ? 0x9ff0c5 : this.visualPalette.objectTint);
+    if (snap.active !== undefined) {
+      this.activations.reset(this.level.requiredActivations);
+      for (const id of snap.active) this.activations.setParticipantActive(id, "net", true);
+      for (const plate of this.plates) {
+        const active = this.activations.isActive(plate.id);
+        plate.rect.setFillStyle(active ? 0x3f8d6e : this.visualPalette.lowerFace);
+        plate.visual.setTint(active ? 0x9ff0c5 : this.visualPalette.objectTint);
+      }
     }
-    (snap.gatesOpen ?? []).forEach((open, index) => {
-      if (open && this.gates[index]) this.openGate(this.gates[index]);
-    });
-    (snap.sealsAlive ?? []).forEach((alive, index) => {
-      if (alive) return;
-      const seal = this.seals.find((candidate) => candidate.index === index);
-      if (seal) this.breakSeal(seal);
-    });
+    if (snap.gatesOpen !== undefined) {
+      snap.gatesOpen.forEach((open, index) => {
+        if (open && this.gates[index]) this.openGate(this.gates[index]);
+      });
+    }
+    if (snap.sealsAlive !== undefined) {
+      snap.sealsAlive.forEach((alive, index) => {
+        if (alive) return;
+        const seal = this.seals.find((candidate) => candidate.index === index);
+        if (seal) this.breakSeal(seal);
+      });
+    }
     this.goal.setFillStyle(0x66dbc0, snap.goalOpen ? 0.34 : 0.12);
     if (snap.goalOpen) this.openGoalGate();
   }

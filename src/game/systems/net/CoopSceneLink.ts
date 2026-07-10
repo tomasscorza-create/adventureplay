@@ -243,11 +243,12 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     
     const snap = build(this.snapshotSeq) as Record<string, unknown>;
     const out: Record<string, unknown> = {};
+    const isKeyframe = this.snapshotSeq % COOP_SNAPSHOT_RATE_HZ === 0;
     
     for (const key of Object.keys(snap)) {
       if (OPTIONAL_SECTIONS.has(key)) {
         const serialized = JSON.stringify(snap[key]);
-        if (this.lastSentSections[key] !== serialized) {
+        if (isKeyframe || this.lastSentSections[key] !== serialized) {
           out[key] = snap[key];
           this.lastSentSections[key] = serialized;
         }

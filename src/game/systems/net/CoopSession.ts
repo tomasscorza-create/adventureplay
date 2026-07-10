@@ -151,6 +151,7 @@ class CoopSession {
   }
 
   private trackStat(type: "sent" | "received", event: string, payload: unknown) {
+    if (!import.meta.env.DEV) return;
     const bytes = JSON.stringify(payload).length;
     this.networkStats[type].count++;
     this.networkStats[type].bytes += bytes;
