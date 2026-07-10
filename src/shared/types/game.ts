@@ -83,6 +83,18 @@ export interface HudState extends PlayerHudState {
   spinCooldownRemainingMs: number;
 }
 
+export type TeammateConnectionStatus = "connected" | "disconnected" | "defeated";
+
+export interface TeammateHudState {
+  slot: number;
+  characterId: CharacterId;
+  health: number;
+  maxHealth: number;
+  healingCharges: number;
+  powerCharges: number;
+  status: TeammateConnectionStatus;
+}
+
 export interface LevelCompletionSummary {
   levelId: string;
   levelName: string;

@@ -42,6 +42,7 @@ type GameEventMap = {
   };
   [EVENTS.SCREEN_CHANGED]: GameScreen;
   [EVENTS.LEVEL_COMPLETED]: LevelCompletionSummary;
+  [EVENTS.TEAMMATE_HUD_UPDATED]: import("../../shared/types/game").TeammateHudState[];
 };
 
 type EventKey = keyof GameEventMap;

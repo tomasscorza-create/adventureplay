@@ -6,6 +6,7 @@ export const EVENTS = {
   CONTINUE_LEVEL: "react:continue-level",
   GO_TO_MENU: "react:go-to-menu",
   ACTIVE_LEVEL_CHANGED: "game:active-level-changed",
+
   SFX_REQUESTED: "game:sfx-requested",
   HAPTIC_REQUESTED: "game:haptic-requested",
   HUD_UPDATED: "game:hud-updated",
@@ -15,4 +16,5 @@ export const EVENTS = {
   ACHIEVEMENT_UNLOCKED: "game:achievement-unlocked",
   SCREEN_CHANGED: "game:screen-changed",
   LEVEL_COMPLETED: "game:level-completed",
+  TEAMMATE_HUD_UPDATED: "game:teammate-hud-updated",
 } as const;

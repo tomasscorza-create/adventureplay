@@ -2940,3 +2940,81 @@
     font-size: 0.92rem;
   }
 }
+
+/* ======================= Coop Teammate HUD ======================= */
+.coop-teammate-hud {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.teammate-card {
+  background: rgba(16, 24, 39, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  min-width: 140px;
+  color: white;
+  backdrop-filter: blur(4px);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.teammate-card.is-disconnected,
+.teammate-card.is-defeated {
+  opacity: 0.6;
+  filter: grayscale(100%);
+}
+
+.teammate-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.teammate-card__slot {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+}
+
+.teammate-card__name {
+  color: #a5b4fc;
+}
+
+.teammate-card__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.teammate-card__health {
+  display: flex;
+  justify-content: space-between;
+}
+
+.teammate-card__label {
+  color: #9ca3af;
+}
+
+.teammate-card__charges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.teammate-card__status-overlay {
+  font-size: 0.8rem;
+  color: #f87171;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}

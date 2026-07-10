@@ -26,10 +26,12 @@ import type {
   LevelCompletionSummary,
   ProfileIconId,
   SaveData,
+  TeammateHudState,
 } from "./shared/types/game";
 import { AchievementUnlockToast } from "./ui/components/AchievementUnlockToast";
 import { LevelUpToast } from "./ui/components/LevelUpToast";
 import { HUD } from "./ui/components/HUD";
+import { CoopTeammateHud } from "./ui/components/CoopTeammateHud";
 import { AbilityControls } from "./ui/components/AbilityControls";
 import { MobileControls } from "./ui/components/MobileControls";
 import { OrientationNotice } from "./ui/components/OrientationNotice";
@@ -102,6 +104,7 @@ export function App() {
   const [showIntro, setShowIntro] = useState(true);
   const [screen, setScreen] = useState<GameScreen>("main-menu");
   const [hud, setHud] = useState<HudState>(initialHud);
+  const [teammateHud, setTeammateHud] = useState<TeammateHudState[]>([]);
   const [healthPickupFeedback, setHealthPickupFeedback] = useState({ sequence: 0, restored: 0 });
   const [damageFeedbackSequence, setDamageFeedbackSequence] = useState(0);
   const [progressQueue, setProgressQueue] = useState<ProgressNotification[]>([]);
@@ -196,6 +199,7 @@ export function App() {
 
   useEffect(() => {
     const offHud = gameEvents.on(EVENTS.HUD_UPDATED, setHud);
+    const offTeammateHud = gameEvents.on(EVENTS.TEAMMATE_HUD_UPDATED, setTeammateHud);
     const offHealthPickup = gameEvents.on(EVENTS.HEALTH_PICKUP_COLLECTED, ({ restored }) => {
       setHealthPickupFeedback((current) => ({
         sequence: current.sequence + 1,
@@ -251,6 +255,7 @@ export function App() {
       }
       if (nextScreen !== "playing" && nextScreen !== "paused" && nextScreen !== "coop-exit-confirm") {
         setHealthPickupFeedback({ sequence: 0, restored: 0 });
+        setTeammateHud([]);
       }
     });
     const offCompleted = gameEvents.on(EVENTS.LEVEL_COMPLETED, (summary) => {
@@ -259,6 +264,7 @@ export function App() {
     });
     return () => {
       offHud();
+      offTeammateHud();
       offHealthPickup();
       offPlayerDamaged();
       offAchievementUnlocked();
@@ -477,12 +483,15 @@ export function App() {
         )
       )}
       {gameReady && (screen === "playing" || screen === "paused" || screen === "coop-exit-confirm") && (
-        <HUD
-          hud={hud}
-          healthPickupFeedback={healthPickupFeedback}
-          achievementReward={activeAchievement?.reward}
-          rewardFeedbackKey={activeAchievement?.id}
-        />
+        <>
+          <HUD
+            hud={hud}
+            healthPickupFeedback={healthPickupFeedback}
+            achievementReward={activeAchievement?.reward}
+            rewardFeedbackKey={activeAchievement?.id}
+          />
+          {teammateHud.length > 0 && <CoopTeammateHud teammates={teammateHud} />}
+        </>
       )}
       {gameReady && screen === "playing" && !usesMobileGameplayControls && (
         <AbilityControls

@@ -1700,6 +1700,7 @@ export class PuzzleScene extends Phaser.Scene {
       spinCooldownRemainingMs: this.player.getSpinCooldownRemaining(this.time.now),
     };
     gameEvents.emit(EVENTS.HUD_UPDATED, hud);
+    this.emitTeammateHud();
   }
 
   private bindSceneEvents(): void {
@@ -2033,6 +2034,49 @@ export class PuzzleScene extends Phaser.Scene {
     if (key === this.lastGuestHudKey) return;
     this.lastGuestHudKey = key;
     gameEvents.emit(EVENTS.HUD_UPDATED, hud);
+    this.emitTeammateHud();
+  }
+
+  private lastTeammateHudKey?: string;
+
+  private emitTeammateHud(): void {
+    if (!this.coop || !this.coop.roster || this.coop.roster.length <= 1) return;
+
+    const teammates: import("../../shared/types/game").TeammateHudState[] = [];
+    
+    for (const entry of this.coop.roster) {
+      if (entry.slot === this.coopSelfSlot) continue;
+      
+      const player = this.playerAtSlot(entry.slot);
+      if (!player) continue;
+
+      const isConnected = coopSession.participants.some(p => p.slot === entry.slot);
+      const charges = this.chargesForSlot(entry.slot);
+      
+      let status: import("../../shared/types/game").TeammateConnectionStatus = "connected";
+      if (!isConnected) {
+        status = "disconnected";
+      } else if (player.stats.health <= 0) {
+        status = "defeated";
+      }
+
+      teammates.push({
+        slot: entry.slot,
+        characterId: entry.characterId as import("../../shared/types/game").CharacterId,
+        health: player.stats.health,
+        maxHealth: player.stats.maxHealth,
+        healingCharges: charges.healingCharges,
+        powerCharges: charges.powerCharges,
+        status,
+      });
+    }
+
+    if (teammates.length > 0) {
+      const key = teammates.map(t => `${t.slot}|${t.health}|${t.healingCharges}|${t.powerCharges}|${t.status}`).join(",");
+      if (key === this.lastTeammateHudKey) return;
+      this.lastTeammateHudKey = key;
+      gameEvents.emit(EVENTS.TEAMMATE_HUD_UPDATED, teammates);
+    }
   }
 
   private handleParticipantDisconnected(slot: number): void {
