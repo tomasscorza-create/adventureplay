@@ -193,6 +193,11 @@ export interface PlatformDefinition {
     distance: number;
     speed: number;
   };
+  sinking?: {
+    dropDistance: number;
+    fallSpeed: number;
+    returnSpeed: number;
+  };
 }
 
 export interface LevelHazardDefinition {

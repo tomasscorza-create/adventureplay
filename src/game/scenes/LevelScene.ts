@@ -25,6 +25,7 @@ import { M3Enemy } from "../entities/enemies/M3Enemy";
 import { MovingHazard } from "../entities/hazards/MovingHazard";
 import { Coin } from "../entities/items/Coin";
 import { MovingPlatform } from "../entities/platforms/MovingPlatform";
+import { SinkingPlatform } from "../entities/platforms/SinkingPlatform";
 import { Player } from "../entities/player/Player";
 import { PowerProjectile } from "../entities/projectiles/PowerProjectile";
 import { getCharacterDefinition } from "../data/characters";
@@ -62,6 +63,7 @@ export class LevelScene extends Phaser.Scene {
   private player!: Player;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private movingPlatforms!: Phaser.Physics.Arcade.Group;
+  private sinkingPlatforms!: Phaser.Physics.Arcade.Group;
   private enemies!: Phaser.Physics.Arcade.Group;
   private coins!: Phaser.Physics.Arcade.Group;
   private healthPickups!: Phaser.Physics.Arcade.StaticGroup;
@@ -313,6 +315,7 @@ export class LevelScene extends Phaser.Scene {
 
     this.platforms = this.physics.add.staticGroup();
     this.movingPlatforms = this.physics.add.group({ runChildUpdate: true });
+    this.sinkingPlatforms = this.physics.add.group({ runChildUpdate: true });
     let movingPlatformNetId = 0;
     for (const platform of this.level.platforms) {
       if (platform.movement) {
@@ -321,6 +324,9 @@ export class LevelScene extends Phaser.Scene {
         movingPlatformNetId += 1;
         if (this.isGuest) this.freezePuppet(movingPlatform);
         this.movingPlatforms.add(movingPlatform);
+      } else if (platform.sinking) {
+        const sinkingPlatform = new SinkingPlatform(this, platform, this.level.theme);
+        this.sinkingPlatforms.add(sinkingPlatform);
       } else {
         this.createPlatform(platform);
       }
@@ -484,6 +490,7 @@ export class LevelScene extends Phaser.Scene {
         [
           ...this.platforms.getChildren(),
           ...this.movingPlatforms.getChildren(),
+          ...this.sinkingPlatforms.getChildren(),
         ] as Phaser.GameObjects.Rectangle[],
         isActiveVolcano
           ? "volcanic-enemy-m1"
@@ -512,6 +519,7 @@ export class LevelScene extends Phaser.Scene {
         [
           ...this.platforms.getChildren(),
           ...this.movingPlatforms.getChildren(),
+          ...this.sinkingPlatforms.getChildren(),
         ] as Phaser.GameObjects.Rectangle[],
         this.level.m3Intelligence,
         enemy.enemyId === "e2m3"
@@ -542,6 +550,7 @@ export class LevelScene extends Phaser.Scene {
     const fx = !this.isGuest;
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.collider(this.enemies, this.movingPlatforms);
+    this.physics.add.collider(this.enemies, this.sinkingPlatforms);
     this.physics.add.collider(
       this.enemies,
       this.enemies,
@@ -558,6 +567,7 @@ export class LevelScene extends Phaser.Scene {
     this.forEachPlayer((player, slot) => {
       this.physics.add.collider(player, this.platforms);
       this.physics.add.collider(player, this.movingPlatforms);
+      this.physics.add.collider(player, this.sinkingPlatforms);
       this.physics.add.overlap(player, this.coins, (_p, coin) => {
         if (fx) this.collectCoin(coin as Coin);
       });

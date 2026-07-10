@@ -893,7 +893,10 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 2500, y: 520, width: 130, height: 24 }, // Escalera al puente, paso 1
       { x: 2680, y: 430, width: 130, height: 24 }, // Escalera al puente, paso 2
       { x: 2860, y: 330, width: 120, height: 24 }, // Salto hacia el drop-shot
-      { x: 3100, y: 520, width: 140, height: 24 }, // Aterrizaje del drop-shot
+      { 
+        x: 3100, y: 520, width: 140, height: 24,
+        sinking: { dropDistance: 150, fallSpeed: 150, returnSpeed: 50 }
+      }, // Aterrizaje del drop-shot (hundible)
       { x: 3280, y: 420, width: 140, height: 24 }, // Subida
       { x: 3500, y: 320, width: 140, height: 24 }, // Percha para el disparo a distancia
       { x: 4100, y: 320, width: 120, height: 24 }, // Pilar de la palanca a distancia y Sello 4

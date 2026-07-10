@@ -38,11 +38,24 @@ Para escalar el modo "Explorar", no se crea una nueva Escena. Se crea un Tema Vi
 No inyectes `this.add.sprite(200, 150, "boss")` a mitad del archivo `LevelScene.ts`.
 El motor debe iterar sobre `levelDefinition.enemies` o `levelDefinition.platforms` para construir un nivel dinámicamente.
 
-## 4. Diseño de Niveles de Desafío (Puzzle Levels)
-Para las cámaras de desafío (`puzzleLevels.ts`), se busca **variabilidad y diversión** por encima de patrones matemáticos estrictos. 
-* **Romper moldes:** No te limites a poner obstáculos en secuencia sobre suelo plano. Utiliza el espacio vertical, obliga a retroceder o crea penalizaciones de caída que obliguen a repetir una escalada.
-* **Mecánicas avanzadas probadas:** 
-  * *Saltos de precisión y verticalidad:* Plataformas diminutas muy altas.
-  * *Apilamiento:* Hacer caer cajas sobre otras para lograr saltos a lugares de otro modo inaccesibles.
-  * *Disparos en caída libre (Drop-shots):* Muros gigantes con un solo hueco bloqueado por un sello (Point). El jugador debe dejarse caer desde muy alto, disparar en el aire para romper el sello, y maniobrar hacia el hueco antes de tocar el suelo.
-* **Flexibilidad en los Tests:** Las aserciones rígidas en `puzzleLevels.test.ts` (como "cada nivel debe ser más largo que el anterior" o "los peligros siempre deben incrementar") han sido relajadas o ignoradas (`it.skip`). Si un nuevo diseño creativo rompe un test de estructura, la directiva es **actualizar o saltar el test**, priorizando la jugabilidad asimétrica y variada.
+## 4. Diseño Sistemático de Niveles de Desafío (Puzzle Levels 1-10+)
+Para las cámaras de desafío (`puzzleLevels.ts`), hemos establecido un **patrón maestro de diseño** enfocado en variabilidad, puzles reales y dinamismo. Al crear o mejorar niveles, sigue esta guía estructurada:
+
+### A. Romper la Monotonía Lineal
+* **Cero puentes aburridos:** Evita plataformas largas y planas. Fragmenta los caminos con precipicios, pequeños pilares y desniveles.
+* **Verticalidad:** El nivel no debe avanzar solo a la derecha. Usa el espacio vertical para forzar escaladas, caídas y saltos de precisión.
+
+### B. Distribución Progresiva de Monedas (Oro)
+* Las monedas no se tiran al azar ni se apilan todas juntas.
+* **Progresión sistemática:** Suma monedas gradualmente según el nivel (Nivel 1: +1 moneda aislada, Nivel 2: +2 monedas, etc.).
+* **Organización estética (Arcos y Cascadas):** Coloca el oro dibujando la trayectoria natural del salto del jugador (en curvas ascendentes o cascadas de caída). Combínalos en Dúos o Tríos esparcidos por el mapa.
+
+### C. Patrones Mecánicos Avanzados (El "Estilo")
+Al estructurar el nivel, combina estas mecánicas para crear "momentos wow":
+1. **Backtracking Lógico:** Conecta acciones forzando al jugador a avanzar y luego retroceder. *Ejemplo: cruzar una puerta para encontrar una caja (Caja 2), arrastrarla hacia atrás hasta una plataforma donde dejamos caer la Caja 1 encima de ella para apilarlas, y empujarlas juntas para alcanzar un Sello elevado.*
+2. **Disparos de Precisión en Caída (Drop-shots):** Muros enormes con sellos flotando sobre un mar de pinchos. El jugador debe saltar al vacío, disparar al sello en el aire (apex) y caer milimétricamente en un pilar minúsculo.
+3. **Francotirador a Distancia Real:** Diseña "Perchas de disparo" alejadas (hasta 600px). El jugador debe visualizar tanto el objetivo (Sello/Palanca) como su posición en pantalla sin superposiciones.
+4. **Plataformas Dinámicas/Hundibles (Sinking Platforms):** Instancia plataformas que se desploman por gravedad usando la propiedad `sinking` (`{ dropDistance, fallSpeed, returnSpeed }`). Combina esto con *drop-shots* o abismos para forzar tiempos de reacción inmediatos.
+
+### D. Regla de Oro sobre Tests
+* **Flexibilidad Creativa:** Las aserciones matemáticas rígidas en `puzzleLevels.test.ts` (como "cada sello debe estar sobre una plataforma", o "todo nivel es más largo") han sido subordinadas a la jugabilidad. Si un diseño creativo y divertido (como un Sello flotante inalcanzable diseñado para cajas apiladas) falla un test antiguo, **se actualiza o se ignora el test (`it.skip`)**, jamás se sacrifica la diversión.
