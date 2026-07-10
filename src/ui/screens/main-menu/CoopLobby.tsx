@@ -184,6 +184,8 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
       roster: coopSession.participants.map((entry) => ({
         slot: entry.slot,
         characterId: entry.characterId,
+        healingCharges: entry.healingCharges,
+        powerCharges: entry.powerCharges,
       })),
     });
   };

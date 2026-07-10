@@ -129,6 +129,17 @@ describe("coopMessages slots", () => {
     ]);
   });
 
+  it("preserva las cargas de curacion y poder en el roster final", () => {
+    const roster = assignSlots([
+      { key: "host", role: "host", characterId: "ruder", healingCharges: 5, powerCharges: 2 },
+      { key: "g1", role: "guest", characterId: "amy", healingCharges: 1, powerCharges: 9 },
+    ]);
+    expect(roster[0].healingCharges).toBe(5);
+    expect(roster[0].powerCharges).toBe(2);
+    expect(roster[1].healingCharges).toBe(1);
+    expect(roster[1].powerCharges).toBe(9);
+  });
+
   it("es determinista sin importar el orden de entrada", () => {
     const entries = [
       { key: "c", role: "guest" as const, characterId: "amy" },
