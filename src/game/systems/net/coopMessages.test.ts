@@ -72,21 +72,30 @@ describe("coopMessages room codes", () => {
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(6);
+    expect(COOP_PROTOCOL_VERSION).toBe(7);
   });
 
   it("excluye la propia key y normaliza los payloads de los peers", () => {
     const state = {
       "self-key": [{ role: "host", characterId: "ruder", protocol: 2 }],
-      "peer-key": [{ role: "guest", characterId: "amy", protocol: 2 }],
+      "peer-key": [
+        { role: "guest", characterId: "amy", protocol: 2, healingCharges: 3, powerCharges: 12 },
+      ],
     };
     const peers = collectPeerPresences(state, "self-key");
     expect(peers).toEqual([
-      { key: "peer-key", role: "guest", characterId: "amy", protocol: 2 },
+      {
+        key: "peer-key",
+        role: "guest",
+        characterId: "amy",
+        protocol: 2,
+        healingCharges: 3,
+        powerCharges: 12,
+      },
     ]);
   });
 
-  it("asume protocolo 1 para clientes previos y descarta payloads sin rol valido", () => {
+  it("asume protocolo 1 y cargas 0 para payloads incompletos, y descarta roles invalidos", () => {
     const state = {
       guest: [{ role: "guest", characterId: "sarix" }],
       intruso: [{ characterId: "faust" }],
@@ -94,7 +103,14 @@ describe("coopMessages presence", () => {
     };
     const peers = collectPeerPresences(state, "self-key");
     expect(peers).toEqual([
-      { key: "guest", role: "guest", characterId: "sarix", protocol: 1 },
+      {
+        key: "guest",
+        role: "guest",
+        characterId: "sarix",
+        protocol: 1,
+        healingCharges: 0,
+        powerCharges: 0,
+      },
     ]);
   });
 });

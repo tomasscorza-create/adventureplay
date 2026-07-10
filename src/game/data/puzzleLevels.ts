@@ -84,6 +84,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { itemId: "bronzeCoin", x: 300, y: 580, value: 2 },
       { itemId: "bronzeCoin", x: 700, y: 580, value: 3 },
       { itemId: "bronzeCoin", x: 1110, y: 350, value: 3 },
+      { itemId: "bronzeCoin", x: 1160, y: 300, value: 3 }, // +1
       { itemId: "bronzeCoin", x: 1450, y: 500, value: 3 },
       { itemId: "bronzeCoin", x: 2050, y: 460, value: 4 },
     ],
@@ -141,7 +142,9 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { itemId: "bronzeCoin", x: 760, y: 580, value: 3 },
       { itemId: "bronzeCoin", x: 1180, y: 350, value: 4 },
       { itemId: "bronzeCoin", x: 1430, y: 350, value: 4 },
+      { itemId: "bronzeCoin", x: 1480, y: 300, value: 4 }, // +1 (duo)
       { itemId: "bronzeCoin", x: 2330, y: 440, value: 3 },
+      { itemId: "bronzeCoin", x: 2380, y: 390, value: 4 }, // +2 (duo)
       { itemId: "bronzeCoin", x: 2500, y: 290, value: 3 },
     ],
     crates: [{ x: 470, y: 560 }, { x: 2460, y: 270 }],
@@ -206,10 +209,13 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     coins: [
       { itemId: "bronzeCoin", x: 300, y: 580, value: 3 },
       { itemId: "bronzeCoin", x: 820, y: 580, value: 4 },
+      { itemId: "bronzeCoin", x: 870, y: 530, value: 4 }, // +1 (duo)
       { itemId: "bronzeCoin", x: 1260, y: 350, value: 4 },
       { itemId: "bronzeCoin", x: 1510, y: 350, value: 4 },
       { itemId: "bronzeCoin", x: 2420, y: 470, value: 4 },
       { itemId: "bronzeCoin", x: 2620, y: 350, value: 4 },
+      { itemId: "bronzeCoin", x: 2660, y: 300, value: 4 }, // +2 (trio)
+      { itemId: "bronzeCoin", x: 2700, y: 260, value: 4 }, // +3 (trio)
       { itemId: "bronzeCoin", x: 3200, y: 580, value: 3 },
     ],
     crates: [
@@ -288,11 +294,15 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { itemId: "bronzeCoin", x: 280, y: 580, value: 4 },
       { itemId: "bronzeCoin", x: 860, y: 580, value: 4 },
       { itemId: "bronzeCoin", x: 1360, y: 350, value: 4 },
+      { itemId: "bronzeCoin", x: 1410, y: 300, value: 4 }, // +1 (duo)
       { itemId: "bronzeCoin", x: 1590, y: 350, value: 4 },
       { itemId: "bronzeCoin", x: 2420, y: 440, value: 4 },
       { itemId: "bronzeCoin", x: 2750, y: 280, value: 4 },
+      { itemId: "bronzeCoin", x: 2800, y: 230, value: 4 }, // +2 (duo)
       { itemId: "bronzeCoin", x: 3000, y: 380, value: 4 },
       { itemId: "bronzeCoin", x: 3400, y: 330, value: 4 },
+      { itemId: "bronzeCoin", x: 3530, y: 350, value: 5 }, // +3 (trio salto)
+      { itemId: "bronzeCoin", x: 3560, y: 380, value: 5 }, // +4 (trio salto)
     ],
     crates: [
       { x: 500, y: 560 },
@@ -367,12 +377,17 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     coins: [
       { itemId: "bronzeCoin", x: 400, y: 580, value: 5 },
       { itemId: "bronzeCoin", x: 950, y: 390, value: 5 },
+      { itemId: "bronzeCoin", x: 1000, y: 340, value: 5 }, // +1 (duo)
       { itemId: "bronzeCoin", x: 1700, y: 340, value: 5 },
+      { itemId: "bronzeCoin", x: 1750, y: 290, value: 5 }, // +2 (duo)
       { itemId: "bronzeCoin", x: 2500, y: 580, value: 5 },
       { itemId: "bronzeCoin", x: 3300, y: 420, value: 5 },
+      { itemId: "bronzeCoin", x: 3350, y: 370, value: 5 }, // +3 (duo)
       { itemId: "bronzeCoin", x: 3900, y: 350, value: 5 },
       { itemId: "bronzeCoin", x: 4550, y: 450, value: 5 },
       { itemId: "bronzeCoin", x: 4900, y: 300, value: 5 },
+      { itemId: "bronzeCoin", x: 5020, y: 350, value: 5 }, // +4 (trio caída)
+      { itemId: "bronzeCoin", x: 5060, y: 450, value: 5 }, // +5 (trio caída)
       { itemId: "bronzeCoin", x: 5300, y: 580, value: 5 },
     ],
     crates: [
@@ -463,11 +478,17 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     ],
     coins: [
       { itemId: "bronzeCoin", x: 850, y: 340, value: 5 },
+      { itemId: "bronzeCoin", x: 900, y: 290, value: 5 }, // +1 (duo)
       { itemId: "bronzeCoin", x: 1600, y: 390, value: 5 },
+      { itemId: "bronzeCoin", x: 1650, y: 340, value: 5 }, // +2 (duo)
       { itemId: "bronzeCoin", x: 2400, y: 320, value: 5 },
+      { itemId: "bronzeCoin", x: 2450, y: 270, value: 5 }, // +3 (duo)
       { itemId: "bronzeCoin", x: 3400, y: 360, value: 5 },
+      { itemId: "bronzeCoin", x: 3450, y: 310, value: 5 }, // +4 (duo)
       { itemId: "bronzeCoin", x: 4150, y: 400, value: 5 },
       { itemId: "bronzeCoin", x: 4470, y: 300, value: 5 },
+      { itemId: "bronzeCoin", x: 4510, y: 270, value: 6 }, // +5 (trio salto)
+      { itemId: "bronzeCoin", x: 4540, y: 250, value: 6 }, // +6 (trio salto)
       { itemId: "bronzeCoin", x: 4670, y: 180, value: 5 },
       { itemId: "bronzeCoin", x: 5120, y: 275, value: 5 },
     ],
@@ -553,12 +574,19 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     coins: [
       { itemId: "bronzeCoin", x: 500, y: 580, value: 5 },
       { itemId: "bronzeCoin", x: 1650, y: 350, value: 6 },
+      { itemId: "bronzeCoin", x: 1700, y: 300, value: 6 }, // +1 (duo)
       { itemId: "bronzeCoin", x: 2450, y: 380, value: 6 },
+      { itemId: "bronzeCoin", x: 2500, y: 330, value: 6 }, // +2 (duo)
       { itemId: "bronzeCoin", x: 3420, y: 420, value: 6 },
+      { itemId: "bronzeCoin", x: 3470, y: 370, value: 6 }, // +3 (duo)
       { itemId: "bronzeCoin", x: 4300, y: 370, value: 6 },
+      { itemId: "bronzeCoin", x: 4350, y: 320, value: 6 }, // +4 (duo)
       { itemId: "bronzeCoin", x: 5120, y: 440, value: 7 },
       { itemId: "bronzeCoin", x: 5375, y: 280, value: 7 },
+      { itemId: "bronzeCoin", x: 5410, y: 240, value: 7 }, // +5 (duo)
       { itemId: "bronzeCoin", x: 5525, y: 140, value: 7 },
+      { itemId: "bronzeCoin", x: 5560, y: 100, value: 7 }, // +6 (trio final)
+      { itemId: "bronzeCoin", x: 5600, y: 75, value: 7 },  // +7 (trio final)
       { itemId: "bronzeCoin", x: 6020, y: 370, value: 7 },
     ],
     crates: [
@@ -632,66 +660,72 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     playerStart: { x: 150, y: 560 },
     platforms: [
       { x: 0, y: 640, width: 6200, height: 80 },
-      { x: 1650, y: 410, width: 380, height: 24 }, // Cornisa de la primera palanca (requiere caja)
-      { x: 2450, y: 510, width: 120, height: 24 }, // Escalera 1 hacia el canal de disparo
-      { x: 2610, y: 440, width: 120, height: 24 }, // Escalera 2
-      { x: 2770, y: 380, width: 130, height: 24 }, // Escalera 3
-      { x: 2930, y: 300, width: 150, height: 24 }, // Cornisa de caida para el disparo
-      { x: 3150, y: 390, width: 40, height: 110 }, // Pared del canal de disparo en caida
-      { x: 3150, y: 330, width: 180, height: 24 }, // Techo del canal de disparo
-      { x: 4900, y: 430, width: 240, height: 24 }, // Cornisa de la palanca final (requiere caja reutilizada)
+      { x: 1300, y: 520, width: 60, height: 24 },
+      { x: 1100, y: 400, width: 60, height: 24 },
+      { x: 1300, y: 280, width: 60, height: 24 },
+      { x: 1550, y: 160, width: 100, height: 24 },
+      { x: 1650, y: 410, width: 380, height: 24 },
+      { x: 2600, y: 500, width: 120, height: 24 },
+      { x: 2800, y: 380, width: 120, height: 24 },
+      { x: 3000, y: 260, width: 150, height: 24 },
+      { x: 3200, y: 390, width: 40, height: 110 },
+      { x: 3200, y: 330, width: 180, height: 24 },
+      { x: 4400, y: 300, width: 120, height: 24 },
+      { x: 5000, y: 430, width: 240, height: 24 },
+      { x: 5500, y: 520, width: 80, height: 24 },
+      { x: 5700, y: 400, width: 80, height: 24 },
     ],
     coins: [
-      { itemId: "bronzeCoin", x: 520, y: 580, value: 6 },
-      { itemId: "bronzeCoin", x: 1840, y: 350, value: 6 },
-      { itemId: "bronzeCoin", x: 2990, y: 240, value: 6 },
-      { itemId: "bronzeCoin", x: 3600, y: 580, value: 6 },
-      { itemId: "bronzeCoin", x: 4980, y: 370, value: 7 },
-      { itemId: "bronzeCoin", x: 5060, y: 580, value: 7 },
-      { itemId: "bronzeCoin", x: 5560, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 1200, y: 460, value: 7 },
+      { itemId: "bronzeCoin", x: 1200, y: 340, value: 7 },
+      { itemId: "bronzeCoin", x: 3100, y: 320, value: 7 },
+      { itemId: "bronzeCoin", x: 3250, y: 440, value: 7 },
+      { itemId: "bronzeCoin", x: 3250, y: 480, value: 8 },
+      { itemId: "bronzeCoin", x: 5600, y: 460, value: 8 },
+      { itemId: "bronzeCoin", x: 5700, y: 360, value: 8 },
+      { itemId: "bronzeCoin", x: 5750, y: 340, value: 8 },
     ],
     crates: [
       { x: 620, y: 560 },
       { x: 3700, y: 560 },
-      { x: 4300, y: 560 },
+      { x: 4200, y: 560 },
+      { x: 5050, y: 350 }, // Caja extra para facilitar Point 3 (70%)
     ],
-    enemies: [{ type: "m1", x: 1200, y: 600, patrolDistance: 250 }, { type: "m1", x: 2300, y: 400, patrolDistance: 150 }],
+    enemies: [{ type: "m1", x: 900, y: 600, patrolDistance: 250 }, { type: "m1", x: 2300, y: 600, patrolDistance: 150 }],
     plates: [
       { id: "plate-1", x: 1150, y: 625, width: 78 },
       { id: "plate-2", x: 4000, y: 625, width: 76 },
-      { id: "plate-3", x: 4550, y: 625, width: 76 },
+      { id: "plate-3", x: 4650, y: 625, width: 76 },
     ],
     levers: [
       { id: "lever-1", x: 1830, y: 362 },
-      { id: "lever-dist", x: 3250, y: 390, rangedOnly: true }, // Palanca alineada con el canal de caida
-      { id: "lever-2", x: 5000, y: 382 },
+      { id: "lever-dist", x: 3250, y: 390, rangedOnly: true },
+      { id: "lever-2", x: 5100, y: 382 },
     ],
     gates: [
       { id: "gate-1", x: 1350, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
       { id: "gate-2", x: 2050, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
       { id: "gate-dist", x: 3370, y: 0, width: 40, height: 640, requiredActivations: ["lever-dist"] },
-      // Puerta doble: exige ambas placas presionadas a la vez (una caja por placa)
-      { id: "gate-3", x: 4750, y: 0, width: 54, height: 640, requiredActivations: ["plate-2", "plate-3"] },
-      { id: "gate-4", x: 5180, y: 0, width: 50, height: 640, requiredActivations: ["lever-2"] },
+      { id: "gate-3", x: 4850, y: 0, width: 54, height: 640, requiredActivations: ["plate-2", "plate-3"] },
+      { id: "gate-4", x: 5300, y: 0, width: 50, height: 640, requiredActivations: ["lever-2"] },
     ],
     boxJumpZones: [
-      { x: 1600, y: 625, width: 70 },
-      { x: 4850, y: 625, width: 70 },
+      { x: 1580, y: 625, width: 70 },
+      { x: 4950, y: 625, width: 70 },
     ],
     seals: [
-      { x: 5300, y: 500, width: 52, height: 140 },
-      { x: 5470, y: 500, width: 52, height: 140 },
-      { x: 5640, y: 500, width: 52, height: 140 },
-      { x: 5810, y: 500, width: 52, height: 140 },
+      { x: 1580, y: 20, width: 52, height: 140 },
+      { x: 3250, y: 450, width: 52, height: 140 },
+      { x: 4420, y: 160, width: 52, height: 140 },
+      { x: 5690, y: 260, width: 52, height: 140 },
     ],
     hazards: [
-      { x: 880, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 1350, y: 610, width: 110, height: 30, damage: 1 },
       { x: 1900, y: 610, width: 110, height: 30, damage: 1 },
-      { x: 2300, y: 610, width: 100, height: 30, damage: 1 },
-      { x: 3450, y: 610, width: 110, height: 30, damage: 1 },
-      { x: 4150, y: 610, width: 120, height: 30, damage: 1 },
-      { x: 5390, y: 610, width: 110, height: 30, damage: 1 },
-      { x: 5730, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 2700, y: 610, width: 150, height: 30, damage: 1 },
+      { x: 3250, y: 610, width: 110, height: 30, damage: 1 },
+      { x: 4400, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 5500, y: 610, width: 250, height: 30, damage: 1 },
     ],
     inventoryReward: {
       claimId: "trialChamber8:architect-crown",
@@ -710,7 +744,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
 
     // Compatibilidad singular
     crate: { x: 620, y: 560 },
-    boxJumpZone: { x: 1600, y: 625, width: 70 },
+    boxJumpZone: { x: 1580, y: 625, width: 70 },
     plate: { x: 1150, y: 625, width: 78 },
     lever: { x: 1830, y: 362 },
     gate: { x: 1350, y: 0, width: 50, height: 640 },
@@ -748,19 +782,20 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 5950, y: 500, width: 220, height: 24 }, // Plataforma del portal elevado
     ],
     coins: [
-      { itemId: "bronzeCoin", x: 350, y: 580, value: 6 },
       { itemId: "bronzeCoin", x: 1005, y: 340, value: 6 },
+      { itemId: "bronzeCoin", x: 1045, y: 300, value: 6 }, // Duo 1
       { itemId: "bronzeCoin", x: 2170, y: 280, value: 6 },
-      { itemId: "bronzeCoin", x: 2280, y: 410, value: 7 },
-      { itemId: "bronzeCoin", x: 3560, y: 240, value: 7 },
-      { itemId: "bronzeCoin", x: 5210, y: 280, value: 7 },
-      { itemId: "bronzeCoin", x: 5620, y: 320, value: 7 },
-      { itemId: "bronzeCoin", x: 6060, y: 390, value: 7 },
+      { itemId: "bronzeCoin", x: 2220, y: 240, value: 7 }, // Duo 2
+      { itemId: "bronzeCoin", x: 3600, y: 240, value: 7 },
+      { itemId: "bronzeCoin", x: 3650, y: 280, value: 7 },
+      { itemId: "bronzeCoin", x: 3700, y: 340, value: 7 }, // Trio caída campanario
+      { itemId: "bronzeCoin", x: 5450, y: 200, value: 7 },
+      { itemId: "bronzeCoin", x: 5550, y: 250, value: 7 }, // Duo caída gran torre
     ],
     crates: [
       { x: 520, y: 560 },
       { x: 3000, y: 560 },
-      { x: 4230, y: 560 }, // Caja del foso: nace junto a su placa, imposible perderla
+      { x: 4260, y: 560 }, // Caja del foso: movida para dejar espacio de empuje al jugador
       { x: 2280, y: 560 }, // Par pre-apilado opcional: escalera hacia la moneda alta
       { x: 2280, y: 490 },
     ],
@@ -850,13 +885,18 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       { x: 0, y: 640, width: 6800, height: 80 },
       { x: 250, y: 380, width: 180, height: 24 }, // Cornisa del sello del regreso (sobre el inicio)
       { x: 480, y: 490, width: 120, height: 24 }, // Peldano de acceso a la cornisa
+      { x: 550, y: 480, width: 100, height: 24 }, // Repisa para dejar caer la Caja 1
+      { x: 750, y: 320, width: 60, height: 24 }, // Ménsula del sello de doble caja
       { x: 860, y: 500, width: 130, height: 24 }, // Torre del vigia, paso 1
       { x: 1030, y: 410, width: 130, height: 24 }, // Torre del vigia, paso 2
       { x: 1200, y: 320, width: 150, height: 24 }, // Torre del vigia, cima (palanca)
       { x: 2500, y: 520, width: 130, height: 24 }, // Escalera al puente, paso 1
       { x: 2680, y: 430, width: 130, height: 24 }, // Escalera al puente, paso 2
-      { x: 2860, y: 330, width: 700, height: 24 }, // Puente de los tres sellos
-      { x: 3700, y: 330, width: 120, height: 24 }, // Pilar de la palanca a distancia
+      { x: 2860, y: 330, width: 120, height: 24 }, // Salto hacia el drop-shot
+      { x: 3100, y: 520, width: 140, height: 24 }, // Aterrizaje del drop-shot
+      { x: 3280, y: 420, width: 140, height: 24 }, // Subida
+      { x: 3500, y: 320, width: 140, height: 24 }, // Percha para el disparo a distancia
+      { x: 4100, y: 320, width: 120, height: 24 }, // Pilar de la palanca a distancia y Sello 4
       { x: 4700, y: 500, width: 140, height: 24 }, // Pendulo, subida 1
       { x: 4880, y: 410, width: 140, height: 24 }, // Pendulo, subida 2
       { x: 5060, y: 320, width: 160, height: 24 }, // Pendulo, cuspide (sello)
@@ -865,34 +905,36 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     ],
     coins: [
       { itemId: "bronzeCoin", x: 420, y: 320, value: 6 },
-      { itemId: "bronzeCoin", x: 900, y: 440, value: 6 },
-      { itemId: "bronzeCoin", x: 1260, y: 260, value: 7 },
-      { itemId: "bronzeCoin", x: 2990, y: 270, value: 7 },
-      { itemId: "bronzeCoin", x: 3080, y: 580, value: 7 },
-      { itemId: "bronzeCoin", x: 3330, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 470, y: 280, value: 6 }, // Duo 1
+      { itemId: "bronzeCoin", x: 950, y: 380, value: 7 },
+      { itemId: "bronzeCoin", x: 990, y: 340, value: 7 },
+      { itemId: "bronzeCoin", x: 1030, y: 380, value: 7 }, // Trio 1
+      { itemId: "bronzeCoin", x: 2980, y: 380, value: 7 },
+      { itemId: "bronzeCoin", x: 3020, y: 420, value: 7 },
+      { itemId: "bronzeCoin", x: 3060, y: 460, value: 7 }, // Trio 2 (caida drop-shot)
       { itemId: "bronzeCoin", x: 5000, y: 260, value: 7 },
-      { itemId: "bronzeCoin", x: 5560, y: 300, value: 7 },
-      { itemId: "bronzeCoin", x: 6300, y: 580, value: 7 },
+      { itemId: "bronzeCoin", x: 5050, y: 220, value: 7 }, // Duo 2
     ],
     crates: [
-      { x: 700, y: 560 }, // Queda detras de la primera puerta: hay que volver por ella
-      { x: 3650, y: 560 }, // Bajo el final del puente: se recupera tras abrir la tercera puerta
+      { x: 600, y: 400 }, // Caja 1 (en la repisa, para dejar caer sobre la Caja 2)
+      { x: 1650, y: 560 }, // Caja 2 (escondida tras gate-1): !Traerla de regreso y apilar!
+      { x: 3800, y: 560 }, // Bajo el abismo: se usa para la ultima placa
     ],
-    enemies: [{ type: "m1", x: 1300, y: 600, patrolDistance: 250 }, { type: "m1", x: 1900, y: 500, patrolDistance: 200 }, { type: "m1", x: 2900, y: 400, patrolDistance: 150 }],
+    enemies: [{ type: "m1", x: 1300, y: 600, patrolDistance: 250 }, { type: "m1", x: 1900, y: 500, patrolDistance: 200 }, { type: "m1", x: 3800, y: 600, patrolDistance: 150 }],
     plates: [
       {
         id: "plate-1",
         x: 2050,
         y: 625,
         width: 78,
-        hint: "La caja quedo atras: cruza la puerta abierta y traela hasta la placa",
+        hint: "Desarma tu torre de cajas y trae una hasta aqui",
       },
       {
         id: "plate-2",
-        x: 4300,
+        x: 4400,
         y: 625,
         width: 76,
-        hint: "Vuelve por la caja bajo el puente y empujala hasta la placa",
+        hint: "Empuja la caja hasta la placa para abrir la salida",
       },
     ],
     levers: [
@@ -904,32 +946,31 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
       },
       {
         id: "lever-dist",
-        x: 3760,
-        y: 330,
+        x: 4120,
+        y: 272,
         rangedOnly: true,
-        hint: "Cruza el puente rompiendo sellos y dispara a la palanca desde el borde",
+        hint: "Dispara a la palanca desde la percha lejana",
       },
     ],
     gates: [
       { id: "gate-1", x: 1550, y: 0, width: 50, height: 640, requiredActivations: ["lever-1"] },
       { id: "gate-2", x: 2350, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },
-      { id: "gate-3", x: 3900, y: 0, width: 50, height: 640, requiredActivations: ["lever-dist"] },
+      { id: "gate-3", x: 4320, y: 0, width: 50, height: 640, requiredActivations: ["lever-dist"] },
       { id: "gate-4", x: 4550, y: 0, width: 50, height: 640, requiredActivations: ["plate-2"] },
     ],
     seals: [
-      { x: 300, y: 240, width: 52, height: 140 }, // Sobre el punto de partida: mirar atras
-      { x: 2950, y: 190, width: 52, height: 140 }, // Puente, primer guardian
-      { x: 3200, y: 190, width: 52, height: 140 }, // Puente, segundo guardian
-      { x: 3450, y: 190, width: 52, height: 140 }, // Puente, tercer guardian
+      { x: 300, y: 240, width: 52, height: 140 }, // Sobre el punto de partida
+      { x: 754, y: 180, width: 52, height: 140 }, // Sello del Backtracking (apilar 2 cajas y saltar)
+      { x: 3000, y: 460, width: 52, height: 140 }, // Sello Drop-shot
+      { x: 4170, y: 150, width: 52, height: 140 }, // Sello Disparo a distancia
       { x: 5110, y: 180, width: 52, height: 140 }, // Cuspide del pendulo
       { x: 5520, y: 360, width: 52, height: 140 }, // Bajada del pendulo
     ],
     hazards: [
       { x: 600, y: 610, width: 90, height: 30, damage: 1 },
       { x: 1400, y: 610, width: 100, height: 30, damage: 1 },
-      { x: 2880, y: 610, width: 120, height: 30, damage: 1 },
-      { x: 3130, y: 610, width: 120, height: 30, damage: 1 },
-      { x: 3380, y: 610, width: 120, height: 30, damage: 1 },
+      { x: 2970, y: 610, width: 120, height: 30, damage: 1 }, // Pinchos del drop-shot
+      { x: 4000, y: 610, width: 250, height: 30, damage: 1 }, // Foso bajo el disparo lejano
       { x: 4750, y: 610, width: 110, height: 30, damage: 1 },
       { x: 5250, y: 610, width: 110, height: 30, damage: 1 },
       { x: 6100, y: 610, width: 100, height: 30, damage: 1 },

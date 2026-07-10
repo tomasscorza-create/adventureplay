@@ -24,7 +24,9 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 // v5: gameplay N jugadores: el inicio lleva el roster autoritativo (slot+heroe).
 // v6: `end` lleva el slot emisor (salidas individuales) y `start` se reutiliza
 //     a mitad de sesion para encadenar el siguiente nivel de la sala.
-export const COOP_PROTOCOL_VERSION = 6;
+// v7: cada jugador reporta sus cargas reales (presence + roster del start) y
+//     las compras del guest viajan como delta `charges` hacia el host.
+export const COOP_PROTOCOL_VERSION = 7;
 
 export type CoopRole = "host" | "guest";
 
@@ -42,13 +44,17 @@ export const COOP_EVENTS = {
   snapshot: "snapshot",
   start: "start",
   end: "end",
+  charges: "charges",
 } as const;
 
-// El guest se presenta con el heroe que eligio para que el host lo instancie.
+// El guest se presenta con el heroe que eligio para que el host lo instancie,
+// y con sus cargas reales para que el host no las invente desde su propio save.
 // `protocol` falta en los clientes anteriores a la v2 (se interpreta como 1).
 export interface CoopHello {
   characterId: string;
   protocol?: number;
+  healingCharges?: number;
+  powerCharges?: number;
 }
 
 // Entrada normalizada de presence de un peer. La key del canal es un clientId
@@ -59,6 +65,8 @@ export interface CoopPresenceEntry {
   role: CoopRole;
   characterId: string;
   protocol: number;
+  healingCharges: number;
+  powerCharges: number;
 }
 
 export function collectPeerPresences(
@@ -76,6 +84,8 @@ export function collectPeerPresences(
         role,
         characterId: typeof entry.characterId === "string" ? entry.characterId : "",
         protocol: typeof entry.protocol === "number" ? entry.protocol : 1,
+        healingCharges: typeof entry.healingCharges === "number" ? entry.healingCharges : 0,
+        powerCharges: typeof entry.powerCharges === "number" ? entry.powerCharges : 0,
       });
     }
   }
@@ -88,16 +98,18 @@ export interface CoopParticipant {
   role: CoopRole;
   characterId: string;
   slot: number;
+  healingCharges: number;
+  powerCharges: number;
 }
 
 // Roster determinista de la sala: el anfitrion ocupa HOST_SLOT y los guests se
 // ordenan por su clientId ascendente para recibir slots 1..N. Al derivarse solo
 // del conjunto de presencias (identico en todos los dispositivos), cada cliente
 // calcula el mismo mapa sin necesitar un mensaje de asignacion ni una carrera.
-export function assignSlots(
-  entries: ReadonlyArray<{ key: string; role: CoopRole; characterId: string }>,
-): CoopParticipant[] {
-  const roster: CoopParticipant[] = [];
+export function assignSlots<T extends { key: string; role: CoopRole; characterId: string }>(
+  entries: ReadonlyArray<T>,
+): Array<T & { slot: number }> {
+  const roster: Array<T & { slot: number }> = [];
   const host = entries.find((entry) => entry.role === "host");
   if (host) roster.push({ ...host, slot: HOST_SLOT });
   entries
@@ -108,11 +120,23 @@ export function assignSlots(
 }
 
 // Entrada compacta del roster que el host transmite al iniciar: define cuantos
-// jugadores hay, en que slot y con que heroe, de forma autoritativa para que
-// todos instancien exactamente lo mismo sin depender del timing de presence.
+// jugadores hay, en que slot, con que heroe y con que cargas, de forma
+// autoritativa para que todos instancien exactamente lo mismo sin depender del
+// timing de presence. En el encadenado de niveles lleva las cargas vivas.
 export interface CoopStartPlayer {
   slot: number;
   characterId: string;
+  healingCharges?: number;
+  powerCharges?: number;
+}
+
+// Compra de cargas durante la partida: el comprador transmite el delta y el
+// host lo suma a los contadores vivos de ese slot (los valores absolutos del
+// save no sirven porque no reflejan lo gastado en la partida).
+export interface CoopChargesMessage {
+  slot: number;
+  healingDelta: number;
+  powerDelta: number;
 }
 
 export interface CoopStartMessage {

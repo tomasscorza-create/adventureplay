@@ -11,6 +11,7 @@ import {
   COOP_SNAPSHOT_RATE_HZ,
   packInputState,
   unpackInputState,
+  type CoopChargesMessage,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopInputMessage,
@@ -27,9 +28,11 @@ export interface CoopLinkTransport {
   onPeerLeft(cb: () => void): () => void;
   onParticipantLeft?(cb: (slot: number) => void): () => void;
   onStart?(cb: (message: CoopStartMessage) => void): () => void;
+  onCharges?(cb: (message: CoopChargesMessage) => void): () => void;
   sendInput(message: CoopInputMessage): void;
   sendSnapshot(snapshot: unknown): void;
   sendEnd(reason: CoopEndReason, slot?: number): void;
+  sendCharges?(message: CoopChargesMessage): void;
   leave(): void;
 }
 
@@ -40,6 +43,8 @@ export interface CoopLinkHooks {
   // El host reutiliza el mensaje `start` para encadenar el siguiente nivel de
   // la sala; los guests lo reciben aqui una vez terminado el nivel actual.
   onStartNextLevel?: (message: CoopStartMessage) => void;
+  // Host: un jugador compro cargas durante la partida (delta por slot).
+  onRemoteCharges?: (message: CoopChargesMessage) => void;
 }
 
 const MIN_INPUT_INTERVAL_MS = 1000 / COOP_INPUT_RATE_HZ;
@@ -138,6 +143,15 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     if (this.transport.onStart && hooks.onStartNextLevel) {
       this.unbinds.push(this.transport.onStart((message) => hooks.onStartNextLevel!(message)));
     }
+    if (this.transport.onCharges && hooks.onRemoteCharges) {
+      this.unbinds.push(this.transport.onCharges((message) => hooks.onRemoteCharges!(message)));
+    }
+  }
+
+  // Guest: anuncia al host las cargas compradas durante la partida.
+  sendChargeDelta(healingDelta: number, powerDelta: number): void {
+    if (healingDelta <= 0 && powerDelta <= 0) return;
+    this.transport.sendCharges?.({ slot: this.localSlot, healingDelta, powerDelta });
   }
 
   private remoteSlot(slot: number): RemoteInputSlot {

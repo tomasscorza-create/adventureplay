@@ -11,7 +11,8 @@
 | **Presión (Explorar) sigue al jugador más atrasado** | Con cámaras independientes, una línea atada a cámara mataría al que se queda atrás. Anclarla al más lento conserva la mecánica sin castigar la exploración. Decisión explícita del usuario. |
 | **Cargas de poder/vida no persistidas en co-op** | Evita doble contabilidad entre dos saves; el host mantiene contadores vivos para el HUD. |
 | **Co-op encadenado por el host** | Tras la victoria, `Próximo` avanza a toda la sala: el host reenvía `start` con el próximo nivel y el roster vigente, y la sesión sobrevive al reinicio de escena (`coopLink.dispose(keepSession)`); el botón del guest espera al host. Tras derrota, `Reintentar` vuelve al menú (retry co-op no soportado aún). |
-| **Tienda de cargas deshabilitada en co-op** | El botón `+` se oculta y el evento se ignora: las cargas de los guests viven en el host y una compra descontaría ORO sin entregar cargas. |
+| **Tienda de cargas en co-op sin pausar** | La tienda abre con la partida corriendo detrás (pausar desincronizaría). La compra del host actualiza su save (= contadores vivos); la del guest viaja como **delta** `charges` al host, que suma a `remoteCharges[slot-1]`. Al volver, `syncCoopPurchases` refresca solo ORO y cargas del save fresco (no reemplaza `this.save`: los stats del jugador comparten referencia). |
+| **Cargas reales por jugador** | Cada jugador reporta sus cargas en presence al entrar; el roster del `start` las lleva (vivas al encadenar). El host nunca siembra desde su propio save — eso bloqueaba los poderes de los guests. |
 | **Modo red solo con `coop` presente** | Garantiza regresión cero: single-player de Explorar y Desafío quedan idénticos. |
 | **Versión de protocolo + presence por clientId** | La versión evita que builds incompatibles emparejen en silencio (aviso claro). La key por clientId (no por rol) permite más de un guest y evita colisiones. |
 | **Modelo de slots (protocolo N-ready antes que gameplay N)** | Separar la generalización del protocolo (slots, `players[]`, input con emisor) del render de 3-4 jugadores permite subir versión una sola vez y validar el modelo con tests, manteniendo el gameplay de 2 idéntico. |
@@ -81,6 +82,12 @@
    regresión de 4B: `applySnapshot` usaba `allPlayers()` (que filtra abandonos) como índice de
    slots y, tras un abandono en salas 3-4, aplicaba el estado de red al jugador equivocado; ahora
    resuelve por `playerAtSlot(slot)`.
+10. **Cargas reales por jugador + tienda en co-op (protocolo v7):** el bug de "poderes
+   bloqueados / sin recompras" venía de sembrar las cargas de los guests desde el save del host
+   con la tienda deshabilitada. Ahora las cargas viajan en presence y en el roster del `start`
+   (vivas al encadenar), la tienda funciona en co-op sin pausar la escena, y las compras del
+   guest llegan al host como delta (`CoopChargesMessage`). Además, el HUD del guest dejó de
+   emitirse a 60 Hz hacia React: solo emite cuando cambia algo visible (rendimiento).
 
 ## Continuidad / próximos pasos sugeridos
 

@@ -9,6 +9,7 @@ import {
   generateRoomCode,
   HOST_SLOT,
   normalizeRoomCode,
+  type CoopChargesMessage,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopHello,
@@ -43,6 +44,8 @@ interface CoopCallbacks {
   // Cambios en el roster (slots/heroes presentes), para la lista del lobby.
   roster: Set<(participants: CoopParticipant[]) => void>;
   participantLeft: Set<(slot: number) => void>;
+  // Compras de cargas durante la partida (delta hacia el host).
+  charges: Set<(message: CoopChargesMessage) => void>;
 }
 
 // Identidad unica del cliente dentro del canal de presence. La key ya no es el
@@ -85,6 +88,7 @@ class CoopSession {
     sessionError: new Set(),
     roster: new Set(),
     participantLeft: new Set(),
+    charges: new Set(),
   };
   private participantsKey = "";
   private authorizedParticipantKeys: Set<string> | null = null;
@@ -189,6 +193,9 @@ class CoopSession {
     channel.on("broadcast", { event: COOP_EVENTS.end }, ({ payload }) => {
       this.callbacks.end.forEach((cb) => cb(payload as CoopEndMessage));
     });
+    channel.on("broadcast", { event: COOP_EVENTS.charges }, ({ payload }) => {
+      this.callbacks.charges.forEach((cb) => cb(payload as CoopChargesMessage));
+    });
 
     channel.on("presence", { event: "sync" }, () => this.syncPresence());
     channel.on("presence", { event: "join" }, () => this.syncPresence());
@@ -201,6 +208,8 @@ class CoopSession {
             role,
             characterId: hello.characterId,
             protocol: COOP_PROTOCOL_VERSION,
+            healingCharges: hello.healingCharges ?? 0,
+            powerCharges: hello.powerCharges ?? 0,
           });
           this.setConnectionState("waiting");
           resolve();
@@ -241,7 +250,14 @@ class CoopSession {
     // Roster determinista incluyendo al jugador local, para fijar el slot propio
     // y el de cada peer igual en todos los dispositivos.
     const roster = assignSlots([
-      { key: this.clientKey, role: this._role, characterId: this.localHello.characterId },
+      {
+        key: this.clientKey,
+        role: this._role,
+        characterId: this.localHello.characterId,
+        protocol: COOP_PROTOCOL_VERSION,
+        healingCharges: this.localHello.healingCharges ?? 0,
+        powerCharges: this.localHello.powerCharges ?? 0,
+      },
       ...peers,
     ]);
     this._localSlot = roster.find((entry) => entry.key === this.clientKey)?.slot ?? this._localSlot;
@@ -311,17 +327,28 @@ class CoopSession {
     this.broadcast(COOP_EVENTS.snapshot, snapshot);
   }
 
-  sendStart(levelId: string): void {
+  // `rosterOverride` permite al host encadenar niveles con las cargas vivas de
+  // la partida (los valores de presence quedan viejos una vez que se gasto).
+  sendStart(levelId: string, rosterOverride?: CoopStartPlayer[]): void {
     this._connectionState = "in-game";
     this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
-    const roster: CoopStartPlayer[] = this._participants
+    const roster: CoopStartPlayer[] = rosterOverride ?? this._participants
       .filter((entry) => entry.slot < COOP_MAX_PLAYERS)
-      .map((entry) => ({ slot: entry.slot, characterId: entry.characterId }));
+      .map((entry) => ({
+        slot: entry.slot,
+        characterId: entry.characterId,
+        healingCharges: entry.healingCharges,
+        powerCharges: entry.powerCharges,
+      }));
     this.broadcast(COOP_EVENTS.start, { levelId, roster } satisfies CoopStartMessage);
   }
 
   sendEnd(reason: CoopEndReason, slot?: number): void {
     this.broadcast(COOP_EVENTS.end, { reason, slot } satisfies CoopEndMessage);
+  }
+
+  sendCharges(message: CoopChargesMessage): void {
+    this.broadcast(COOP_EVENTS.charges, message);
   }
 
   private broadcast(event: string, payload: unknown): void {
@@ -387,6 +414,9 @@ class CoopSession {
   }
   onParticipantLeft(cb: (slot: number) => void): () => void {
     return this.subscribe("participantLeft", cb);
+  }
+  onCharges(cb: (message: CoopChargesMessage) => void): () => void {
+    return this.subscribe("charges", cb);
   }
 
   private subscribe<K extends keyof CoopCallbacks>(

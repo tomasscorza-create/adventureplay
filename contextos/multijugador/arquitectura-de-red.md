@@ -24,7 +24,9 @@ No hay sockets acoplados dentro de escenas ni entidades.
 - Un canal por sala: `supabase.channel("coop-room-<CÓDIGO>")`.
 - Config: `broadcast: { self: false, ack: false }` + `presence: { key: clientId }`. La key es un
   **clientId único por dispositivo** (no el rol): admite más de un guest y evita colisiones. El rol
-  viaja dentro del payload de presence junto con `characterId` y `protocol`.
+  viaja dentro del payload de presence junto con `characterId`, `protocol` y las **cargas reales
+  del jugador** (`healingCharges`/`powerCharges`, leídas de su save al entrar a la sala) — el host
+  siembra los contadores vivos de cada slot desde ahí, nunca desde su propio save.
 - **Broadcast** para mensajes (input/snapshot/hello/start/end). **Presence** para detectar quién
   está en la sala, asignar slots y validar versiones.
 - **Versión de protocolo** (`COOP_PROTOCOL_VERSION`): si un peer trae una versión distinta (incluye
@@ -64,7 +66,8 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `6`. Subirla ante cualquier cambio incompatible de mensajes/presencia (v6: `end` con slot emisor y `start` reutilizado a mitad de sesión para encadenar niveles). |
+| `COOP_PROTOCOL_VERSION` | `7`. Subirla ante cualquier cambio incompatible de mensajes/presencia (v7: cada jugador reporta sus cargas reales en presence y en el roster del `start`; las compras del guest viajan como delta `charges` al host). |
+| `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
 | `CoopStartMessage` | `{ levelId, roster: { slot, characterId }[] }` — roster autoritativo del host. |
 | `HOST_SLOT` | `0`. Los guests ocupan slots `1..N`. |

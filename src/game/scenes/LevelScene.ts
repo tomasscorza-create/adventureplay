@@ -122,6 +122,10 @@ export class LevelScene extends Phaser.Scene {
   private nextProjectileNetId = 1;
   // Al encadenar el siguiente nivel co-op, el SHUTDOWN no debe cerrar la sala.
   private keepCoopSessionOnShutdown = false;
+  // Cargas propias segun el save al entrar (para detectar compras en co-op).
+  private coopChargeBaseline = { healingCharges: 0, powerCharges: 0 };
+  // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
+  private lastGuestHudKey = "";
   private coopPressureX = 0;
   // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
   private pressureCooldownSlot0 = 0;
@@ -153,6 +157,7 @@ export class LevelScene extends Phaser.Scene {
       : undefined;
     this.nextProjectileNetId = 1;
     this.keepCoopSessionOnShutdown = false;
+    this.lastGuestHudKey = "";
     this.coopPressureX = 0;
     this.pressureCooldownSlot0 = 0;
     this.damageTakenThisLevel = false;
@@ -164,6 +169,11 @@ export class LevelScene extends Phaser.Scene {
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.save = gameSaveStore.load();
     this.save.player.health = this.save.player.maxHealth;
+    const ownCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
+    this.coopChargeBaseline = {
+      healingCharges: ownCharges?.healingCharges ?? 0,
+      powerCharges: ownCharges?.powerCharges ?? 0,
+    };
     // En co-op ambos empiezan en el inicio del nivel (sin checkpoint asimetrico).
     this.activeCheckpoint = !this.coop && this.save.checkpointId === this.level.checkpoint.id
       ? { ...this.level.checkpoint }
@@ -329,7 +339,6 @@ export class LevelScene extends Phaser.Scene {
     // `this.player` es siempre el slot 0; los slots 1..N-1 van a `remotePlayers`.
     const roster = this.coop?.roster
       ?? [{ slot: 0, characterId: this.save.selectedCharacterId }];
-    const seededCharges = this.seedRemoteCharges();
 
     for (const entry of [...roster].sort((a, b) => a.slot - b.slot)) {
       const character = getCharacterDefinition(entry.characterId as CharacterId);
@@ -343,7 +352,13 @@ export class LevelScene extends Phaser.Scene {
       } else {
         this.remotePlayers.push(player);
         this.remoteMovement.push(new MovementSystem());
-        this.remoteCharges.push({ ...seededCharges });
+        // Cargas reales del jugador de ese slot: llegan en el roster (presence
+        // en el primer nivel, contadores vivos al encadenar). Nunca se siembran
+        // desde el save del host: bloqueaba los poderes de los guests.
+        this.remoteCharges.push({
+          healingCharges: entry.healingCharges ?? 0,
+          powerCharges: entry.powerCharges ?? 0,
+        });
         this.remoteRecoveringFromPit.push(false);
         this.remotePressureCooldown.push(0);
       }
@@ -359,14 +374,6 @@ export class LevelScene extends Phaser.Scene {
       const cameraTarget = this.playerAtSlot(this.coopSelfSlot) ?? this.player;
       this.cameras.main.startFollow(cameraTarget, true, 0.1, 0.1, 0, 0);
     }
-  }
-
-  // Cargas iniciales que el host siembra para cada guest (toma las suyas; no
-  // tiene el save del guest). En el guest/single devuelve ceros.
-  private seedRemoteCharges(): { healingCharges: number; powerCharges: number } {
-    if (!this.isHost) return { healingCharges: 0, powerCharges: 0 };
-    const own = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    return { healingCharges: own?.healingCharges ?? 0, powerCharges: own?.powerCharges ?? 0 };
   }
 
   private allPlayers(): Player[] {
@@ -586,9 +593,10 @@ export class LevelScene extends Phaser.Scene {
 
   private bindSceneEvents(): void {
     this.unbindResume = gameEvents.on(EVENTS.RESUME_GAME, () => {
-      // En co-op la escena nunca se pausa: "seguir jugando" desde la
-      // confirmacion de salida solo devuelve la pantalla a "playing".
+      // En co-op la escena nunca se pausa: la vuelta desde la confirmacion de
+      // salida o desde la tienda solo refresca compras y vuelve a "playing".
       if (this.coop && !this.scene.isPaused()) {
+        this.syncCoopPurchases();
         gameEvents.emit(EVENTS.SCREEN_CHANGED, "playing");
         return;
       }
@@ -601,12 +609,14 @@ export class LevelScene extends Phaser.Scene {
     });
 
     this.unbindPowerShop = gameEvents.on(EVENTS.PAUSE_FOR_POWER_SHOP, () => {
-      if (this.coop || this.levelFinished || this.scene.isPaused()) {
+      if (this.levelFinished || this.scene.isPaused()) {
         return;
       }
 
       gameEvents.emit(EVENTS.SCREEN_CHANGED, "power-shop");
-      this.scene.pause();
+      // En co-op la tienda no pausa la escena (pausar desincronizaria la sala):
+      // la partida sigue corriendo detras, como en la confirmacion de salida.
+      if (!this.coop) this.scene.pause();
     });
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
@@ -2076,20 +2086,56 @@ export class LevelScene extends Phaser.Scene {
         if (!this.isGuest || !this.levelFinished) return;
         this.restartCoopScene(message.levelId, message.roster);
       },
+      onRemoteCharges: (message) => {
+        // Solo el host administra los contadores vivos de cada guest.
+        if (!this.isHost) return;
+        const charges = this.remoteCharges[message.slot - 1];
+        if (!charges) return;
+        charges.healingCharges += Math.max(0, message.healingDelta);
+        charges.powerCharges += Math.max(0, message.powerDelta);
+      },
     });
+  }
+
+  // Vuelta de la tienda en co-op (sin pausa): tomar del save fresco solo lo que
+  // una compra cambia (ORO y cargas) sin reemplazar `this.save`, porque los
+  // stats vivos del jugador comparten referencia con `this.save.player`. Si
+  // compro un guest, el delta viaja al host que administra sus contadores.
+  private syncCoopPurchases(): void {
+    const fresh = gameSaveStore.load();
+    this.save.player.coins = fresh.player.coins;
+    this.save.characterPowerCharges = fresh.characterPowerCharges;
+    const charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
+    const healing = charges?.healingCharges ?? 0;
+    const power = charges?.powerCharges ?? 0;
+    if (this.isGuest) {
+      this.coopLink?.sendChargeDelta(
+        Math.max(0, healing - this.coopChargeBaseline.healingCharges),
+        Math.max(0, power - this.coopChargeBaseline.powerCharges),
+      );
+    }
+    this.coopChargeBaseline = { healingCharges: healing, powerCharges: power };
+    this.emitHud();
   }
 
   // Host: encadena el siguiente nivel para toda la sala reutilizando el mensaje
   // `start` (misma sala y canal); la sesion sobrevive al reinicio de escena.
+  // El roster lleva las cargas vivas de la partida para que el proximo nivel
+  // no las reinicie desde valores viejos.
   private startNextCoopLevel(nextLevelId: string): void {
-    coopSession.sendStart(nextLevelId);
-    this.restartCoopScene(
-      nextLevelId,
-      coopSession.participants.map((entry) => ({
-        slot: entry.slot,
-        characterId: entry.characterId,
-      })),
-    );
+    const ownCharges = this.getActivePowerCharges();
+    const roster: CoopStartPlayer[] = coopSession.participants.map((entry) => ({
+      slot: entry.slot,
+      characterId: entry.characterId,
+      healingCharges: entry.slot === 0
+        ? ownCharges?.healingCharges ?? 0
+        : this.remoteCharges[entry.slot - 1]?.healingCharges ?? 0,
+      powerCharges: entry.slot === 0
+        ? ownCharges?.powerCharges ?? 0
+        : this.remoteCharges[entry.slot - 1]?.powerCharges ?? 0,
+    }));
+    coopSession.sendStart(nextLevelId, roster);
+    this.restartCoopScene(nextLevelId, roster);
   }
 
   private restartCoopScene(levelId: string, roster: CoopStartPlayer[]): void {
@@ -2294,7 +2340,7 @@ export class LevelScene extends Phaser.Scene {
   private emitGuestHud(): void {
     const snap = this.coopLink?.latestSnapshot;
     const self = snap?.players[this.coopSelfSlot];
-    gameEvents.emit(EVENTS.HUD_UPDATED, {
+    const hud = {
       ...this.save.player,
       health: self?.health ?? this.save.player.health,
       maxHealth: self?.maxHealth ?? this.save.player.maxHealth,
@@ -2305,7 +2351,15 @@ export class LevelScene extends Phaser.Scene {
       timeLimit: this.level.timeLimitSeconds,
       progressPercent: this.getGuestProgressPercent(self?.x ?? this.level.playerStart.x),
       spinCooldownRemainingMs: self?.spinCdMs ?? 0,
-    });
+    };
+    // updateGuest corre a 60 Hz: emitir el HUD a React solo cuando algo visible
+    // cambio (re-render de todo el HUD por frame era un costo gratuito).
+    const key = `${hud.health}|${hud.maxHealth}|${hud.healingCharges}|${hud.powerCharges}|`
+      + `${hud.timeRemaining}|${hud.progressPercent}|${Math.ceil(hud.spinCooldownRemainingMs / 100)}|`
+      + `${hud.coins}`;
+    if (key === this.lastGuestHudKey) return;
+    this.lastGuestHudKey = key;
+    gameEvents.emit(EVENTS.HUD_UPDATED, hud);
   }
 
   private getGuestProgressPercent(x: number): number {

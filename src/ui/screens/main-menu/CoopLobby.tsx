@@ -130,12 +130,23 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
 
   const peerReady = connection === "ready";
 
+  // Cada jugador reporta sus cargas reales al entrar a la sala: el host las usa
+  // para sembrar los contadores vivos de cada slot (no inventa las suyas).
+  const buildHello = () => {
+    const charges = save.characterPowerCharges[save.selectedCharacterId];
+    return {
+      characterId: save.selectedCharacterId,
+      healingCharges: charges?.healingCharges ?? 0,
+      powerCharges: charges?.powerCharges ?? 0,
+    };
+  };
+
   const handleCreate = async () => {
     setError(null);
     setBusy(true);
     setStep("host");
     try {
-      const created = await coopSession.host({ characterId: save.selectedCharacterId });
+      const created = await coopSession.host(buildHello());
       setCode(created);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No se pudo crear la sala.");
@@ -154,7 +165,7 @@ export function CoopLobby({ save, mode, onBack, onStartLevel }: CoopLobbyProps) 
     setError(null);
     setBusy(true);
     try {
-      await coopSession.join(clean, { characterId: save.selectedCharacterId });
+      await coopSession.join(clean, buildHello());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No se pudo unir a la sala.");
     } finally {
