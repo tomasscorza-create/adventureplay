@@ -89,12 +89,11 @@
    guest llegan al host como delta (`CoopChargesMessage`). Además, el HUD del guest dejó de
    emitirse a 60 Hz hacia React: solo emite cuando cambia algo visible (rendimiento).
 11. **Retry co-op soportado:** Tras derrota, el host puede reintentar el mismo nivel reutilizando el mecanismo de encadenado. La derrota en Explorar co-op ya no pasa por `GameOverScene`, conservando la escena viva al igual que en Desafío.
-12. **Fase 4 - Optimización de red:** Se agregó telemetría de red en consola (solo DEV), se dividió el tráfico usando un canal secundario `coop-room-<CÓDIGO>-input` para evitar que los guests reciban broadcasts cruzados inútiles, y se implementó *delta encoding* genérico en `CoopSceneLink`: las secciones pesadas de los snapshots (enemigos, plataformas, etc.) pasan a ser opcionales y solo se transmiten cuando cambian, reconstruyéndose automáticamente en el receptor. Esto baja drásticamente el consumo de bytes.
+12. **Fase 4 - Optimización de red (protocolo v8):** Se agregó telemetría de red en consola (solo DEV), se dividió el tráfico usando un canal secundario `coop-room-<CÓDIGO>-input` para evitar que los guests reciban broadcasts cruzados inútiles, y se implementó *delta encoding* genérico en `CoopSceneLink`: las secciones pesadas de los snapshots (enemigos, plataformas, etc.) pasan a ser opcionales y solo se transmiten cuando cambian, reconstruyéndose automáticamente en el receptor. Esto baja drásticamente el consumo de bytes.
 
 ## Continuidad / próximos pasos sugeridos
 
-- **Fase 4 — costo y robustez:** delta-encoding de snapshots, revisar cuotas de Supabase Realtime
-  con salas de 4, reconexión ante caídas, pausa co-op acordada, expulsión por el host.
+- **Costo y robustez:** revisar cuotas de Supabase Realtime con salas de 4, reconexión ante caídas, pausa co-op acordada, expulsión por el host. (Fase 4 completada con protocolo v8).
 - **HUD del compañero:** mostrar ícono y vida de los demás jugadores en una esquina secundaria.
 - **Predicción de cliente** para el personaje del guest (reduce la latencia percibida).
 - **Estados de animación finos** de enemigos complejos en el guest.
