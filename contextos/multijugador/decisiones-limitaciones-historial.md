@@ -10,7 +10,7 @@
 | **Fin de partida compartido** | Co-op cooperativo: si uno cae o se agota el tiempo, ambos pierden; la meta se gana juntos. |
 | **Presión (Explorar) sigue al jugador más atrasado** | Con cámaras independientes, una línea atada a cámara mataría al que se queda atrás. Anclarla al más lento conserva la mecánica sin castigar la exploración. Decisión explícita del usuario. |
 | **Cargas de poder/vida no persistidas en co-op** | Evita doble contabilidad entre dos saves; el host mantiene contadores vivos para el HUD. |
-| **Co-op encadenado por el host** | Tras la victoria, `Próximo` avanza a toda la sala: el host reenvía `start` con el próximo nivel y el roster vigente, y la sesión sobrevive al reinicio de escena (`coopLink.dispose(keepSession)`); el botón del guest espera al host. Tras derrota, `Reintentar` vuelve al menú (retry co-op no soportado aún). |
+| **Co-op encadenado por el host** | Tras la victoria, `Próximo` avanza a toda la sala: el host reenvía `start` con el próximo nivel y el roster vigente, y la sesión sobrevive al reinicio de escena (`coopLink.dispose(keepSession)`); el botón del guest espera al host. Tras derrota, `Reintentar` reinicia el nivel actual con la misma lógica. |
 | **Tienda de cargas en co-op sin pausar** | La tienda abre con la partida corriendo detrás (pausar desincronizaría). La compra del host actualiza su save (= contadores vivos); la del guest viaja como **delta** `charges` al host, que suma a `remoteCharges[slot-1]`. Al volver, `syncCoopPurchases` refresca solo ORO y cargas del save fresco (no reemplaza `this.save`: los stats del jugador comparten referencia). |
 | **Cargas reales por jugador** | Cada jugador reporta sus cargas en presence al entrar; el roster del `start` las lleva (vivas al encadenar). El host nunca siembra desde su propio save — eso bloqueaba los poderes de los guests. |
 | **Modo red solo con `coop` presente** | Garantiza regresión cero: single-player de Explorar y Desafío quedan idénticos. |
@@ -88,6 +88,7 @@
    (vivas al encadenar), la tienda funciona en co-op sin pausar la escena, y las compras del
    guest llegan al host como delta (`CoopChargesMessage`). Además, el HUD del guest dejó de
    emitirse a 60 Hz hacia React: solo emite cuando cambia algo visible (rendimiento).
+11. **Retry co-op soportado:** Tras derrota, el host puede reintentar el mismo nivel reutilizando el mecanismo de encadenado. La derrota en Explorar co-op ya no pasa por `GameOverScene`, conservando la escena viva al igual que en Desafío.
 
 ## Continuidad / próximos pasos sugeridos
 

@@ -621,7 +621,9 @@ export class LevelScene extends Phaser.Scene {
 
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
       if (this.coop) {
-        gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        if (this.isHost) {
+          this.startNextCoopLevel(this.level.id);
+        }
         return;
       }
       const restartLevelId = levelDefinitions[levelId] ? levelId : this.level.id;
@@ -1909,7 +1911,12 @@ export class LevelScene extends Phaser.Scene {
     });
     if (this.isHost) this.coopLink?.finish("lost");
     this.time.delayedCall(620, () => {
-      this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id, coop: this.coop });
+      if (this.coop) {
+        this.physics.pause();
+        gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
+      } else {
+        this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+      }
     });
   }
 
@@ -2421,7 +2428,8 @@ export class LevelScene extends Phaser.Scene {
       this.allPlayers().forEach((player) => player.markDefeated());
       this.playSfx("game-over");
       this.time.delayedCall(620, () => {
-        this.scene.start("GameOverScene", { result: "defeat", restartLevelId: this.level.id });
+        this.physics.pause();
+        gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
       });
     } else {
       if (typeof slot === "number") {

@@ -4,6 +4,7 @@ import {
 } from "../../game/data/achievements";
 import type { LevelCompletionSummary } from "../../shared/types/game";
 import { AchievementIcon } from "../components/AchievementIcon";
+import { coopSession } from "../../game/systems/net/CoopSession";
 
 interface LevelSummaryScreenProps {
   summary: LevelCompletionSummary;
@@ -45,6 +46,8 @@ export function LevelSummaryScreen({ summary, onContinue }: LevelSummaryScreenPr
       : summary.theme === "ancient-trials"
         ? "Las camaras antiguas"
         : "Frontera Verde";
+
+  const isWaiting = coopSession.isActive && coopSession.role === "guest" && !isFinalLevel;
 
   return (
     <section className={`overlay level-summary level-summary--${summary.theme}`}>
@@ -132,8 +135,8 @@ export function LevelSummaryScreen({ summary, onContinue }: LevelSummaryScreenPr
                 : `LV ${summary.nextStageNumber} · ${summary.nextLevelName}`}
             </strong>
           </div>
-          <button className="level-summary__next-button" type="button" onClick={onContinue}>
-            <span>{isFinalLevel ? "Finalizar" : "Próximo"}</span>
+          <button className="level-summary__next-button" type="button" onClick={onContinue} disabled={isWaiting}>
+            <span>{isFinalLevel ? "Finalizar" : isWaiting ? "Esperando al anfitrion…" : "Próximo"}</span>
             <ResultIcon icon="arrow" />
           </button>
         </footer>

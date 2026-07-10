@@ -1726,7 +1726,9 @@ export class PuzzleScene extends Phaser.Scene {
     });
     this.unbindRestart = gameEvents.on(EVENTS.RESTART_GAME, ({ levelId }) => {
       if (this.coop) {
-        gameEvents.emit(EVENTS.GO_TO_MENU, undefined);
+        if (this.isHost) {
+          this.startNextCoopLevel(this.level.id);
+        }
         return;
       }
       if (!this.levelFinished) {

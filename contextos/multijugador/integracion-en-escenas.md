@@ -103,8 +103,7 @@ objetivos en simultáneo sin conflicto.
 
 ## Fin de partida (compartido)
 
-- **Derrota:** muerte de cualquiera o tiempo agotado → `finishWithDefeat` (marca a ambos, en
-  Explorar va a `GameOverScene`). El host transmite `end("lost")`; el guest lo refleja en
+- **Derrota:** muerte de cualquiera o tiempo agotado → `finishWithDefeat` (marca a ambos, la escena queda viva y ya no pasa por `GameOverScene`). El host transmite `end("lost")`; el guest lo refleja en
   `handleRemoteEnd`.
 - **Victoria:** llegar a la meta con objetivos cumplidos → `completeLevel`/`finalizeCompletion`.
   El host transmite `end("won")`; cada cliente hace su **propio** bookkeeping de guardado y emite
@@ -116,7 +115,7 @@ objetivos en simultáneo sin conflicto.
 - **Siguiente nivel (encadenado):** solo el host avanza con `Próximo` → `startNextCoopLevel` reenvía
   `start` con el roster vigente de `coopSession.participants` (compactado si alguien abandonó) y
   reinicia su escena con `keepCoopSessionOnShutdown = true` para no cerrar la sala; el guest recibe
-  el `start` por el hook `onStartNextLevel` del link (solo si `levelFinished`) y lo sigue.
+  el `start` por el hook `onStartNextLevel` del link (solo si `levelFinished`) y lo sigue. La UI de fin de partida desactiva los botones de avance para el guest, mostrando "Esperando al anfitrion…".
 
 ## Especificidades de Explorar (`LevelScene`)
 
