@@ -317,6 +317,9 @@ export class LevelScene extends Phaser.Scene {
     this.movingPlatforms = this.physics.add.group({ runChildUpdate: true });
     this.sinkingPlatforms = this.physics.add.group({ runChildUpdate: true });
     let movingPlatformNetId = 0;
+    
+    console.warn(`[DEBUG] LEVEL SCENE CREATED - ID: ${this.level.id}, Total platforms: ${this.level.platforms.length}`);
+    
     for (const platform of this.level.platforms) {
       if (platform.movement) {
         const movingPlatform = new MovingPlatform(this, platform, this.level.theme);
@@ -567,7 +570,12 @@ export class LevelScene extends Phaser.Scene {
     this.forEachPlayer((player, slot) => {
       this.physics.add.collider(player, this.platforms);
       this.physics.add.collider(player, this.movingPlatforms);
-      this.physics.add.collider(player, this.sinkingPlatforms);
+      this.physics.add.collider(player, this.sinkingPlatforms, (_p, platformObj) => {
+        const platform = platformObj as SinkingPlatform;
+        if (platform.body && (platform.body as Phaser.Physics.Arcade.Body).touching.up) {
+          platform.triggerSink();
+        }
+      });
       this.physics.add.overlap(player, this.coins, (_p, coin) => {
         if (fx) this.collectCoin(coin as Coin);
       });

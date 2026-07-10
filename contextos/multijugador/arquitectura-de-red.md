@@ -83,11 +83,13 @@ instancie y valide compatibilidad.
 | Código de sala | `ROOM_CODE_LENGTH = 4`, alfabeto sin caracteres ambiguos; `generateRoomCode` / `normalizeRoomCode` / `isValidRoomCode`. |
 
 **Input robusto ante pérdidas (`CoopSceneLink`):** el guest envía su input **solo al cambiar**
-(tope 30 Hz) más un keepalive espaciado (100 ms), fundiendo los flancos `justPressed` en los bits
-para que un tap táctil de un solo frame no se pierda. El host reconstruye los `justPressed` por slot
-comparando contra el consumo anterior **y** acumulando los flancos entre mensajes
-(`consumeRemoteInputFrame(slot)`), de modo que un press+release en el mismo lote de red no se
-colapse. No depende de eventos de flanco que un broadcast con pérdidas podría descartar.
+(tope 30 Hz) más un keepalive espaciado (100 ms). Los flancos `justPressed` que caen dentro de la
+ventana del throttle se acumulan localmente por acción y se consumen solo después de confirmar el
+envío; pulsaciones repetidas de la misma acción se serializan con una liberación intermedia. El host
+reconstruye los `justPressed` por slot comparando contra el consumo anterior **y** acumulando los
+flancos entre mensajes (`consumeRemoteInputFrame(slot)`), de modo que un press+release en el mismo
+lote de red no se colapse. No depende de eventos de flanco que un broadcast con pérdidas podría
+descartar.
 
 ## `LevelSnapshot` (`levelCoopMessages.ts`, Explorar)
 

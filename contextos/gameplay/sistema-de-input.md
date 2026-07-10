@@ -11,6 +11,7 @@ Esta es la fuente de la verdad para el manejo de controles de usuario en *Advent
 - `src/game/systems/input/GameplayInputSystem.ts`: Combina y procesa teclado + táctil en un frame de input unificado.
 - `src/game/systems/movement/MovementSystem.ts`: Consume el `GameplayInputFrame`.
   - **Tolerancias vitales:** Conserva pulsaciones de salto durante 120 ms (coyote time/buffer de pre-salto) y permite 100 ms de gracia al abandonar una superficie para facilitar saltos al borde.
+- `src/game/systems/net/CoopSceneLink.ts`: En co-op, acumula por acción los flancos `justPressed` que el throttle de 30 Hz todavía no pudo enviar. Los consume una sola vez al confirmar cada envío y serializa pulsaciones repetidas con una liberación intermedia.
 
 ## 3. Controles Desktop (Teclado)
 - **Movimiento:** Flecha izquierda/A, Flecha derecha/D.

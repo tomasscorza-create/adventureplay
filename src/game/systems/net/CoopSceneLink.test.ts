@@ -7,6 +7,7 @@ import {
 import { CoopSceneLink, type CoopLinkTransport } from "./CoopSceneLink";
 import {
   packInputState,
+  unpackInputState,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopInputMessage,
@@ -31,6 +32,7 @@ class FakeTransport implements CoopLinkTransport {
   readonly sentSnapshots: unknown[] = [];
   readonly sentEnds: { reason: CoopEndReason; slot?: number }[] = [];
   leaveCalls = 0;
+  throwOnInputSend = false;
 
   onInput(cb: (message: CoopInputMessage) => void): () => void {
     this.inputHandlers.add(cb);
@@ -58,6 +60,7 @@ class FakeTransport implements CoopLinkTransport {
     return () => this.startHandlers.delete(cb);
   }
   sendInput(message: CoopInputMessage): void {
+    if (this.throwOnInputSend) throw new Error("input transport failed");
     this.sentInputs.push(message);
   }
   sendSnapshot(snapshot: unknown): void {
@@ -277,6 +280,113 @@ describe("CoopSceneLink guest", () => {
     expect(transport.sentInputs).toHaveLength(2);
     expect(transport.sentInputs[0].bits).toBe(packInputState({ ...emptyGameplayInputState, jump: true }));
     expect(transport.sentInputs[1].bits).toBe(0);
+  });
+
+  it("conserva un justPressed bloqueado por el throttle hasta poder enviarlo una sola vez", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+
+    link.sendLocalInput(100, asFrame({}));
+    link.sendLocalInput(110, { ...asFrame({}), jumpJustPressed: true });
+    link.sendLocalInput(120, asFrame({}));
+    expect(transport.sentInputs).toHaveLength(1);
+
+    link.sendLocalInput(134, asFrame({}));
+    link.sendLocalInput(168, asFrame({}));
+    link.sendLocalInput(220, asFrame({}));
+
+    expect(transport.sentInputs.map((message) => message.bits)).toEqual([
+      0,
+      packInputState({ ...emptyGameplayInputState, jump: true }),
+      0,
+    ]);
+  });
+
+  it("acumula flancos de acciones distintas recibidos en varios frames bloqueados", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+
+    link.sendLocalInput(100, asFrame({ right: true }));
+    link.sendLocalInput(108, {
+      ...asFrame({ right: true }),
+      jumpJustPressed: true,
+      meleeJustPressed: true,
+    });
+    link.sendLocalInput(116, { ...asFrame({ right: true }), powerJustPressed: true });
+    link.sendLocalInput(124, asFrame({ right: true }));
+    link.sendLocalInput(132, asFrame({ right: true }));
+    expect(transport.sentInputs).toHaveLength(1);
+
+    link.sendLocalInput(134, asFrame({ right: true }));
+    link.sendLocalInput(168, asFrame({ right: true }));
+
+    expect(unpackInputState(transport.sentInputs[1].bits)).toEqual({
+      ...emptyGameplayInputState,
+      right: true,
+      jump: true,
+      melee: true,
+      power: true,
+    });
+    expect(unpackInputState(transport.sentInputs[2].bits)).toEqual({
+      ...emptyGameplayInputState,
+      right: true,
+    });
+  });
+
+  it("envia el flanco acumulado en el primer frame permitido por el limite temporal", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+
+    link.sendLocalInput(100, asFrame({}));
+    link.sendLocalInput(133, { ...asFrame({}), spinJustPressed: true });
+    expect(transport.sentInputs).toHaveLength(1);
+
+    link.sendLocalInput(134, asFrame({}));
+    expect(transport.sentInputs).toHaveLength(2);
+    expect(unpackInputState(transport.sentInputs[1].bits).spin).toBe(true);
+  });
+
+  it("serializa dos flancos de la misma accion sin colapsarlos ni duplicarlos", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+
+    link.sendLocalInput(100, asFrame({}));
+    link.sendLocalInput(108, { ...asFrame({}), jumpJustPressed: true });
+    link.sendLocalInput(116, asFrame({}));
+    link.sendLocalInput(124, { ...asFrame({}), jumpJustPressed: true });
+
+    link.sendLocalInput(134, asFrame({}));
+    link.sendLocalInput(168, asFrame({}));
+    link.sendLocalInput(202, asFrame({}));
+    link.sendLocalInput(236, asFrame({}));
+
+    expect(transport.sentInputs.map((message) => message.bits)).toEqual([
+      0,
+      packInputState({ ...emptyGameplayInputState, jump: true }),
+      0,
+      packInputState({ ...emptyGameplayInputState, jump: true }),
+      0,
+    ]);
+  });
+
+  it("conserva el flanco y la secuencia si el transporte rechaza el envio", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+
+    link.sendLocalInput(100, asFrame({}));
+    link.sendLocalInput(108, { ...asFrame({}), powerJustPressed: true });
+    transport.throwOnInputSend = true;
+    expect(() => link.sendLocalInput(134, asFrame({}))).toThrow("input transport failed");
+
+    transport.throwOnInputSend = false;
+    link.sendLocalInput(134, asFrame({}));
+
+    expect(transport.sentInputs).toHaveLength(2);
+    expect(transport.sentInputs[1]).toEqual({
+      slot: 1,
+      seq: 2,
+      bits: packInputState({ ...emptyGameplayInputState, power: true }),
+    });
   });
 
   it("no dispara nada si se llama a dispose por segunda vez", () => {

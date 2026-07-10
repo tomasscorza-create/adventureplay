@@ -700,7 +700,7 @@ export const puzzleLevelDefinitions: Record<string, PuzzleLevelDefinition> = {
     levers: [
       { id: "lever-1", x: 1830, y: 362 },
       { id: "lever-dist", x: 3250, y: 390, rangedOnly: true },
-      { id: "lever-2", x: 5100, y: 382 },
+      { id: "lever-2", x: 5160, y: 382 },
     ],
     gates: [
       { id: "gate-1", x: 1350, y: 0, width: 50, height: 640, requiredActivations: ["plate-1"] },

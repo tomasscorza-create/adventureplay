@@ -49,6 +49,14 @@ export interface CoopLinkHooks {
 
 const MIN_INPUT_INTERVAL_MS = 1000 / COOP_INPUT_RATE_HZ;
 const SNAPSHOT_INTERVAL_MS = 1000 / COOP_SNAPSHOT_RATE_HZ;
+const LOCAL_PRESS_EDGES = [
+  ["jump", "jumpJustPressed"],
+  ["melee", "meleeJustPressed"],
+  ["spin", "spinJustPressed"],
+  ["heal", "healJustPressed"],
+  ["power", "powerJustPressed"],
+  ["pause", "pauseJustPressed"],
+] as const satisfies ReadonlyArray<readonly [keyof GameplayInputState, keyof GameplayInputFrame]>;
 
 // Estado del input remoto de un slot: el ultimo sostenido, el previo (para
 // flancos) y los flancos acumulados entre consumos.
@@ -97,6 +105,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   private lastInputSentAt = 0;
   private lastInputBits = -1;
   private inputSeq = 0;
+  // Flancos locales que aun no pudieron cruzar la red por el throttle. El
+  // contador conserva incluso pulsaciones repetidas de una misma accion; si el
+  // ultimo paquete aun la tenia activa, primero se envia su liberacion y luego
+  // el siguiente flanco para que el host pueda reconstruir ambas transiciones.
+  private readonly pendingLocalPresses: Partial<Record<keyof GameplayInputState, number>> = {};
   private latest?: TSnapshot;
 
   // Host: throttling y numeracion de snapshots salientes.
@@ -215,24 +228,57 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   // estado sostenido (cola de TouchInputStore): se funden en los bits para que
   // el host siempre reciba al menos un mensaje con la accion activa.
   sendLocalInput(timeMs: number, frame: GameplayInputFrame): void {
+    for (const [action, edge] of LOCAL_PRESS_EDGES) {
+      if (frame[edge]) {
+        this.pendingLocalPresses[action] = (this.pendingLocalPresses[action] ?? 0) + 1;
+      }
+    }
+
     const effective: GameplayInputState = {
       left: frame.left,
       right: frame.right,
-      jump: frame.jump || frame.jumpJustPressed,
-      melee: frame.melee || frame.meleeJustPressed,
-      spin: frame.spin || frame.spinJustPressed,
-      heal: frame.heal || frame.healJustPressed,
-      power: frame.power || frame.powerJustPressed,
-      pause: frame.pause || frame.pauseJustPressed,
+      jump: frame.jump,
+      melee: frame.melee,
+      spin: frame.spin,
+      heal: frame.heal,
+      power: frame.power,
+      pause: frame.pause,
     };
+    const lastSent = this.lastInputBits < 0
+      ? emptyGameplayInputState
+      : unpackInputState(this.lastInputBits);
+    const deliveredPresses: Array<keyof GameplayInputState> = [];
+
+    for (const [action] of LOCAL_PRESS_EDGES) {
+      if ((this.pendingLocalPresses[action] ?? 0) <= 0) continue;
+      if (lastSent[action]) {
+        // Una pulsacion nueva necesita antes un paquete de liberacion; conservar
+        // el contador hace que el flanco se envie en la siguiente oportunidad.
+        effective[action] = false;
+      } else {
+        effective[action] = true;
+        deliveredPresses.push(action);
+      }
+    }
+
     const bits = packInputState(effective);
     const elapsed = timeMs - this.lastInputSentAt;
     const changed = bits !== this.lastInputBits;
     if (changed ? elapsed < MIN_INPUT_INTERVAL_MS : elapsed < COOP_INPUT_KEEPALIVE_MS) return;
+
+    const nextSeq = this.inputSeq + 1;
+    this.transport.sendInput({ slot: this.localSlot, seq: nextSeq, bits });
+
+    // Solo consumir flancos y avanzar el estado despues de que el transporte
+    // haya aceptado el envio; si lanza un error, la cola queda intacta.
+    for (const action of deliveredPresses) {
+      const remaining = (this.pendingLocalPresses[action] ?? 0) - 1;
+      if (remaining > 0) this.pendingLocalPresses[action] = remaining;
+      else delete this.pendingLocalPresses[action];
+    }
     this.lastInputBits = bits;
     this.lastInputSentAt = timeMs;
-    this.inputSeq += 1;
-    this.transport.sendInput({ slot: this.localSlot, seq: this.inputSeq, bits });
+    this.inputSeq = nextSeq;
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.

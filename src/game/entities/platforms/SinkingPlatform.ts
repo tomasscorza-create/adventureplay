@@ -15,6 +15,8 @@ export class SinkingPlatform extends Phaser.GameObjects.Rectangle {
   constructor(scene: Phaser.Scene, definition: PlatformDefinition, theme: LevelTheme) {
     super(scene, definition.x, definition.y, definition.width, definition.height, 0x000000, 0);
 
+    console.warn(`[DEBUG] SINKING PLATFORM INJECTED AT X:${definition.x} Y:${definition.y}`);
+
     const sinking = definition.sinking;
     if (!sinking) {
       throw new Error("SinkingPlatform requires a sinking definition");
@@ -46,13 +48,14 @@ export class SinkingPlatform extends Phaser.GameObjects.Rectangle {
       .image(definition.x + definition.width / 2, definition.y - 26, "terrain-platform-mid-a")
       .setOrigin(0.5, 0)
       .setDisplaySize(definition.width, 78)
-      .setDepth(5);
-      
+      .setDepth(5)
+      .setTintFill(0xff0000); // 100% ROJO PURO SÓLIDO para que no haya duda
+
     if (theme === "enchanted-forest") {
-      this.visual.setTint(0x79a66f);
+      this.visual.setTintFill(0xff0000); // Forzado rojo
       this.shadow.setFillStyle(0x0b2824, 0.42);
     } else if (theme === "active-volcano") {
-      this.visual.setTint(0x8f3a2b);
+      this.visual.setTintFill(0xff0000); // Forzado rojo
       this.shadow.setFillStyle(0x260909, 0.5);
     }
 
@@ -64,17 +67,20 @@ export class SinkingPlatform extends Phaser.GameObjects.Rectangle {
     body.friction.set(1, 1);
   }
 
+  triggerSink(): void {
+    if (this.sinkState === "IDLE") {
+      this.sinkState = "SINKING";
+      this.sinkDelayTimer = 100;
+    }
+  }
+
   update(_time: number, delta: number): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
     
     switch (this.sinkState) {
       case "IDLE":
-        if (body.touching.up) {
-          this.sinkState = "SINKING";
-          this.sinkDelayTimer = 100; // Un pequeñísimo delay para que el jugador sienta el impacto
-        } else {
-          body.setVelocityY(0);
-        }
+        // El estado IDLE ahora espera a ser disparado externamente vía triggerSink() por el colisionador.
+        body.setVelocityY(0);
         break;
 
       case "SINKING":
@@ -87,9 +93,6 @@ export class SinkingPlatform extends Phaser.GameObjects.Rectangle {
             this.sinkState = "RETURNING";
             // Set Y precisely
             this.y = this.initialY + this.dropDistance;
-          } else if (!body.touching.up) {
-            // Si el jugador salta a medio camino, empieza a subir inmediatamente
-            this.sinkState = "RETURNING";
           }
         }
         break;
@@ -108,6 +111,7 @@ export class SinkingPlatform extends Phaser.GameObjects.Rectangle {
         break;
     }
 
+    // ACTUALIZACIÓN VISUAL OBLIGATORIA
     const centerX = this.x + this.width / 2;
     this.visual.setPosition(centerX, this.y - 26);
     this.shadow.setPosition(centerX, this.y + this.height + 20);
