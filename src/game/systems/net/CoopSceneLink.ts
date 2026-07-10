@@ -35,6 +35,9 @@ export interface CoopLinkTransport {
   sendSnapshot(snapshot: unknown): void;
   sendEnd(reason: CoopEndReason, slot?: number): void;
   sendCharges?(message: CoopChargesMessage): void;
+  recordSnapshotKind?(keyframe: boolean): void;
+  recordInputApplied?(slot: number, latencyMs: number): void;
+  recordDesync?(): void;
   leave(): void;
 }
 
@@ -69,6 +72,7 @@ interface RemoteInputSlot {
   prevHeld: GameplayInputState;
   pressed: GameplayInputState;
   lastSeq: number;
+  receivedAtMs?: number;
 }
 
 function createRemoteInputSlot(): RemoteInputSlot {
@@ -77,6 +81,7 @@ function createRemoteInputSlot(): RemoteInputSlot {
     prevHeld: { ...emptyGameplayInputState },
     pressed: { ...emptyGameplayInputState },
     lastSeq: -1,
+    receivedAtMs: undefined,
   };
 }
 
@@ -151,6 +156,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
           const slot = this.remoteSlot(message.slot);
           if (message.seq <= slot.lastSeq) return;
           slot.lastSeq = message.seq;
+          slot.receivedAtMs = message.receivedAtMs;
           const held = unpackInputState(message.bits);
           for (const action of Object.keys(held) as Array<keyof GameplayInputState>) {
             if (held[action] && !slot.held[action]) slot.pressed[action] = true;
@@ -163,6 +169,9 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
       this.unbinds.push(
         this.transport.onSnapshot<TSnapshot>((snapshot) => {
           if (this.latest && snapshot.seq <= this.latest.seq) return;
+          if (this.latest && snapshot.seq > this.latest.seq + 1) {
+            this.transport.recordDesync?.();
+          }
           
           if (this.latest) {
             const snapAny = snapshot as Record<string, unknown>;
@@ -242,6 +251,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     };
     state.pressed = { ...emptyGameplayInputState };
     state.prevHeld = { ...held };
+    if (state.receivedAtMs !== undefined) {
+      const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+      this.transport.recordInputApplied?.(slot, Math.max(0, nowMs - state.receivedAtMs));
+      state.receivedAtMs = undefined;
+    }
     return frame;
   }
 
@@ -319,6 +333,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     const isKeyframe = this.forceFullSnapshot
       || this.snapshotSeq % COOP_SNAPSHOT_RATE_HZ === 0;
     this.forceFullSnapshot = false;
+    this.transport.recordSnapshotKind?.(isKeyframe);
     
     for (const key of Object.keys(snap)) {
       if (OPTIONAL_SECTIONS.has(key)) {

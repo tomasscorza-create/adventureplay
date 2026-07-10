@@ -28,7 +28,8 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 //     las compras del guest viajan como delta `charges` hacia el host.
 // v8: canal de input separado y snapshots con delta en arrays (secciones opcionales).
 // v9: reserva temporal de identidad/slot y recuperacion por snapshot completo.
-export const COOP_PROTOCOL_VERSION = 9;
+// v10: envelope comun con identidad/rol, validacion defensiva y rate limiting.
+export const COOP_PROTOCOL_VERSION = 10;
 
 // Tiempo durante el cual una ausencia de presence en partida se considera una
 // desconexion recuperable. Al vencer, la salida se vuelve definitiva.
@@ -75,6 +76,12 @@ export interface CoopPresenceEntry {
   powerCharges: number;
 }
 
+function normalizeNetworkCharge(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : 0;
+}
+
 export function collectPeerPresences(
   state: Record<string, Array<Record<string, unknown>>>,
   selfKey: string,
@@ -90,8 +97,8 @@ export function collectPeerPresences(
         role,
         characterId: typeof entry.characterId === "string" ? entry.characterId : "",
         protocol: typeof entry.protocol === "number" ? entry.protocol : 1,
-        healingCharges: typeof entry.healingCharges === "number" ? entry.healingCharges : 0,
-        powerCharges: typeof entry.powerCharges === "number" ? entry.powerCharges : 0,
+        healingCharges: normalizeNetworkCharge(entry.healingCharges),
+        powerCharges: normalizeNetworkCharge(entry.powerCharges),
       });
     }
   }
@@ -176,6 +183,8 @@ export interface CoopInputMessage {
   slot: number;
   seq: number;
   bits: number;
+  // Solo se agrega al recibir en el host; nunca se confia ni se envia desde el guest.
+  receivedAtMs?: number;
 }
 
 export function packInputState(state: GameplayInputState): number {

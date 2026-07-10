@@ -1720,6 +1720,9 @@ export class PuzzleScene extends Phaser.Scene {
     });
     this.unbindPowerShop = gameEvents.on(EVENTS.PAUSE_FOR_POWER_SHOP, () => {
       if (this.levelFinished || this.scene.isPaused()) return;
+      // Las compras del guest no pueden verificarse desde Broadcast; hasta que
+      // exista una RPC autoritativa, la tienda co-op queda limitada al host.
+      if (this.isGuest) return;
       gameEvents.emit(EVENTS.SCREEN_CHANGED, "power-shop");
       // En co-op la tienda no pausa la escena (pausar desincronizaria la sala):
       // la partida sigue corriendo detras, como en la confirmacion de salida.

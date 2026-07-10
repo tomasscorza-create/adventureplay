@@ -20,6 +20,13 @@ import {
   type CoopStartMessage,
   type CoopStartPlayer,
 } from "./coopMessages";
+import {
+  CoopSecurityGuard,
+  createWireEnvelope,
+  type CoopSecurityDecision,
+  type CoopWireEnvelope,
+} from "./coopSecurity";
+import { CoopDiagnostics, type CoopDiagnosticsSnapshot } from "./CoopDiagnostics";
 
 export type CoopConnectionState =
   | "idle"
@@ -67,14 +74,10 @@ function generateClientKey(): string {
 // Usa dos canales de Supabase Realtime por codigo de sala: principal (broadcast + presence)
 // e input (para evitar trafico innecesario a los guests), sin tablas ni RLS.
 class CoopSession {
+  private readonly security = new CoopSecurityGuard();
+  private readonly diagnostics = new CoopDiagnostics(() => this.nowMs());
   private channel: RealtimeChannel | null = null;
   private inputChannel: RealtimeChannel | null = null;
-  public networkStats = {
-    sent: { count: 0, bytes: 0 },
-    received: { count: 0, bytes: 0 },
-    events: {} as Record<string, { sentCount: number; sentBytes: number; recvCount: number; recvBytes: number }>,
-  };
-  private statsInterval = 0;
   private _role: CoopRole | null = null;
   private _code = "";
   private _connectionState: CoopConnectionState = "idle";
@@ -161,21 +164,55 @@ class CoopSession {
     return code;
   }
 
-  private trackStat(type: "sent" | "received", event: string, payload: unknown) {
-    if (!import.meta.env.DEV) return;
-    const bytes = JSON.stringify(payload).length;
-    this.networkStats[type].count++;
-    this.networkStats[type].bytes += bytes;
-    if (!this.networkStats.events[event]) {
-      this.networkStats.events[event] = { sentCount: 0, sentBytes: 0, recvCount: 0, recvBytes: 0 };
-    }
-    if (type === "sent") {
-      this.networkStats.events[event].sentCount++;
-      this.networkStats.events[event].sentBytes += bytes;
-    } else {
-      this.networkStats.events[event].recvCount++;
-      this.networkStats.events[event].recvBytes += bytes;
-    }
+  private trackStat(type: "sent" | "received", event: string, payload: unknown, slot?: number) {
+    this.diagnostics.record(type, event, payload, slot);
+  }
+
+  private nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+  }
+
+  setDiagnosticsEnabled(enabled: boolean): void {
+    this.diagnostics.setEnabled(enabled);
+  }
+
+  diagnosticsSnapshot(): CoopDiagnosticsSnapshot {
+    return this.diagnostics.snapshot(this.security.metrics());
+  }
+
+  recordSnapshotKind(keyframe: boolean): void {
+    this.diagnostics.recordSnapshot(keyframe);
+  }
+
+  recordInputApplied(_slot: number, latencyMs: number): void {
+    this.diagnostics.recordInputApplied(latencyMs);
+  }
+
+  recordDesync(): void {
+    this.diagnostics.recordDesync();
+  }
+
+  private handleSecurityReject(
+    decision: CoopSecurityDecision<unknown>,
+    sender?: CoopParticipant,
+  ): void {
+    if (!decision.disconnectRecommended || this._role !== "host" || !sender
+      || sender.role !== "guest") return;
+    this.blockParticipant(sender);
+  }
+
+  private blockParticipant(participant: CoopParticipant): void {
+    if (!this.authorizedParticipants.has(participant.key)) return;
+    this.clearReconnectTimer(participant.key);
+    this.disconnectedParticipantKeys.delete(participant.key);
+    this.authorizedParticipants.delete(participant.key);
+    this.authorizedParticipantKeys?.delete(participant.key);
+    this._participants = [...this.authorizedParticipants.values()]
+      .sort((a, b) => a.slot - b.slot);
+    this.emitRosterIfChanged();
+    this.security.noteBlockedParticipant();
+    this.callbacks.participantReconnectExpired.forEach((cb) => cb(participant.slot));
+    this.sendEnd("left", participant.slot);
   }
 
   async join(rawCode: string, hello: CoopHello): Promise<void> {
@@ -201,6 +238,7 @@ class CoopSession {
     this._localSlot = role === "host" ? HOST_SLOT : HOST_SLOT + 1;
     this._participants = [];
     this.setConnectionState("connecting");
+    this.configureDiagnostics();
 
     const channel = supabase.channel(`coop-room-${code}`, {
       config: {
@@ -215,47 +253,100 @@ class CoopSession {
     });
     this.inputChannel = inputChannel;
 
-    this.networkStats = { sent: { count: 0, bytes: 0 }, received: { count: 0, bytes: 0 }, events: {} };
-    if (import.meta.env.DEV) {
-      this.statsInterval = window.setInterval(() => {
-        console.log("📊 Network Stats (30s):", this.networkStats);
-      }, 30000);
-    }
-
     channel.on("broadcast", { event: COOP_EVENTS.hello }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.hello, payload);
-      this.peerHello = payload as CoopHello;
+      const parsed = this.security.parseEnvelope(payload, this._participants, 2048, this.nowMs(), true);
+      if (!parsed.accepted) return;
+      const hello = parsed.value!.envelope.payload;
+      if (typeof hello !== "object" || hello === null
+        || typeof (hello as CoopHello).characterId !== "string") return;
+      this.peerHello = hello as CoopHello;
       this.emitPeerJoined();
     });
     
     if (role === "host") {
       inputChannel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
-        this.trackStat("received", COOP_EVENTS.input, payload);
-        const message = payload as CoopInputMessage;
-        if (!this.acceptsActiveSlot(message.slot)) return;
-        this.callbacks.input.forEach((cb) => cb(message));
+        const nowMs = this.nowMs();
+        const parsed = this.security.parseEnvelope(payload, this._participants, 512, nowMs);
+        if (!parsed.accepted || !parsed.value?.sender) {
+          this.handleSecurityReject(parsed, parsed.value?.sender);
+          return;
+        }
+        const decision = this.security.validateInput(
+          parsed.value.envelope.payload,
+          parsed.value.sender,
+          nowMs,
+        );
+        if (!decision.accepted || !decision.value
+          || !this.acceptsActiveSlot(decision.value.slot)) {
+          this.handleSecurityReject(decision, parsed.value.sender);
+          return;
+        }
+        this.trackStat("received", COOP_EVENTS.input, payload, decision.value.slot);
+        const receivedMessage = { ...decision.value, receivedAtMs: nowMs };
+        this.callbacks.input.forEach((cb) => cb(receivedMessage));
       });
     }
 
     channel.on("broadcast", { event: COOP_EVENTS.snapshot }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.snapshot, payload);
-      this.callbacks.snapshot.forEach((cb) => cb(payload));
+      if (this._role !== "guest") return;
+      const nowMs = this.nowMs();
+      const parsed = this.security.parseEnvelope(payload, this._participants, 512 * 1024, nowMs);
+      if (!parsed.accepted || !parsed.value?.sender) return;
+      const decision = this.security.validateSnapshot(
+        parsed.value.envelope.payload,
+        parsed.value.sender,
+        nowMs,
+      );
+      if (!decision.accepted) return;
+      this.callbacks.snapshot.forEach((cb) => cb(decision.value));
     });
     channel.on("broadcast", { event: COOP_EVENTS.start }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.start, payload);
+      if (this._role !== "guest") return;
+      const nowMs = this.nowMs();
+      const parsed = this.security.parseEnvelope(payload, this._participants, 16 * 1024, nowMs);
+      if (!parsed.accepted || !parsed.value?.sender) return;
+      const decision = this.security.validateStart(
+        parsed.value.envelope.payload,
+        parsed.value.sender,
+        nowMs,
+      );
+      if (!decision.accepted || !decision.value) return;
       this._connectionState = "in-game";
       this.authorizeCurrentParticipants();
-      this.callbacks.start.forEach((cb) => cb(payload as CoopStartMessage));
+      this.callbacks.start.forEach((cb) => cb(decision.value!));
     });
     channel.on("broadcast", { event: COOP_EVENTS.end }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.end, payload);
-      this.callbacks.end.forEach((cb) => cb(payload as CoopEndMessage));
+      const nowMs = this.nowMs();
+      const parsed = this.security.parseEnvelope(payload, this._participants, 2048, nowMs);
+      if (!parsed.accepted || !parsed.value?.sender) return;
+      const decision = this.security.validateEnd(
+        parsed.value.envelope.payload,
+        parsed.value.sender,
+        nowMs,
+      );
+      if (!decision.accepted || !decision.value) return;
+      this.callbacks.end.forEach((cb) => cb(decision.value!));
     });
     channel.on("broadcast", { event: COOP_EVENTS.charges }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.charges, payload);
-      const message = payload as CoopChargesMessage;
-      if (!this.acceptsActiveSlot(message.slot)) return;
-      this.callbacks.charges.forEach((cb) => cb(message));
+      if (this._role !== "host") return;
+      const nowMs = this.nowMs();
+      const parsed = this.security.parseEnvelope(payload, this._participants, 512, nowMs);
+      if (!parsed.accepted || !parsed.value?.sender) return;
+      const decision = this.security.validateCharges(
+        parsed.value.envelope.payload,
+        parsed.value.sender,
+        nowMs,
+      );
+      if (!decision.accepted) {
+        this.handleSecurityReject(decision, parsed.value.sender);
+        return;
+      }
+      this.callbacks.charges.forEach((cb) => cb(decision.value!));
     });
 
     channel.on("presence", { event: "sync" }, () => this.syncPresence());
@@ -316,6 +407,21 @@ class CoopSession {
     });
   }
 
+  private configureDiagnostics(): void {
+    const storageEnabled = typeof localStorage !== "undefined"
+      && localStorage.getItem("cd") === "1";
+    this.setDiagnosticsEnabled(storageEnabled);
+    if (typeof window === "undefined") return;
+    const diagnosticWindow = window as Window & {
+      __COOP_DIAG__?: () => CoopDiagnosticsSnapshot;
+    };
+    if (this.diagnostics.enabled) {
+      diagnosticWindow.__COOP_DIAG__ = () => this.diagnosticsSnapshot();
+    } else {
+      delete diagnosticWindow.__COOP_DIAG__;
+    }
+  }
+
   private beginLocalReconnect(): void {
     if (this._connectionState !== "in-game" && this._connectionState !== "ready"
       && this._connectionState !== "reconnecting") return;
@@ -326,6 +432,7 @@ class CoopSession {
     if (this.localReconnectTimer) return;
     this.localReconnectTimer = window.setTimeout(() => {
       this.localReconnectTimer = 0;
+      this.diagnostics.recordReconnect(false);
       this.callbacks.sessionError.forEach((cb) => cb("No se pudo recuperar la conexion cooperativa."));
       this.callbacks.participantReconnectExpired.forEach((cb) => cb(this._localSlot));
       this.leave();
@@ -336,6 +443,7 @@ class CoopSession {
   private finishLocalReconnect(): void {
     if (this.localReconnectTimer) window.clearTimeout(this.localReconnectTimer);
     this.localReconnectTimer = 0;
+    this.diagnostics.recordReconnect(true);
     this.setConnectionState(this.reconnectStateBeforeDrop);
   }
 
@@ -389,6 +497,7 @@ class CoopSession {
         if (liveKeys.has(key)) {
           if (this.disconnectedParticipantKeys.delete(key)) {
             this.clearReconnectTimer(key);
+            this.diagnostics.recordReconnect(true);
             this.callbacks.participantRejoined.forEach((cb) => cb(reserved.slot));
           }
         } else if (!this.disconnectedParticipantKeys.has(key)) {
@@ -451,6 +560,7 @@ class CoopSession {
     if (!this.disconnectedParticipantKeys.delete(key)) return;
     const participant = this.authorizedParticipants.get(key);
     if (!participant) return;
+    this.diagnostics.recordReconnect(false);
     this.authorizedParticipants.delete(key);
     this.authorizedParticipantKeys?.delete(key);
     this._participants = [...this.authorizedParticipants.values()]
@@ -484,18 +594,27 @@ class CoopSession {
   }
 
   sendInput(message: CoopInputMessage): void {
-    if (!this.inputChannel) return;
-    this.trackStat("sent", COOP_EVENTS.input, message);
-    void this.inputChannel.send({ type: "broadcast", event: COOP_EVENTS.input, payload: message });
+    if (!this.inputChannel || this._role !== "guest") return;
+    const safeMessage: CoopInputMessage = {
+      slot: this._localSlot,
+      seq: message.seq,
+      bits: message.bits,
+    };
+    const envelope = this.wireEnvelope(safeMessage);
+    if (!envelope) return;
+    this.trackStat("sent", COOP_EVENTS.input, envelope, safeMessage.slot);
+    void this.inputChannel.send({ type: "broadcast", event: COOP_EVENTS.input, payload: envelope });
   }
 
   sendSnapshot(snapshot: unknown): void {
+    if (this._role !== "host") return;
     this.broadcast(COOP_EVENTS.snapshot, snapshot);
   }
 
   // `rosterOverride` permite al host encadenar niveles con las cargas vivas de
   // la partida (los valores de presence quedan viejos una vez que se gasto).
   sendStart(levelId: string, rosterOverride?: CoopStartPlayer[]): void {
+    if (this._role !== "host") return;
     this._connectionState = "in-game";
     this.authorizeCurrentParticipants();
     const roster: CoopStartPlayer[] = rosterOverride ?? this._participants
@@ -517,17 +636,28 @@ class CoopSession {
   }
 
   sendEnd(reason: CoopEndReason, slot?: number): void {
-    this.broadcast(COOP_EVENTS.end, { reason, slot } satisfies CoopEndMessage);
+    if (!this._role) return;
+    if (this._role === "guest" && reason !== "left") return;
+    const safeSlot = this._role === "guest" ? this._localSlot : slot;
+    this.broadcast(COOP_EVENTS.end, { reason, slot: safeSlot } satisfies CoopEndMessage);
   }
 
   sendCharges(message: CoopChargesMessage): void {
-    this.broadcast(COOP_EVENTS.charges, message);
+    if (this._role !== "guest") return;
+    this.broadcast(COOP_EVENTS.charges, { ...message, slot: this._localSlot });
   }
 
   private broadcast(event: string, payload: unknown): void {
     if (!this.channel) return;
-    this.trackStat("sent", event, payload);
-    void this.channel.send({ type: "broadcast", event, payload });
+    const envelope = this.wireEnvelope(payload);
+    if (!envelope) return;
+    this.trackStat("sent", event, envelope);
+    void this.channel.send({ type: "broadcast", event, payload: envelope });
+  }
+
+  private wireEnvelope(payload: unknown): CoopWireEnvelope | null {
+    if (!this._role || !this.clientKey) return null;
+    return createWireEnvelope(this.clientKey, this._role, payload);
   }
 
   leave(): void {
@@ -536,10 +666,6 @@ class CoopSession {
       this.localReconnectTimer = 0;
     }
     for (const key of this.reconnectTimers.keys()) this.clearReconnectTimer(key);
-    if (this.statsInterval) {
-      window.clearInterval(this.statsInterval);
-      this.statsInterval = 0;
-    }
     if (this.channel) {
       void this.channel.unsubscribe();
       supabase?.removeChannel(this.channel);

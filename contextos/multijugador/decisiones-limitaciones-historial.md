@@ -91,6 +91,11 @@
 11. **Retry co-op soportado:** Tras derrota, el host puede reintentar el mismo nivel reutilizando el mecanismo de encadenado. La derrota en Explorar co-op ya no pasa por `GameOverScene`, conservando la escena viva al igual que en Desafío.
 12. **Fase 4 - Optimización de red (protocolo v8):** Se agregó telemetría de red en consola (solo DEV), se dividió el tráfico usando un canal secundario `coop-room-<CÓDIGO>-input` para evitar que los guests reciban broadcasts cruzados inútiles, y se implementó *delta encoding* genérico en `CoopSceneLink`: las secciones pesadas de los snapshots (enemigos, plataformas, etc.) pasan a ser opcionales y solo se transmiten cuando cambian, reconstruyéndose automáticamente en el receptor. Esto baja drásticamente el consumo de bytes.
 13. **Fase 5 - Reconexión automática (protocolo v9):** reserva de identidad y slot por 10 segundos, estado `reconnecting`, neutralización del input remoto, entidad suspendida sin destruir estado, reactivación en el mismo slot, keyframe completo forzado y repetición del resultado si la partida terminó durante la ausencia. No incluye migración de host.
+14. **Fase 7A/7B - Endurecimiento (protocolo v10):** envelope común y validación de versión,
+    emisor, rol, slot, secuencia, rangos, tamaño y rate; autoridad explícita para mensajes de
+    control; compras guest bloqueadas hasta disponer de RPC autoritativa; diagnóstico opt-in sin
+    payloads sensibles y suite multicliente ampliada. La migración de host quedó deliberadamente
+    sin implementar: Presence/Broadcast no aporta elección atómica, lease ni fencing token.
 
 ## Continuidad / próximos pasos sugeridos
 

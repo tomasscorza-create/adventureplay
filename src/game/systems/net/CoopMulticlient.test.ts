@@ -285,6 +285,22 @@ describe("ciclo de partida multicliente", () => {
     }
     expect(game.host.nextLevels).toEqual([]);
   });
+
+  it("no ejecuta poderes sin cargas y permite reintentar el mismo nivel", () => {
+    const game = new SimulatedCoopGame(4);
+    game.players[1].powerCharges = 0;
+    game.step(50, {
+      "guest-1": inputFrame({ powerJustPressed: true }),
+      "guest-2": inputFrame({ meleeJustPressed: true, powerJustPressed: true }),
+      "guest-3": inputFrame({ meleeJustPressed: true, powerJustPressed: true }),
+    });
+    expect(game.players[1]).toMatchObject({ powers: 0, powerCharges: 0 });
+    expect(game.players[2]).toMatchObject({ attacks: 1, powers: 1, powerCharges: 1 });
+    expect(game.players[3]).toMatchObject({ attacks: 1, powers: 1, powerCharges: 1 });
+
+    const retry = game.changeLevel("level-1");
+    for (const guest of game.runtimes.slice(1)) expect(guest.nextLevels).toEqual([retry]);
+  });
 });
 
 describe("reconexion automatica con host estable", () => {
@@ -328,7 +344,7 @@ describe("reconexion automatica con host estable", () => {
 
     game.room.disconnect(reconnecting.client.id);
     game.room.flush();
-    expect(() => game.room.reconnect(reconnecting.client.id, 8)).toThrow(
+    expect(() => game.room.reconnect(reconnecting.client.id, 9)).toThrow(
       "Las versiones del juego no coinciden.",
     );
     expect(game.host.rejoinedSlots).toEqual([]);
@@ -355,6 +371,23 @@ describe("reconexion automatica con host estable", () => {
 });
 
 describe("condiciones adversas de red", () => {
+  it("tolera jitter diferente mientras tres guests envian a la vez", () => {
+    const game = new SimulatedCoopGame(4);
+    game.room.delayNext("input", 45);
+    game.room.delayNext("input", 10);
+    game.room.delayNext("input", 70);
+    game.runtimes.slice(1).forEach((runtime) => {
+      runtime.link.sendLocalInput(50, inputFrame({ right: true, meleeJustPressed: true }));
+    });
+
+    game.room.advanceTo(30);
+    expect(game.host.link.consumeRemoteInputFrame(2).right).toBe(true);
+    expect(game.host.link.consumeRemoteInputFrame(1).right).toBe(false);
+    game.room.advanceTo(45);
+    expect(game.host.link.consumeRemoteInputFrame(1).meleeJustPressed).toBe(true);
+    game.room.advanceTo(70);
+    expect(game.host.link.consumeRemoteInputFrame(3).meleeJustPressed).toBe(true);
+  });
   it("descarta snapshots retrasados que llegan despues de uno mas nuevo", () => {
     const game = new SimulatedCoopGame(2);
     game.room.delayNext("snapshot", 100);

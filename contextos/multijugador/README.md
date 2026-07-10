@@ -7,7 +7,7 @@ valores y nombres exactos del código fuente.
 > **Estado (actualizado):** co-op online **funcional** de **2 a 4 jugadores** en los dos modos
 > jugables: **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Host-autoritativo sobre
 > Supabase Realtime, cámara independiente por dispositivo, fin de partida compartido. Protocolo
-> **v9** con reconexión automática de 10 segundos, canal de input separado y delta encoding, modelo de slots (`COOP_MAX_PLAYERS = 4`), niveles encadenados por el host, manejo de
+> **v10** con validación defensiva, diagnóstico opt-in, reconexión automática de 10 segundos, canal de input separado y delta encoding, modelo de slots (`COOP_MAX_PLAYERS = 4`), niveles encadenados por el host, manejo de
 > salidas individuales, cargas reales por jugador y tienda funcional en co-op. Ver historial en
 > `decisiones-limitaciones-historial.md`.
 
@@ -19,6 +19,7 @@ valores y nombres exactos del código fuente.
 | `integracion-en-escenas.md` | Cómo `PuzzleScene` y `LevelScene` implementan el co-op: jugadores, snapshots, interpolación, colisiones, fin compartido. Tabla de qué se sincroniza por modo. |
 | `decisiones-limitaciones-historial.md` | Decisiones de diseño y su porqué (cámara, presión, fate), limitaciones conocidas, evolución y continuidad. |
 | `pruebas-multicliente.md` | Harness determinista de 2–4 clientes, fallos de red simulados y línea base de tráfico. |
+| `endurecimiento-produccion.md` | Seguridad de protocolo v10, diagnóstico, pruebas y bloqueo/diseño seguro de migración de host. |
 
 ## Resumen ejecutivo (30 segundos)
 

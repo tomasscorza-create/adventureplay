@@ -73,7 +73,7 @@ describe("coopMessages room codes", () => {
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(9);
+    expect(COOP_PROTOCOL_VERSION).toBe(10);
     expect(COOP_RECONNECT_WINDOW_MS).toBe(10_000);
   });
 

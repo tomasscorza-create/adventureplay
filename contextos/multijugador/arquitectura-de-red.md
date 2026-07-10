@@ -66,7 +66,7 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `9`. Subirla ante cualquier cambio incompatible de mensajes/presencia (v9: reserva temporal de identidad/slot y recuperación por snapshot completo). |
+| `COOP_PROTOCOL_VERSION` | `10`. Envelope validado, guardas de autoridad/rate/slot y diagnóstico opt-in; conserva la reconexión v9. |
 | `COOP_RECONNECT_WINDOW_MS` | `10000`. Ventana para recuperar el mismo slot antes de convertir la ausencia en salida definitiva. |
 | `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
@@ -141,7 +141,7 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 - Presence conserva una identidad estable mientras vive `CoopSession`; una resuscripción reutiliza esa identidad.
 - Al desaparecer un participante durante la partida, su slot queda reservado 10 segundos. Ningún late join puede ocuparlo.
 - El host neutraliza inmediatamente el último input remoto para evitar movimiento atascado y las escenas ocultan/congelan la entidad sin destruir su vida, cargas ni posición.
-- Si vuelve con protocolo v9 dentro de la ventana, se reactiva la misma entidad y el host fuerza el siguiente snapshot como keyframe completo.
+- Si vuelve con protocolo v10 dentro de la ventana, se reactiva la misma entidad y el host fuerza el siguiente snapshot como keyframe completo.
 - Si la partida terminó durante la ausencia, el host repite `end("won" | "lost")` al detectar el regreso.
 - Si vence la ventana, se emite la salida definitiva, se elimina la reserva y el host rechaza inputs posteriores de ese slot.
 - No hay migración de host. Un refresh completo de página tampoco recupera la escena: esta fase cubre cortes transitorios mientras la sesión y la escena siguen vivas.

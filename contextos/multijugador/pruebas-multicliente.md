@@ -36,13 +36,13 @@ manteniendo movimiento y un snapshot simple con cuatro estados de jugador.
 | Frecuencia de input por guest | 9,4 Hz |
 | Publicaciones | 459 |
 | Entregas después de fan-out | 813 |
-| Bytes JSON publicados | ~71.244 B |
-| Bytes JSON entregados | ~197.994 B |
+| Bytes JSON publicados | ~102.207 B |
+| Bytes JSON entregados | ~251.967 B |
 | Snapshots publicados / entregados | 177 / 531 |
 | Inputs publicados | 282 |
 
-Los bytes miden únicamente `JSON.stringify(payload)` en UTF-8. No incluyen envelopes de
-Supabase, WebSocket, TLS ni headers; sirven como presupuesto comparativo y detector de regresiones,
+Los bytes miden el envelope v10 y payload mediante `JSON.stringify` en UTF-8. No incluyen el envelope
+de Supabase, WebSocket, TLS ni headers; sirven como presupuesto comparativo y detector de regresiones,
 no como estimación de facturación exacta.
 
 El límite configurado es 20 Hz, pero con frames de 16,67 ms y el throttle actual basado en

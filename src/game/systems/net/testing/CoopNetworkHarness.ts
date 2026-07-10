@@ -1,6 +1,7 @@
 import type { CoopSessionInfo } from "../../../events/EventBus";
 import type { GameplayInputFrame } from "../../../../shared/types/input";
 import type { CoopLinkTransport } from "../CoopSceneLink";
+import { createWireEnvelope } from "../coopSecurity";
 import {
   assignSlots,
   COOP_MAX_PLAYERS,
@@ -269,7 +270,11 @@ export class SimulatedRoom {
     payload: unknown,
     targets: string[],
   ): void {
-    const bytes = payloadBytes(payload);
+    const sender = this.members.get(from);
+    const measuredPayload = sender
+      ? createWireEnvelope(sender.id, sender.role, payload)
+      : payload;
+    const bytes = payloadBytes(measuredPayload);
     const stats = this.eventTraffic(event);
     stats.publications += 1;
     stats.bytesPublished += bytes;
