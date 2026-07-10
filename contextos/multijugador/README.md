@@ -18,6 +18,7 @@ valores y nombres exactos del código fuente.
 | `arquitectura-de-red.md` | Transporte (Supabase Realtime), `CoopSession`, mensajes, modelo host-autoritativo, mapa de archivos. |
 | `integracion-en-escenas.md` | Cómo `PuzzleScene` y `LevelScene` implementan el co-op: jugadores, snapshots, interpolación, colisiones, fin compartido. Tabla de qué se sincroniza por modo. |
 | `decisiones-limitaciones-historial.md` | Decisiones de diseño y su porqué (cámara, presión, fate), limitaciones conocidas, evolución y continuidad. |
+| `pruebas-multicliente.md` | Harness determinista de 2–4 clientes, fallos de red simulados y línea base de tráfico. |
 
 ## Resumen ejecutivo (30 segundos)
 
@@ -53,4 +54,5 @@ en local, ambos contra la misma instancia).
 
 ## Verificación de código
 
-`npm run check` (lint + tipos + tests + auditorías + build) debe pasar antes de entregar.
+- `npm run test:coop`: protocolo, link y simulación multicliente con reporte de tráfico.
+- `npm run check`: lint + tipos + suite completa + auditorías + build; debe pasar antes de entregar.

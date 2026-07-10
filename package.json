@@ -9,6 +9,7 @@
     "lint": "eslint src scripts vite.config.ts eslint.config.js --max-warnings 0",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:coop": "vitest run src/game/systems/net/coopMessages.test.ts src/game/systems/net/CoopSceneLink.test.ts src/game/systems/net/CoopMulticlient.test.ts --reporter=verbose",
     "test:watch": "vitest",
     "audit:achievements": "node --experimental-strip-types scripts/audit-achievements.mjs",
     "audit:levels": "node --experimental-strip-types scripts/audit-levels.mjs",
