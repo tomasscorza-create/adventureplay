@@ -27,7 +27,12 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 // v7: cada jugador reporta sus cargas reales (presence + roster del start) y
 //     las compras del guest viajan como delta `charges` hacia el host.
 // v8: canal de input separado y snapshots con delta en arrays (secciones opcionales).
-export const COOP_PROTOCOL_VERSION = 8;
+// v9: reserva temporal de identidad/slot y recuperacion por snapshot completo.
+export const COOP_PROTOCOL_VERSION = 9;
+
+// Tiempo durante el cual una ausencia de presence en partida se considera una
+// desconexion recuperable. Al vencer, la salida se vuelve definitiva.
+export const COOP_RECONNECT_WINDOW_MS = 10_000;
 
 export type CoopRole = "host" | "guest";
 

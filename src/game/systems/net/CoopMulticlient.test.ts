@@ -21,6 +21,7 @@ interface SimulatedWorldSnapshot {
   seq: number;
   levelId: string;
   players: SimulatedPlayerState[];
+  enemies?: Array<[number, number, number]>;
   won: boolean;
   lost: boolean;
 }
@@ -30,6 +31,8 @@ interface ClientRuntime {
   link: CoopSceneLink<SimulatedWorldSnapshot>;
   ends: Array<{ reason: CoopEndReason; slot?: number }>;
   departedSlots: number[];
+  rejoinedSlots: number[];
+  expiredSlots: number[];
   nextLevels: CoopStartMessage[];
 }
 
@@ -70,6 +73,8 @@ class SimulatedCoopGame {
     this.runtimes = clients.map((client) => {
       const ends: ClientRuntime["ends"] = [];
       const departedSlots: number[] = [];
+      const rejoinedSlots: number[] = [];
+      const expiredSlots: number[] = [];
       const nextLevels: CoopStartMessage[] = [];
       const link = new CoopSceneLink<SimulatedWorldSnapshot>(
         client.sessionInfo(roster),
@@ -79,9 +84,19 @@ class SimulatedCoopGame {
         onRemoteEnd: (reason, slot) => ends.push({ reason, slot }),
         onPeerLeft: () => ends.push({ reason: "left" }),
         onParticipantLeft: (slot) => departedSlots.push(slot),
+        onParticipantRejoined: (slot) => rejoinedSlots.push(slot),
+        onParticipantReconnectExpired: (slot) => expiredSlots.push(slot),
         onStartNextLevel: (message) => nextLevels.push(message),
       });
-      return { client, link, ends, departedSlots, nextLevels };
+      return {
+        client,
+        link,
+        ends,
+        departedSlots,
+        rejoinedSlots,
+        expiredSlots,
+        nextLevels,
+      };
     });
   }
 
@@ -146,6 +161,7 @@ class SimulatedCoopGame {
       seq,
       levelId: this.levelId,
       players: structuredClone(this.players),
+      enemies: [[1, 320, 180]],
       won: this.won,
       lost: this.lost,
     };
@@ -268,6 +284,73 @@ describe("ciclo de partida multicliente", () => {
       expect(guest.nextLevels).toEqual([message]);
     }
     expect(game.host.nextLevels).toEqual([]);
+  });
+});
+
+describe("reconexion automatica con host estable", () => {
+  it("reserva el slot y restaura estado con un snapshot completo", () => {
+    const game = new SimulatedCoopGame(4);
+    const reconnecting = game.guest(0);
+    const originalSlot = reconnecting.client.slot;
+
+    game.step(50, {
+      "guest-1": inputFrame({ right: true, meleeJustPressed: true, powerJustPressed: true }),
+    });
+    expect(game.players[originalSlot]).toMatchObject({ x: 1, attacks: 1, powers: 1 });
+    expect(reconnecting.link.latestSnapshot?.seq).toBe(1);
+
+    game.room.disconnect(reconnecting.client.id);
+    game.room.flush();
+    expect(game.host.departedSlots).toEqual([originalSlot]);
+    expect(() => game.room.join("intruder", "guest", { characterId: "faust" })).toThrow(
+      "La sala esta llena.",
+    );
+
+    game.step(100, { host: inputFrame({ right: true }) });
+    expect(reconnecting.link.latestSnapshot?.seq).toBe(1);
+
+    game.room.reconnect(reconnecting.client.id);
+    game.room.flush();
+    expect(reconnecting.client.slot).toBe(originalSlot);
+    expect(game.host.rejoinedSlots).toEqual([originalSlot]);
+
+    game.step(150, { "guest-1": inputFrame({ right: true }) });
+    expect(reconnecting.link.latestSnapshot?.seq).toBe(3);
+    expect(reconnecting.link.latestSnapshot?.players).toEqual(game.players);
+    const snapshots = game.room.publishedPayloads("snapshot") as SimulatedWorldSnapshot[];
+    expect(snapshots.at(-1)?.enemies).toEqual([[1, 320, 180]]);
+  });
+
+  it("rechaza una reconexion incompatible y aplica la salida al vencer la reserva", () => {
+    const game = new SimulatedCoopGame(3);
+    const reconnecting = game.guest(0);
+    const slot = reconnecting.client.slot;
+
+    game.room.disconnect(reconnecting.client.id);
+    game.room.flush();
+    expect(() => game.room.reconnect(reconnecting.client.id, 8)).toThrow(
+      "Las versiones del juego no coinciden.",
+    );
+    expect(game.host.rejoinedSlots).toEqual([]);
+
+    game.room.expireReconnect(reconnecting.client.id);
+    game.room.flush();
+    expect(game.host.expiredSlots).toEqual([slot]);
+    expect(game.room.participantCount).toBe(2);
+  });
+
+  it("repite el resultado si la partida termina durante la desconexion", () => {
+    const game = new SimulatedCoopGame(2);
+    const reconnecting = game.guest();
+
+    game.room.disconnect(reconnecting.client.id);
+    game.room.flush();
+    game.finish("won");
+    expect(reconnecting.ends).toEqual([]);
+
+    game.room.reconnect(reconnecting.client.id);
+    game.room.flush();
+    expect(reconnecting.ends).toEqual([{ reason: "won", slot: 0 }]);
   });
 });
 

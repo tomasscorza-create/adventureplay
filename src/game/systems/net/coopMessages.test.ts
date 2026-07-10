@@ -5,6 +5,7 @@ import {
   collectPeerPresences,
   COOP_MAX_PLAYERS,
   COOP_PROTOCOL_VERSION,
+  COOP_RECONNECT_WINDOW_MS,
   generateRoomCode,
   isValidRoomCode,
   normalizeRoomCode,
@@ -72,7 +73,8 @@ describe("coopMessages room codes", () => {
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(8);
+    expect(COOP_PROTOCOL_VERSION).toBe(9);
+    expect(COOP_RECONNECT_WINDOW_MS).toBe(10_000);
   });
 
   it("excluye la propia key y normaliza los payloads de los peers", () => {

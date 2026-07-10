@@ -25,7 +25,7 @@
 - **Poses finas de M2/M3 en el guest son aproximadas:** se sincroniza posición y `flipX`, no cada
   pose de ataque. El **daño es autoritativo del host**, así que la jugabilidad es correcta aunque
   la animación puntual difiera.
-- **Sin reconexión automática ni anti-cheat.**
+- **Reconexión transitoria disponible; sin migración de host ni anti-cheat.** La identidad y el slot se reservan 10 segundos mientras la escena sigue viva. Un refresh completo no restaura la partida.
 - **Ambos clientes deben apuntar al mismo proyecto Supabase.**
 - **Gameplay de 2 a 4 jugadores** (`COOP_MAX_PLAYERS = 4`). Con salas de 4, revisar el costo de
   broadcasts contra las cuotas de Supabase Realtime antes de promocionar el modo (Fase 4).
@@ -90,10 +90,11 @@
    emitirse a 60 Hz hacia React: solo emite cuando cambia algo visible (rendimiento).
 11. **Retry co-op soportado:** Tras derrota, el host puede reintentar el mismo nivel reutilizando el mecanismo de encadenado. La derrota en Explorar co-op ya no pasa por `GameOverScene`, conservando la escena viva al igual que en Desafío.
 12. **Fase 4 - Optimización de red (protocolo v8):** Se agregó telemetría de red en consola (solo DEV), se dividió el tráfico usando un canal secundario `coop-room-<CÓDIGO>-input` para evitar que los guests reciban broadcasts cruzados inútiles, y se implementó *delta encoding* genérico en `CoopSceneLink`: las secciones pesadas de los snapshots (enemigos, plataformas, etc.) pasan a ser opcionales y solo se transmiten cuando cambian, reconstruyéndose automáticamente en el receptor. Esto baja drásticamente el consumo de bytes.
+13. **Fase 5 - Reconexión automática (protocolo v9):** reserva de identidad y slot por 10 segundos, estado `reconnecting`, neutralización del input remoto, entidad suspendida sin destruir estado, reactivación en el mismo slot, keyframe completo forzado y repetición del resultado si la partida terminó durante la ausencia. No incluye migración de host.
 
 ## Continuidad / próximos pasos sugeridos
 
-- **Costo y robustez:** revisar cuotas de Supabase Realtime con salas de 4, reconexión ante caídas, pausa co-op acordada, expulsión por el host. (Fase 4 completada con protocolo v8).
+- **Costo y robustez:** revisar cuotas de Supabase Realtime con salas de 4, reconexión después de refresh, pausa co-op acordada y expulsión por el host. La reconexión transitoria quedó cubierta en v9.
 - **HUD del compañero:** mostrar ícono y vida de los demás jugadores en una esquina secundaria.
 - **Predicción de cliente** para el personaje del guest (reduce la latencia percibida).
 - **Estados de animación finos** de enemigos complejos en el guest.

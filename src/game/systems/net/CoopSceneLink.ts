@@ -27,6 +27,8 @@ export interface CoopLinkTransport {
   onEnd(cb: (message: CoopEndMessage) => void): () => void;
   onPeerLeft(cb: () => void): () => void;
   onParticipantLeft?(cb: (slot: number) => void): () => void;
+  onParticipantRejoined?(cb: (slot: number) => void): () => void;
+  onParticipantReconnectExpired?(cb: (slot: number) => void): () => void;
   onStart?(cb: (message: CoopStartMessage) => void): () => void;
   onCharges?(cb: (message: CoopChargesMessage) => void): () => void;
   sendInput(message: CoopInputMessage): void;
@@ -40,6 +42,8 @@ export interface CoopLinkHooks {
   onRemoteEnd: (reason: CoopEndReason, slot?: number) => void;
   onPeerLeft: () => void;
   onParticipantLeft?: (slot: number) => void;
+  onParticipantRejoined?: (slot: number) => void;
+  onParticipantReconnectExpired?: (slot: number) => void;
   // El host reutiliza el mensaje `start` para encadenar el siguiente nivel de
   // la sala; los guests lo reciben aqui una vez terminado el nivel actual.
   onStartNextLevel?: (message: CoopStartMessage) => void;
@@ -116,8 +120,10 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   private lastSnapshotSentAt = 0;
   private snapshotSeq = 0;
   private lastSentSections: Record<string, string> = {};
+  private forceFullSnapshot = false;
 
   private ended = false;
+  private endedReason?: CoopEndReason;
   private readonly unbinds: Array<() => void> = [];
 
   constructor(info: CoopSessionInfo, transport: CoopLinkTransport = coopSession) {
@@ -175,7 +181,24 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     this.unbinds.push(this.transport.onEnd((message) => hooks.onRemoteEnd(message.reason, message.slot)));
     this.unbinds.push(this.transport.onPeerLeft(() => hooks.onPeerLeft()));
     if (this.transport.onParticipantLeft && hooks.onParticipantLeft) {
-      this.unbinds.push(this.transport.onParticipantLeft((slot) => hooks.onParticipantLeft!(slot)));
+      this.unbinds.push(this.transport.onParticipantLeft((slot) => {
+        if (this.isHost) this.clearRemoteInput(slot);
+        hooks.onParticipantLeft!(slot);
+      }));
+    }
+    if (this.transport.onParticipantRejoined) {
+      this.unbinds.push(this.transport.onParticipantRejoined((slot) => {
+        if (this.isHost) {
+          this.forceFullSnapshot = true;
+          if (this.endedReason) this.transport.sendEnd(this.endedReason, this.localSlot);
+        }
+        hooks.onParticipantRejoined?.(slot);
+      }));
+    }
+    if (this.transport.onParticipantReconnectExpired && hooks.onParticipantReconnectExpired) {
+      this.unbinds.push(this.transport.onParticipantReconnectExpired((slot) => {
+        hooks.onParticipantReconnectExpired!(slot);
+      }));
     }
     if (this.transport.onStart && hooks.onStartNextLevel) {
       this.unbinds.push(this.transport.onStart((message) => hooks.onStartNextLevel!(message)));
@@ -220,6 +243,10 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     state.pressed = { ...emptyGameplayInputState };
     state.prevHeld = { ...held };
     return frame;
+  }
+
+  clearRemoteInput(slot: number): void {
+    this.remoteInputs.set(slot, createRemoteInputSlot());
   }
 
   // Guest: envia el input inmediatamente cuando cambia (con un tope de
@@ -289,7 +316,9 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     
     const snap = build(this.snapshotSeq) as Record<string, unknown>;
     const out: Record<string, unknown> = {};
-    const isKeyframe = this.snapshotSeq % COOP_SNAPSHOT_RATE_HZ === 0;
+    const isKeyframe = this.forceFullSnapshot
+      || this.snapshotSeq % COOP_SNAPSHOT_RATE_HZ === 0;
+    this.forceFullSnapshot = false;
     
     for (const key of Object.keys(snap)) {
       if (OPTIONAL_SECTIONS.has(key)) {
@@ -311,6 +340,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   finish(reason: CoopEndReason): boolean {
     if (this.ended) return false;
     this.ended = true;
+    this.endedReason = reason;
     this.transport.sendEnd(reason, this.localSlot);
     return true;
   }

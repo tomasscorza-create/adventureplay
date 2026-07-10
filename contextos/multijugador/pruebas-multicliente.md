@@ -22,6 +22,7 @@ npm run test:coop
 - Victoria, derrota, salida de un guest y cambio encadenado de nivel.
 - Snapshot retrasado, input reordenado, pérdida de input y pérdida de snapshot.
 - Recuperación del movimiento sostenido mediante keepalive.
+- Reserva y recuperación del mismo slot, rechazo por versión, expiración y resultado durante desconexión.
 - Conteo de publicaciones, entregas por fan-out, descartes y bytes JSON aproximados.
 
 ## Línea base de tráfico
@@ -35,8 +36,8 @@ manteniendo movimiento y un snapshot simple con cuatro estados de jugador.
 | Frecuencia de input por guest | 9,4 Hz |
 | Publicaciones | 459 |
 | Entregas después de fan-out | 813 |
-| Bytes JSON publicados | ~71.028 B |
-| Bytes JSON entregados | ~197.346 B |
+| Bytes JSON publicados | ~71.244 B |
+| Bytes JSON entregados | ~197.994 B |
 | Snapshots publicados / entregados | 177 / 531 |
 | Inputs publicados | 282 |
 

@@ -22,6 +22,8 @@ export type SimulatedEvent =
   | "end"
   | "charges"
   | "participant-left"
+  | "participant-rejoined"
+  | "participant-reconnect-expired"
   | "peer-left";
 
 interface NetworkEnvelope {
@@ -75,12 +77,14 @@ function payloadBytes(payload: unknown): number {
 export class SimulatedRoom {
   readonly code: string;
   private readonly members = new Map<string, SimulatedMember>();
+  private readonly disconnectedMembers = new Set<string>();
   private queue: NetworkEnvelope[] = [];
   private nextEnvelopeId = 1;
   private nowMs = 0;
   private readonly nextDelays = new Map<SimulatedEvent, number[]>();
   private readonly dropsRemaining = new Map<SimulatedEvent, number>();
   private readonly traffic = new Map<SimulatedEvent, EventTraffic>();
+  private readonly publicationPayloads = new Map<SimulatedEvent, unknown[]>();
 
   constructor(code = "TEST") {
     this.code = code;
@@ -151,10 +155,48 @@ export class SimulatedRoom {
     if (!member) return;
     const previousSlot = this.participants.find((participant) => participant.key === id)?.slot ?? -1;
     this.members.delete(id);
+    this.disconnectedMembers.delete(id);
     this.publishSystem("participant-left", previousSlot, [...this.members.keys()]);
     if (member.role === "host") {
       this.publishSystem("peer-left", undefined, [...this.members.keys()]);
     }
+  }
+
+  disconnect(id: string): void {
+    const member = this.members.get(id);
+    if (!member || this.disconnectedMembers.has(id)) return;
+    const slot = this.participants.find((participant) => participant.key === id)?.slot ?? -1;
+    this.disconnectedMembers.add(id);
+    this.publishSystem(
+      "participant-left",
+      slot,
+      [...this.members.keys()].filter((key) => key !== id && !this.disconnectedMembers.has(key)),
+    );
+  }
+
+  reconnect(id: string, protocol = COOP_PROTOCOL_VERSION): void {
+    if (!this.members.has(id) || !this.disconnectedMembers.has(id)) return;
+    if (protocol !== COOP_PROTOCOL_VERSION) throw new Error("Las versiones del juego no coinciden.");
+    const slot = this.participants.find((participant) => participant.key === id)?.slot ?? -1;
+    this.disconnectedMembers.delete(id);
+    this.publishSystem(
+      "participant-rejoined",
+      slot,
+      [...this.members.keys()].filter((key) => key !== id && !this.disconnectedMembers.has(key)),
+    );
+  }
+
+  expireReconnect(id: string): void {
+    const member = this.members.get(id);
+    if (!member || !this.disconnectedMembers.has(id)) return;
+    const slot = this.participants.find((participant) => participant.key === id)?.slot ?? -1;
+    this.members.delete(id);
+    this.disconnectedMembers.delete(id);
+    this.publishSystem(
+      "participant-reconnect-expired",
+      slot,
+      [...this.members.keys()].filter((key) => !this.disconnectedMembers.has(key)),
+    );
   }
 
   delayNext(event: SimulatedEvent, delayMs: number): void {
@@ -208,6 +250,10 @@ export class SimulatedRoom {
     );
   }
 
+  publishedPayloads(event: SimulatedEvent): unknown[] {
+    return structuredClone(this.publicationPayloads.get(event) ?? []);
+  }
+
   publish(from: string, event: SimulatedEvent, payload: unknown): void {
     const targets = this.targetsFor(from, event);
     this.enqueuePublication(from, event, payload, targets);
@@ -227,6 +273,9 @@ export class SimulatedRoom {
     const stats = this.eventTraffic(event);
     stats.publications += 1;
     stats.bytesPublished += bytes;
+    const payloads = this.publicationPayloads.get(event) ?? [];
+    payloads.push(structuredClone(payload));
+    this.publicationPayloads.set(event, payloads);
 
     for (const to of targets) {
       const drops = this.dropsRemaining.get(event) ?? 0;
@@ -250,13 +299,19 @@ export class SimulatedRoom {
   }
 
   private targetsFor(from: string, event: SimulatedEvent): string[] {
-    if (event === "input" || event === "charges") return [this.hostMember().id];
+    if (this.disconnectedMembers.has(from)) return [];
+    if (event === "input" || event === "charges") {
+      const hostId = this.hostMember().id;
+      return this.disconnectedMembers.has(hostId) ? [] : [hostId];
+    }
     if (event === "snapshot" || event === "start") {
       return [...this.members.values()]
-        .filter((member) => member.role === "guest")
+        .filter((member) => member.role === "guest" && !this.disconnectedMembers.has(member.id))
         .map((member) => member.id);
     }
-    return [...this.members.keys()].filter((id) => id !== from);
+    return [...this.members.keys()].filter(
+      (id) => id !== from && !this.disconnectedMembers.has(id),
+    );
   }
 
   private hostMember(): SimulatedMember {
@@ -326,6 +381,8 @@ export class SimulatedTransport implements CoopLinkTransport {
   private readonly endHandlers = new Set<(message: CoopEndMessage) => void>();
   private readonly peerLeftHandlers = new Set<() => void>();
   private readonly participantLeftHandlers = new Set<(slot: number) => void>();
+  private readonly participantRejoinedHandlers = new Set<(slot: number) => void>();
+  private readonly participantReconnectExpiredHandlers = new Set<(slot: number) => void>();
   private readonly startHandlers = new Set<(message: CoopStartMessage) => void>();
   private readonly chargesHandlers = new Set<(message: CoopChargesMessage) => void>();
 
@@ -359,6 +416,16 @@ export class SimulatedTransport implements CoopLinkTransport {
   onParticipantLeft(cb: (slot: number) => void): () => void {
     this.participantLeftHandlers.add(cb);
     return () => this.participantLeftHandlers.delete(cb);
+  }
+
+  onParticipantRejoined(cb: (slot: number) => void): () => void {
+    this.participantRejoinedHandlers.add(cb);
+    return () => this.participantRejoinedHandlers.delete(cb);
+  }
+
+  onParticipantReconnectExpired(cb: (slot: number) => void): () => void {
+    this.participantReconnectExpiredHandlers.add(cb);
+    return () => this.participantReconnectExpiredHandlers.delete(cb);
   }
 
   onStart(cb: (message: CoopStartMessage) => void): () => void {
@@ -404,6 +471,10 @@ export class SimulatedTransport implements CoopLinkTransport {
       this.chargesHandlers.forEach((handler) => handler(payload as CoopChargesMessage));
     } else if (event === "participant-left") {
       this.participantLeftHandlers.forEach((handler) => handler(payload as number));
+    } else if (event === "participant-rejoined") {
+      this.participantRejoinedHandlers.forEach((handler) => handler(payload as number));
+    } else if (event === "participant-reconnect-expired") {
+      this.participantReconnectExpiredHandlers.forEach((handler) => handler(payload as number));
     } else if (event === "peer-left") {
       this.peerLeftHandlers.forEach((handler) => handler());
     }

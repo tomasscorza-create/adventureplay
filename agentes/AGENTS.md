@@ -64,7 +64,7 @@ Este archivo es el punto de entrada operativo para agentes de IA. Actúa como el
 * **Input unificado:** Todo tap móvil o tecla pasa por un middleware (input unificado) antes de interactuar con el jugador.
 * **Data-driven content:** Archivos como `levels.ts` dictan qué se dibuja y quién aparece. Las escenas son genéricas y dinámicas, no están hardcodeadas con clases concretas.
 * **Supabase:** Base de datos remota para persistencia vía tabla `public.game_saves`.
-* **Co-op online:** Sistema multijugador host-autoritativo desacoplado en `src/game/systems/net/` que simula inputs y comparte snapshots.
+* **Co-op online:** Sistema multijugador host-autoritativo desacoplado en `src/game/systems/net/` que simula inputs y comparte snapshots. La reconexión transitoria reserva identidad y slot durante 10 segundos; no existe migración de host.
 
 ## Estado actual resumido
 

@@ -6,6 +6,7 @@ import {
   COOP_EVENTS,
   COOP_MAX_PLAYERS,
   COOP_PROTOCOL_VERSION,
+  COOP_RECONNECT_WINDOW_MS,
   generateRoomCode,
   HOST_SLOT,
   normalizeRoomCode,
@@ -26,6 +27,7 @@ export type CoopConnectionState =
   | "waiting" // conectado, esperando al otro jugador
   | "ready" // ambos presentes
   | "in-game"
+  | "reconnecting"
   | "ended"
   | "error";
 
@@ -44,6 +46,8 @@ interface CoopCallbacks {
   // Cambios en el roster (slots/heroes presentes), para la lista del lobby.
   roster: Set<(participants: CoopParticipant[]) => void>;
   participantLeft: Set<(slot: number) => void>;
+  participantRejoined: Set<(slot: number) => void>;
+  participantReconnectExpired: Set<(slot: number) => void>;
   // Compras de cargas durante la partida (delta hacia el host).
   charges: Set<(message: CoopChargesMessage) => void>;
 }
@@ -95,10 +99,17 @@ class CoopSession {
     sessionError: new Set(),
     roster: new Set(),
     participantLeft: new Set(),
+    participantRejoined: new Set(),
+    participantReconnectExpired: new Set(),
     charges: new Set(),
   };
   private participantsKey = "";
   private authorizedParticipantKeys: Set<string> | null = null;
+  private authorizedParticipants = new Map<string, CoopParticipant>();
+  private readonly disconnectedParticipantKeys = new Set<string>();
+  private readonly reconnectTimers = new Map<string, number>();
+  private reconnectStateBeforeDrop: CoopConnectionState = "in-game";
+  private localReconnectTimer = 0;
 
   get role(): CoopRole | null {
     return this._role;
@@ -220,7 +231,9 @@ class CoopSession {
     if (role === "host") {
       inputChannel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
         this.trackStat("received", COOP_EVENTS.input, payload);
-        this.callbacks.input.forEach((cb) => cb(payload as CoopInputMessage));
+        const message = payload as CoopInputMessage;
+        if (!this.acceptsActiveSlot(message.slot)) return;
+        this.callbacks.input.forEach((cb) => cb(message));
       });
     }
 
@@ -231,7 +244,7 @@ class CoopSession {
     channel.on("broadcast", { event: COOP_EVENTS.start }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.start, payload);
       this._connectionState = "in-game";
-      this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
+      this.authorizeCurrentParticipants();
       this.callbacks.start.forEach((cb) => cb(payload as CoopStartMessage));
     });
     channel.on("broadcast", { event: COOP_EVENTS.end }, ({ payload }) => {
@@ -240,17 +253,30 @@ class CoopSession {
     });
     channel.on("broadcast", { event: COOP_EVENTS.charges }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.charges, payload);
-      this.callbacks.charges.forEach((cb) => cb(payload as CoopChargesMessage));
+      const message = payload as CoopChargesMessage;
+      if (!this.acceptsActiveSlot(message.slot)) return;
+      this.callbacks.charges.forEach((cb) => cb(message));
     });
 
     channel.on("presence", { event: "sync" }, () => this.syncPresence());
     channel.on("presence", { event: "join" }, () => this.syncPresence());
     channel.on("presence", { event: "leave" }, () => this.syncPresence());
 
+    let mainEverSubscribed = false;
+    let inputEverSubscribed = false;
+    let mainReady = false;
+    let inputReady = false;
+    const restoreIfReady = () => {
+      if (mainReady && inputReady && this._connectionState === "reconnecting") {
+        this.finishLocalReconnect();
+      }
+    };
+
     await Promise.all([
       new Promise<void>((resolve, reject) => {
         channel.subscribe((status) => {
           if (status === "SUBSCRIBED") {
+            mainReady = true;
             void channel.track({
               role,
               characterId: hello.characterId,
@@ -258,26 +284,59 @@ class CoopSession {
               healingCharges: hello.healingCharges ?? 0,
               powerCharges: hello.powerCharges ?? 0,
             });
+            mainEverSubscribed = true;
             resolve();
-          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            reject(new Error(`No se pudo conectar a la sala (${status}).`));
+            restoreIfReady();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            mainReady = false;
+            if (mainEverSubscribed) this.beginLocalReconnect();
+            else reject(new Error(`No se pudo conectar a la sala (${status}).`));
           }
         });
       }),
       new Promise<void>((resolve, reject) => {
         inputChannel.subscribe((status) => {
-          if (status === "SUBSCRIBED") resolve();
-          else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            reject(new Error(`No se pudo conectar al canal de input (${status}).`));
+          if (status === "SUBSCRIBED") {
+            inputReady = true;
+            inputEverSubscribed = true;
+            resolve();
+            restoreIfReady();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            inputReady = false;
+            if (inputEverSubscribed) this.beginLocalReconnect();
+            else reject(new Error(`No se pudo conectar al canal de input (${status}).`));
           }
         });
       })
     ]).then(() => {
-      this.setConnectionState("waiting");
+      if (this._connectionState === "connecting") this.setConnectionState("waiting");
     }).catch(err => {
       this.setConnectionState("error");
       throw err;
     });
+  }
+
+  private beginLocalReconnect(): void {
+    if (this._connectionState !== "in-game" && this._connectionState !== "ready"
+      && this._connectionState !== "reconnecting") return;
+    if (this._connectionState !== "reconnecting") {
+      this.reconnectStateBeforeDrop = this._connectionState;
+      this.setConnectionState("reconnecting");
+    }
+    if (this.localReconnectTimer) return;
+    this.localReconnectTimer = window.setTimeout(() => {
+      this.localReconnectTimer = 0;
+      this.callbacks.sessionError.forEach((cb) => cb("No se pudo recuperar la conexion cooperativa."));
+      this.callbacks.participantReconnectExpired.forEach((cb) => cb(this._localSlot));
+      this.leave();
+      this.setConnectionState("error");
+    }, COOP_RECONNECT_WINDOW_MS);
+  }
+
+  private finishLocalReconnect(): void {
+    if (this.localReconnectTimer) window.clearTimeout(this.localReconnectTimer);
+    this.localReconnectTimer = 0;
+    this.setConnectionState(this.reconnectStateBeforeDrop);
   }
 
   private syncPresence(): void {
@@ -306,9 +365,9 @@ class CoopSession {
       return;
     }
 
-    // Roster determinista incluyendo al jugador local, para fijar el slot propio
-    // y el de cada peer igual en todos los dispositivos.
-    const roster = assignSlots([
+    // Roster vivo derivado de presence. Durante una partida, el roster
+    // autorizado conserva los slots aunque una presence desaparezca brevemente.
+    const liveRoster = assignSlots([
       {
         key: this.clientKey,
         role: this._role,
@@ -319,7 +378,35 @@ class CoopSession {
       },
       ...peers,
     ]);
-    this._localSlot = roster.find((entry) => entry.key === this.clientKey)?.slot ?? this._localSlot;
+    this._localSlot = this.authorizedParticipants.get(this.clientKey)?.slot
+      ?? liveRoster.find((entry) => entry.key === this.clientKey)?.slot
+      ?? this._localSlot;
+
+    if (this.authorizedParticipantKeys) {
+      const liveKeys = new Set(liveRoster.map((entry) => entry.key));
+      for (const [key, reserved] of this.authorizedParticipants) {
+        if (key === this.clientKey) continue;
+        if (liveKeys.has(key)) {
+          if (this.disconnectedParticipantKeys.delete(key)) {
+            this.clearReconnectTimer(key);
+            this.callbacks.participantRejoined.forEach((cb) => cb(reserved.slot));
+          }
+        } else if (!this.disconnectedParticipantKeys.has(key)) {
+          this.disconnectedParticipantKeys.add(key);
+          this.callbacks.participantLeft.forEach((cb) => cb(reserved.slot));
+          const timer = window.setTimeout(
+            () => this.expireParticipantReconnect(key),
+            COOP_RECONNECT_WINDOW_MS,
+          );
+          this.reconnectTimers.set(key, timer);
+        }
+      }
+      this._participants = [...this.authorizedParticipants.values()]
+        .sort((a, b) => a.slot - b.slot);
+      this.emitRosterIfChanged();
+      return;
+    }
+
     // La sala solo cuenta los slots dentro del tope; un cliente que cae fuera
     // (llego cuando ya estaba llena) recibe un error claro y no juega.
     if (this._localSlot >= COOP_MAX_PLAYERS) {
@@ -330,24 +417,8 @@ class CoopSession {
       }
       return;
     }
-    const oldParticipants = this._participants;
-    this._participants = roster.filter((entry) => entry.slot < COOP_MAX_PLAYERS);
-    
-    // Detectar desconexiones subitas comparando roster
-    if (this._connectionState === "in-game" || this._connectionState === "ready") {
-      const currentKeys = new Set(this._participants.map((p) => p.key));
-      for (const old of oldParticipants) {
-        if (!currentKeys.has(old.key)) {
-          this.callbacks.participantLeft.forEach((cb) => cb(old.slot));
-        }
-      }
-    }
-
-    const key = this._participants.map((entry) => `${entry.slot}:${entry.characterId}`).join("|");
-    if (key !== this.participantsKey) {
-      this.participantsKey = key;
-      this.callbacks.roster.forEach((cb) => cb(this._participants));
-    }
+    this._participants = liveRoster.filter((entry) => entry.slot < COOP_MAX_PLAYERS);
+    this.emitRosterIfChanged();
 
     const otherRole: CoopRole = this._role === "host" ? "guest" : "host";
     const peer = peers.find((entry) => entry.role === otherRole);
@@ -366,6 +437,40 @@ class CoopSession {
       this.callbacks.peerLeft.forEach((cb) => cb());
       if (this._connectionState !== "ended") this.setConnectionState("waiting");
     }
+  }
+
+  private emitRosterIfChanged(): void {
+    const key = this._participants.map((entry) => `${entry.slot}:${entry.characterId}`).join("|");
+    if (key === this.participantsKey) return;
+    this.participantsKey = key;
+    this.callbacks.roster.forEach((cb) => cb(this._participants));
+  }
+
+  private expireParticipantReconnect(key: string): void {
+    this.reconnectTimers.delete(key);
+    if (!this.disconnectedParticipantKeys.delete(key)) return;
+    const participant = this.authorizedParticipants.get(key);
+    if (!participant) return;
+    this.authorizedParticipants.delete(key);
+    this.authorizedParticipantKeys?.delete(key);
+    this._participants = [...this.authorizedParticipants.values()]
+      .sort((a, b) => a.slot - b.slot);
+    this.emitRosterIfChanged();
+    this.callbacks.participantReconnectExpired.forEach((cb) => cb(participant.slot));
+    if (this._role === "host") this.sendEnd("left", participant.slot);
+  }
+
+  private acceptsActiveSlot(slot: number): boolean {
+    if (!this.authorizedParticipantKeys) return true;
+    const participant = [...this.authorizedParticipants.values()]
+      .find((entry) => entry.slot === slot);
+    return Boolean(participant && !this.disconnectedParticipantKeys.has(participant.key));
+  }
+
+  private clearReconnectTimer(key: string): void {
+    const timer = this.reconnectTimers.get(key);
+    if (timer !== undefined) window.clearTimeout(timer);
+    this.reconnectTimers.delete(key);
   }
 
   private emitPeerJoined(): void {
@@ -392,7 +497,7 @@ class CoopSession {
   // la partida (los valores de presence quedan viejos una vez que se gasto).
   sendStart(levelId: string, rosterOverride?: CoopStartPlayer[]): void {
     this._connectionState = "in-game";
-    this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
+    this.authorizeCurrentParticipants();
     const roster: CoopStartPlayer[] = rosterOverride ?? this._participants
       .filter((entry) => entry.slot < COOP_MAX_PLAYERS)
       .map((entry) => ({
@@ -402,6 +507,13 @@ class CoopSession {
         powerCharges: entry.powerCharges,
       }));
     this.broadcast(COOP_EVENTS.start, { levelId, roster } satisfies CoopStartMessage);
+  }
+
+  private authorizeCurrentParticipants(): void {
+    this.authorizedParticipantKeys = new Set(this._participants.map((entry) => entry.key));
+    this.authorizedParticipants = new Map(
+      this._participants.map((entry) => [entry.key, { ...entry }]),
+    );
   }
 
   sendEnd(reason: CoopEndReason, slot?: number): void {
@@ -419,6 +531,11 @@ class CoopSession {
   }
 
   leave(): void {
+    if (this.localReconnectTimer) {
+      window.clearTimeout(this.localReconnectTimer);
+      this.localReconnectTimer = 0;
+    }
+    for (const key of this.reconnectTimers.keys()) this.clearReconnectTimer(key);
     if (this.statsInterval) {
       window.clearInterval(this.statsInterval);
       this.statsInterval = 0;
@@ -442,6 +559,8 @@ class CoopSession {
     this._participants = [];
     this.participantsKey = "";
     this.authorizedParticipantKeys = null;
+    this.authorizedParticipants.clear();
+    this.disconnectedParticipantKeys.clear();
     this._localSlot = HOST_SLOT;
     this.setConnectionState("idle");
   }
@@ -485,6 +604,12 @@ class CoopSession {
   }
   onParticipantLeft(cb: (slot: number) => void): () => void {
     return this.subscribe("participantLeft", cb);
+  }
+  onParticipantRejoined(cb: (slot: number) => void): () => void {
+    return this.subscribe("participantRejoined", cb);
+  }
+  onParticipantReconnectExpired(cb: (slot: number) => void): () => void {
+    return this.subscribe("participantReconnectExpired", cb);
   }
   onCharges(cb: (message: CoopChargesMessage) => void): () => void {
     return this.subscribe("charges", cb);

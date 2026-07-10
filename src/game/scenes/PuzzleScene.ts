@@ -1792,7 +1792,9 @@ export class PuzzleScene extends Phaser.Scene {
     this.coopLink?.bind({
       onRemoteEnd: (reason, slot) => this.handleRemoteEnd(reason, slot),
       onPeerLeft: () => this.endCoopToMenu(),
-      onParticipantLeft: (slot) => this.handleParticipantLeft(slot),
+      onParticipantLeft: (slot) => this.handleParticipantDisconnected(slot),
+      onParticipantRejoined: (slot) => this.handleParticipantRejoined(slot),
+      onParticipantReconnectExpired: (slot) => this.handleParticipantReconnectExpired(slot),
       onStartNextLevel: (message) => {
         // El host encadeno el siguiente nivel: el guest lo sigue solo cuando su
         // propio nivel ya termino (evita reinicios a mitad de partida).
@@ -2033,16 +2035,33 @@ export class PuzzleScene extends Phaser.Scene {
     gameEvents.emit(EVENTS.HUD_UPDATED, hud);
   }
 
-  private handleParticipantLeft(slot: number): void {
-    if (slot === 0 || this.remotePlayers.length < 2) {
-      this.endCoopToMenu();
-      return;
-    }
+  private handleParticipantDisconnected(slot: number): void {
     const target = this.playerAtSlot(slot);
     if (!target) return;
     this.freezePuppet(target);
     target.setActive(false);
     target.setVisible(false);
+  }
+
+  private handleParticipantRejoined(slot: number): void {
+    const target = this.playerAtSlot(slot);
+    if (!target) return;
+    target.setActive(true);
+    target.setVisible(true);
+    const body = target.body as Phaser.Physics.Arcade.Body;
+    body.enable = this.isHost;
+  }
+
+  private handleParticipantReconnectExpired(slot: number): void {
+    if (slot === this.coopSelfSlot) {
+      this.endCoopToMenu();
+      return;
+    }
+    if (slot === 0 || this.remotePlayers.length < 2) {
+      this.endCoopToMenu();
+      return;
+    }
+    this.handleParticipantDisconnected(slot);
   }
 
   // El guest ejecuta el cierre de nivel al recibir end("won") del host, y su
@@ -2066,7 +2085,8 @@ export class PuzzleScene extends Phaser.Scene {
       gameEvents.emit(EVENTS.SCREEN_CHANGED, "game-over");
     } else {
       if (typeof slot === "number") {
-        this.handleParticipantLeft(slot);
+        if (slot === this.coopSelfSlot) this.endCoopToMenu();
+        else this.handleParticipantReconnectExpired(slot);
       } else {
         this.endCoopToMenu();
       }

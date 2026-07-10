@@ -39,7 +39,7 @@ transporte inyectado). La escena solo aporta cómo construir/aplicar su snapshot
 
 | Miembro del link | Función |
 |---|---|
-| `bind({ onRemoteEnd, onPeerLeft })` | Suscribe input (host), snapshot (guest), `end` y `peerLeft`. |
+| `bind({ onRemoteEnd, onPeerLeft, ... })` | Suscribe input, snapshot, fin y ciclo de desconexión/reconexión por slot. |
 | `consumeRemoteInputFrame(slot)` | Reconstruye `justPressed` del input del guest en ese slot (flancos + acumulados). |
 | `sendLocalInput(time, frame)` | Guest: envía al cambiar + keepalive, estampando su `localSlot`. |
 | `maybeSendSnapshot(time, build)` | Host: throttle 20 Hz + numeración de `seq`. |
@@ -108,10 +108,10 @@ objetivos en simultáneo sin conflicto.
 - **Victoria:** llegar a la meta con objetivos cumplidos → `completeLevel`/`finalizeCompletion`.
   El host transmite `end("won")`; cada cliente hace su **propio** bookkeeping de guardado y emite
   `LEVEL_COMPLETED` para ver el resumen.
-- **Salida individual:** el `end("left")` lleva el slot del que se va y las desconexiones súbitas
-  se detectan por presence (`onParticipantLeft`). En salas de 3-4, el que se va queda congelado e
-  invisible (`handleParticipantLeft`) y la partida sigue; si sale el host o la sala es de 2, todos
-  vuelven al menú (`endCoopToMenu`).
+- **Salida individual:** el `end("left")` lleva el slot del que se va. Una desconexión súbita
+  primero suspende la entidad y reserva su slot durante 10 segundos. Si vuelve, la entidad se
+  reactiva y recibe un snapshot completo; si vence la ventana, la salida se vuelve definitiva. En
+  salas de 3-4 los restantes continúan; si expira el host o la sala es de 2, todos vuelven al menú.
 - **Siguiente nivel (encadenado):** solo el host avanza con `Próximo` → `startNextCoopLevel` reenvía
   `start` con el roster vigente de `coopSession.participants` (compactado si alguien abandonó) y
   reinicia su escena con `keepCoopSessionOnShutdown = true` para no cerrar la sala; el guest recibe
