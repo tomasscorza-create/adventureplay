@@ -128,6 +128,7 @@ export class LevelScene extends Phaser.Scene {
   private coopChargeBaseline = { healingCharges: 0, powerCharges: 0 };
   // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
   private lastGuestHudKey = "";
+  private lastAppliedSnapshotSeq = -1;
   private coopPressureX = 0;
   // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
   private pressureCooldownSlot0 = 0;
@@ -2315,13 +2316,15 @@ export class LevelScene extends Phaser.Scene {
     this.coopLink?.sendLocalInput(time, input);
     const snapshot = this.coopLink?.latestSnapshot;
     if (snapshot) {
-      this.applySnapshot(snapshot);
+      const isNew = snapshot.seq !== this.lastAppliedSnapshotSeq;
+      this.lastAppliedSnapshotSeq = snapshot.seq;
+      this.applySnapshot(snapshot, isNew);
       this.remainingTimeMs = snapshot.timeMs;
     }
     this.emitHud();
   }
 
-  private applySnapshot(snap: LevelSnapshot): void {
+  private applySnapshot(snap: LevelSnapshot, isNew: boolean): void {
     const s = 0.4;
     // players[] esta indexado por slot: se resuelve cada jugador por su slot y
     // NO por posicion en allPlayers(), que filtra a los que abandonaron y
@@ -2346,28 +2349,82 @@ export class LevelScene extends Phaser.Scene {
     if (self) this.guestPrevSelfHealth = self.health;
 
     if (snap.enemies !== undefined) {
-      const aliveEnemies = new Map<number, [number, number, number]>();
-      for (const [id, x, y, flip] of snap.enemies) aliveEnemies.set(id, [x, y, flip]);
+      if (isNew) {
+        const aliveEnemies = new Map<number, [number, number, number]>();
+        for (const [id, x, y, flip] of snap.enemies) aliveEnemies.set(id, [x, y, flip]);
+        this.enemies.children.each((obj) => {
+          const enemy = obj as BaseEnemy;
+          const netId = enemy.getData("netId") as number | undefined;
+          if (typeof netId !== "number") return true;
+          const target = aliveEnemies.get(netId);
+          if (!target) {
+            enemy.destroy();
+            return true;
+          }
+          enemy.setData("netTargetX", target[0]);
+          enemy.setData("netTargetY", target[1]);
+          enemy.setFlipX(target[2] === 1);
+          return true;
+        });
+      }
       this.enemies.children.each((obj) => {
         const enemy = obj as BaseEnemy;
-        const netId = enemy.getData("netId") as number | undefined;
-        if (typeof netId !== "number") return true;
-        const target = aliveEnemies.get(netId);
-        if (!target) {
-          enemy.destroy();
-          return true;
+        const tx = enemy.getData("netTargetX");
+        const ty = enemy.getData("netTargetY");
+        if (tx !== undefined && ty !== undefined) {
+          enemy.x = Phaser.Math.Linear(enemy.x, tx, s);
+          enemy.y = Phaser.Math.Linear(enemy.y, ty, s);
         }
-        enemy.x = Phaser.Math.Linear(enemy.x, target[0], s);
-        enemy.y = Phaser.Math.Linear(enemy.y, target[1], s);
-        enemy.setFlipX(target[2] === 1);
         return true;
       });
     }
 
-    if (snap.platforms !== undefined) this.applyNetTransforms(this.movingPlatforms, snap.platforms, s);
-    if (snap.hazards !== undefined) this.applyNetTransforms(this.movingHazards, snap.hazards, s);
+    if (snap.platforms !== undefined) {
+      if (isNew) {
+        snap.platforms.forEach(([x, y], index) => {
+          const platform = this.movingPlatforms.getChildren()[index] as MovingPlatform;
+          if (platform) {
+            platform.setData("netTargetX", x);
+            platform.setData("netTargetY", y);
+          }
+        });
+      }
+      this.movingPlatforms.children.each((obj) => {
+        const platform = obj as MovingPlatform;
+        const tx = platform.getData("netTargetX");
+        const ty = platform.getData("netTargetY");
+        if (tx !== undefined && ty !== undefined) {
+          platform.x = Phaser.Math.Linear(platform.x, tx, s);
+          platform.y = Phaser.Math.Linear(platform.y, ty, s);
+        }
+        return true;
+      });
+    }
 
-    if (snap.coins !== undefined) {
+    if (snap.hazards !== undefined) {
+      if (isNew) {
+        snap.hazards.forEach(([x, y], index) => {
+          const hazard = this.movingHazards.getChildren()[index] as MovingHazard;
+          if (hazard) {
+            hazard.setData("netTargetX", x);
+            hazard.setData("netTargetY", y);
+          }
+        });
+      }
+      this.movingHazards.children.each((obj) => {
+        const hazard = obj as MovingHazard;
+        const tx = hazard.getData("netTargetX");
+        const ty = hazard.getData("netTargetY");
+        if (tx !== undefined && ty !== undefined) {
+          hazard.x = Phaser.Math.Linear(hazard.x, tx, s);
+          hazard.y = Phaser.Math.Linear(hazard.y, ty, s);
+        }
+        return true;
+      });
+    }
+
+    if (isNew) {
+      if (snap.coins !== undefined) {
       const coinsPresent = new Set(snap.coins);
       this.coins.children.each((obj) => {
         const coin = obj as Coin;
@@ -2388,6 +2445,7 @@ export class LevelScene extends Phaser.Scene {
         }
         return true;
       });
+    }
     }
 
     if (this.rewardBox?.active && !snap.rewardBox) this.rewardBox.disableBody(true, true);
@@ -2492,6 +2550,7 @@ export class LevelScene extends Phaser.Scene {
     target.setVisible(true);
     const body = target.body as Phaser.Physics.Arcade.Body;
     body.enable = this.isHost;
+    if (this.isHost) body.setAllowGravity(true);
   }
 
   private handleParticipantReconnectExpired(slot: number): void {

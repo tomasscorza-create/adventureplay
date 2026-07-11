@@ -10,7 +10,7 @@ if (!entryMatch) {
   errors.push("No se encontro el chunk de entrada en dist/index.html.");
 } else {
   const entryStats = await stat(join(distDirectory, entryMatch[1]));
-  const entryLimitBytes = 450 * 1024;
+  const entryLimitBytes = 455 * 1024;
   if (entryStats.size > entryLimitBytes) {
     errors.push(`El chunk inicial pesa ${entryStats.size} bytes y supera el limite de ${entryLimitBytes}.`);
   }

@@ -1,5 +1,8 @@
 import type { CoopSecurityMetrics } from "./coopSecurity";
 
+export type SendResultStatus = "ok" | "error" | "timed out" | string;
+
+
 interface DirectionStats {
   messages: number;
   bytes: number;
@@ -21,6 +24,8 @@ export interface CoopDiagnosticsSnapshot {
   inputs: { applied: number; averageApplyLatencyMs: number };
   desyncsDetected: number;
   reconnects: { successful: number; failed: number };
+  sendResults: Record<string, Record<string, number>>;
+  visibility: { hiddenCount: number; totalHiddenTimeMs: number };
   security: CoopSecurityMetrics;
 }
 
@@ -53,6 +58,10 @@ export class CoopDiagnostics {
   private desyncs = 0;
   private reconnectSuccess = 0;
   private reconnectFailure = 0;
+  private sendResults: Record<string, Record<string, number>> = {};
+  private lastHiddenAt = 0;
+  private hiddenCount = 0;
+  private totalHiddenTimeMs = 0;
 
   constructor(private readonly clock: () => number = () => performance.now()) {}
 
@@ -102,6 +111,23 @@ export class CoopDiagnostics {
     else this.reconnectFailure += 1;
   }
 
+  recordSendResult(event: string, status: string): void {
+    if (!this.enabledState) return;
+    if (!this.sendResults[event]) this.sendResults[event] = {};
+    this.sendResults[event][status] = (this.sendResults[event][status] ?? 0) + 1;
+  }
+
+  recordVisibilityChange(hidden: boolean): void {
+    if (!this.enabledState) return;
+    if (hidden) {
+      this.lastHiddenAt = this.clock();
+    } else if (this.lastHiddenAt > 0) {
+      this.totalHiddenTimeMs += this.clock() - this.lastHiddenAt;
+      this.lastHiddenAt = 0;
+      this.hiddenCount += 1;
+    }
+  }
+
   snapshot(security: CoopSecurityMetrics): CoopDiagnosticsSnapshot {
     const elapsedSeconds = this.enabledState
       ? Math.max(0.001, (this.clock() - this.startedAtMs) / 1000)
@@ -131,6 +157,8 @@ export class CoopDiagnostics {
       },
       desyncsDetected: this.desyncs,
       reconnects: { successful: this.reconnectSuccess, failed: this.reconnectFailure },
+      sendResults: structuredClone(this.sendResults),
+      visibility: { hiddenCount: this.hiddenCount, totalHiddenTimeMs: this.totalHiddenTimeMs },
       security,
     };
   }
@@ -147,5 +175,9 @@ export class CoopDiagnostics {
     this.desyncs = 0;
     this.reconnectSuccess = 0;
     this.reconnectFailure = 0;
+    this.sendResults = {};
+    this.lastHiddenAt = 0;
+    this.hiddenCount = 0;
+    this.totalHiddenTimeMs = 0;
   }
 }

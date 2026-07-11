@@ -113,6 +113,8 @@ class CoopSession {
   private readonly reconnectTimers = new Map<string, number>();
   private reconnectStateBeforeDrop: CoopConnectionState = "in-game";
   private localReconnectTimer = 0;
+  private globalInputSeq = 0;
+  private boundVisibilityListener = this.handleVisibilityChange.bind(this);
 
   get role(): CoopRole | null {
     return this._role;
@@ -146,6 +148,11 @@ class CoopSession {
   // Roster completo con slots ya asignados. Vacio hasta que la sala esta lista.
   get participants(): CoopParticipant[] {
     return this._participants;
+  }
+
+  generateInputSeq(): number {
+    this.globalInputSeq += 1;
+    return this.globalInputSeq;
   }
 
   // Personaje del participante en un slot dado, si esta presente.
@@ -239,6 +246,8 @@ class CoopSession {
     this._participants = [];
     this.setConnectionState("connecting");
     this.configureDiagnostics();
+
+    document.addEventListener("visibilitychange", this.boundVisibilityListener);
 
     const channel = supabase.channel(`coop-room-${code}`, {
       config: {
@@ -386,6 +395,13 @@ class CoopSession {
         });
       }),
       new Promise<void>((resolve, reject) => {
+        if (role !== "host") {
+          inputReady = true;
+          inputEverSubscribed = true;
+          resolve();
+          restoreIfReady();
+          return;
+        }
         inputChannel.subscribe((status) => {
           if (status === "SUBSCRIBED") {
             inputReady = true;
@@ -603,7 +619,13 @@ class CoopSession {
     const envelope = this.wireEnvelope(safeMessage);
     if (!envelope) return;
     this.trackStat("sent", COOP_EVENTS.input, envelope, safeMessage.slot);
-    void this.inputChannel.send({ type: "broadcast", event: COOP_EVENTS.input, payload: envelope });
+    this.inputChannel.send({ type: "broadcast", event: COOP_EVENTS.input, payload: envelope })
+      .then((status) => {
+        this.diagnostics.recordSendResult(COOP_EVENTS.input, status);
+      })
+      .catch(() => {
+        this.diagnostics.recordSendResult(COOP_EVENTS.input, "error");
+      });
   }
 
   sendSnapshot(snapshot: unknown): void {
@@ -652,7 +674,13 @@ class CoopSession {
     const envelope = this.wireEnvelope(payload);
     if (!envelope) return;
     this.trackStat("sent", event, envelope);
-    void this.channel.send({ type: "broadcast", event, payload: envelope });
+    this.channel.send({ type: "broadcast", event, payload: envelope })
+      .then((status) => {
+        this.diagnostics.recordSendResult(event, status);
+      })
+      .catch(() => {
+        this.diagnostics.recordSendResult(event, "error");
+      });
   }
 
   private wireEnvelope(payload: unknown): CoopWireEnvelope | null {
@@ -688,6 +716,8 @@ class CoopSession {
     this.authorizedParticipants.clear();
     this.disconnectedParticipantKeys.clear();
     this._localSlot = HOST_SLOT;
+    this.globalInputSeq = 0;
+    document.removeEventListener("visibilitychange", this.boundVisibilityListener);
     this.setConnectionState("idle");
   }
 
@@ -750,6 +780,11 @@ class CoopSession {
     return () => {
       set.delete(cb);
     };
+  }
+
+  private handleVisibilityChange(): void {
+    if (this._connectionState !== "in-game") return;
+    this.diagnostics.recordVisibilityChange(document.visibilityState === "hidden");
   }
 }
 

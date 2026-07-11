@@ -38,6 +38,7 @@ export interface CoopLinkTransport {
   recordSnapshotKind?(keyframe: boolean): void;
   recordInputApplied?(slot: number, latencyMs: number): void;
   recordDesync?(): void;
+  generateInputSeq(): number;
   leave(): void;
 }
 
@@ -113,7 +114,6 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   // Guest: throttling de input saliente y ultimo snapshot aceptado.
   private lastInputSentAt = 0;
   private lastInputBits = -1;
-  private inputSeq = 0;
   // Flancos locales que aun no pudieron cruzar la red por el throttle. El
   // contador conserva incluso pulsaciones repetidas de una misma accion; si el
   // ultimo paquete aun la tenia activa, primero se envia su liberacion y luego
@@ -217,10 +217,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     }
   }
 
-  // Guest: anuncia al host las cargas compradas durante la partida.
+  // Guest: las compras durante la partida estan deshabilitadas en co-op remoto (Fase 1).
   sendChargeDelta(healingDelta: number, powerDelta: number): void {
-    if (healingDelta <= 0 && powerDelta <= 0) return;
-    this.transport.sendCharges?.({ slot: this.localSlot, healingDelta, powerDelta });
+    void healingDelta;
+    void powerDelta;
+    // this.transport.sendCharges?.({ slot: this.localSlot, healingDelta, powerDelta });
   }
 
   private remoteSlot(slot: number): RemoteInputSlot {
@@ -307,7 +308,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     const changed = bits !== this.lastInputBits;
     if (changed ? elapsed < MIN_INPUT_INTERVAL_MS : elapsed < COOP_INPUT_KEEPALIVE_MS) return;
 
-    const nextSeq = this.inputSeq + 1;
+    const nextSeq = this.transport.generateInputSeq();
     this.transport.sendInput({ slot: this.localSlot, seq: nextSeq, bits });
 
     // Solo consumir flancos y avanzar el estado despues de que el transporte
@@ -319,7 +320,6 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     }
     this.lastInputBits = bits;
     this.lastInputSentAt = timeMs;
-    this.inputSeq = nextSeq;
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.

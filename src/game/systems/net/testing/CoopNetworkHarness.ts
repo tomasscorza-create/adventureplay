@@ -390,12 +390,18 @@ export class SimulatedTransport implements CoopLinkTransport {
   private readonly participantReconnectExpiredHandlers = new Set<(slot: number) => void>();
   private readonly startHandlers = new Set<(message: CoopStartMessage) => void>();
   private readonly chargesHandlers = new Set<(message: CoopChargesMessage) => void>();
+  private inputSeq = 0;
 
   constructor(
     private readonly room: SimulatedRoom,
     readonly clientId: string,
     readonly role: CoopRole,
   ) {}
+
+  generateInputSeq(): number {
+    this.inputSeq += 1;
+    return this.inputSeq;
+  }
 
   onInput(cb: (message: CoopInputMessage) => void): () => void {
     this.inputHandlers.add(cb);

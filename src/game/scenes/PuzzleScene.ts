@@ -155,6 +155,7 @@ export class PuzzleScene extends Phaser.Scene {
   private coopChargeBaseline = { healingCharges: 0, powerCharges: 0 };
   // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
   private lastGuestHudKey = "";
+  private lastAppliedSnapshotSeq = -1;
 
   constructor() {
     super("PuzzleScene");
@@ -1932,7 +1933,9 @@ export class PuzzleScene extends Phaser.Scene {
     this.coopLink?.sendLocalInput(time, input);
     const snapshot = this.coopLink?.latestSnapshot;
     if (snapshot) {
-      this.applySnapshot(snapshot);
+      const isNew = snapshot.seq !== this.lastAppliedSnapshotSeq;
+      this.lastAppliedSnapshotSeq = snapshot.seq;
+      this.applySnapshot(snapshot, isNew);
       this.remainingTimeMs = snapshot.timeMs;
     }
     this.updatePlateKeyInterface();
@@ -1940,7 +1943,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.emitHud();
   }
 
-  private applySnapshot(snap: WorldSnapshot): void {
+  private applySnapshot(snap: WorldSnapshot, isNew: boolean): void {
     const smoothing = 0.4;
     // players[] esta indexado por slot: se resuelve cada jugador por su slot y
     // NO por posicion en allPlayers(), que filtra a los que abandonaron y
@@ -1960,28 +1963,51 @@ export class PuzzleScene extends Phaser.Scene {
     if (self) this.guestPrevSelfHealth = self.health;
 
     if (snap.crates !== undefined) {
-      snap.crates.forEach(([x, y], index) => {
-        const crate = this.crates[index];
-        if (!crate) return;
-        crate.x = Phaser.Math.Linear(crate.x, x, smoothing);
-        crate.y = Phaser.Math.Linear(crate.y, y, smoothing);
+      if (isNew) {
+        snap.crates.forEach(([x, y], index) => {
+          const crate = this.crates[index];
+          if (crate) {
+            crate.setData("netTargetX", x);
+            crate.setData("netTargetY", y);
+          }
+        });
+      }
+      this.crates.forEach((crate) => {
+        const tx = crate.getData("netTargetX");
+        const ty = crate.getData("netTargetY");
+        if (tx !== undefined && ty !== undefined) {
+          crate.x = Phaser.Math.Linear(crate.x, tx, smoothing);
+          crate.y = Phaser.Math.Linear(crate.y, ty, smoothing);
+        }
       });
     }
 
     if (snap.enemies !== undefined) {
-      const aliveEnemies = new Map<number, [number, number]>();
-      for (const [netId, x, y] of snap.enemies) aliveEnemies.set(netId, [x, y]);
+      if (isNew) {
+        const aliveEnemies = new Map<number, [number, number]>();
+        for (const [netId, x, y] of snap.enemies) aliveEnemies.set(netId, [x, y]);
+        this.enemies.children.each((obj) => {
+          const enemy = obj as BaseEnemy;
+          const netId = enemy.getData("netId") as number | undefined;
+          if (typeof netId !== "number") return true;
+          const target = aliveEnemies.get(netId);
+          if (!target) {
+            enemy.destroy();
+            return true;
+          }
+          enemy.setData("netTargetX", target[0]);
+          enemy.setData("netTargetY", target[1]);
+          return true;
+        });
+      }
       this.enemies.children.each((obj) => {
         const enemy = obj as BaseEnemy;
-        const netId = enemy.getData("netId") as number | undefined;
-        if (typeof netId !== "number") return true;
-        const target = aliveEnemies.get(netId);
-        if (!target) {
-          enemy.destroy();
-          return true;
+        const tx = enemy.getData("netTargetX");
+        const ty = enemy.getData("netTargetY");
+        if (tx !== undefined && ty !== undefined) {
+          enemy.x = Phaser.Math.Linear(enemy.x, tx, smoothing);
+          enemy.y = Phaser.Math.Linear(enemy.y, ty, smoothing);
         }
-        enemy.x = Phaser.Math.Linear(enemy.x, target[0], smoothing);
-        enemy.y = Phaser.Math.Linear(enemy.y, target[1], smoothing);
         return true;
       });
     }
@@ -2097,6 +2123,7 @@ export class PuzzleScene extends Phaser.Scene {
     target.setVisible(true);
     const body = target.body as Phaser.Physics.Arcade.Body;
     body.enable = this.isHost;
+    if (this.isHost) body.setAllowGravity(true);
   }
 
   private handleParticipantReconnectExpired(slot: number): void {

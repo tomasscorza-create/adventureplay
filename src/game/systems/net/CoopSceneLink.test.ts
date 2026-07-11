@@ -33,6 +33,12 @@ class FakeTransport implements CoopLinkTransport {
   readonly sentEnds: { reason: CoopEndReason; slot?: number }[] = [];
   leaveCalls = 0;
   throwOnInputSend = false;
+  private inputSeq = 0;
+
+  generateInputSeq(): number {
+    this.inputSeq += 1;
+    return this.inputSeq;
+  }
 
   onInput(cb: (message: CoopInputMessage) => void): () => void {
     this.inputHandlers.add(cb);
@@ -384,7 +390,7 @@ describe("CoopSceneLink guest", () => {
     expect(transport.sentInputs).toHaveLength(2);
     expect(transport.sentInputs[1]).toEqual({
       slot: 1,
-      seq: 2,
+      seq: 3,
       bits: packInputState({ ...emptyGameplayInputState, power: true }),
     });
   });

@@ -33,7 +33,7 @@ export const COOP_PROTOCOL_VERSION = 10;
 
 // Tiempo durante el cual una ausencia de presence en partida se considera una
 // desconexion recuperable. Al vencer, la salida se vuelve definitiva.
-export const COOP_RECONNECT_WINDOW_MS = 10_000;
+export const COOP_RECONNECT_WINDOW_MS = 30_000;
 
 export type CoopRole = "host" | "guest";
 
