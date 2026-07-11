@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { NetProjectile } from "./coopMessages";
+import { uniqueProjectilesByNetId } from "./netVisualIdentity";
 
 // Representacion visual de los proyectiles autoritativos del host en la escena
 // del guest: sprites sin fisica creados/interpolados/destruidos segun el
@@ -15,7 +16,7 @@ export class CoopProjectilePuppets {
 
   apply(entries: NetProjectile[]): void {
     const alive = new Set<number>();
-    for (const [netId, x, y, direction] of entries) {
+    for (const [netId, x, y, direction] of uniqueProjectilesByNetId(entries)) {
       alive.add(netId);
       const existing = this.sprites.get(netId);
       if (existing) {
@@ -38,6 +39,15 @@ export class CoopProjectilePuppets {
       this.flashAt(sprite.x, sprite.y);
       sprite.destroy();
     }
+  }
+
+  dispose(): void {
+    for (const sprite of this.sprites.values()) sprite.destroy();
+    this.sprites.clear();
+  }
+
+  get size(): number {
+    return this.sprites.size;
   }
 
   private flashAt(x: number, y: number): void {

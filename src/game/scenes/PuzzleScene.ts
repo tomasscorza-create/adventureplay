@@ -167,6 +167,7 @@ export class PuzzleScene extends Phaser.Scene {
   private lastGuestHudKey = "";
   private lastAppliedSnapshotSeq = -1;
   private lastReconciledSnapshotSeq = -1;
+  private guestPredictionActive = false;
 
   constructor() {
     super("PuzzleScene");
@@ -176,6 +177,8 @@ export class PuzzleScene extends Phaser.Scene {
     this.guestPrediction.reset();
     this.guestPredictionMovement.reset();
     this.lastReconciledSnapshotSeq = -1;
+    this.lastAppliedSnapshotSeq = -1;
+    this.guestPredictionActive = false;
     this.level = puzzleLevelDefinitions[data.levelId ?? "trialChamber1"]
       ?? puzzleLevelDefinitions.trialChamber1;
     this.save = gameSaveStore.load();
@@ -1806,6 +1809,7 @@ export class PuzzleScene extends Phaser.Scene {
       this.unbindContinue?.();
       this.unbindMenu?.();
       this.unbindCameraZoom?.();
+      this.projectilePuppets?.dispose();
       this.coopLink?.dispose(this.keepCoopSessionOnShutdown);
       touchInputStore.reset();
       this.scene.stop("UIScene");
@@ -1957,24 +1961,41 @@ export class PuzzleScene extends Phaser.Scene {
       this.handlePausePressed();
       return;
     }
-    const predictionSeq = this.coopLink?.sendLocalInput(time, input) ?? 0;
+    const sentCommand = this.coopLink?.sendLocalInput(time, input);
+    if (sentCommand) this.guestPrediction.record(sentCommand);
     const localPlayer = this.playerAtSlot(this.coopSelfSlot);
-    if (localPlayer) {
-      const jumped = this.guestPredictionMovement.update(localPlayer, input, delta);
-      if (jumped) this.playSfx("jump");
-      this.playPredictedActions(localPlayer, input);
-      this.guestPrediction.recordPlayer(predictionSeq, input, delta, localPlayer);
-    }
     const latest = this.coopLink?.latestSnapshot;
     if (latest && latest.seq !== this.lastReconciledSnapshotSeq && localPlayer) {
       this.lastReconciledSnapshotSeq = latest.seq;
-      const authoritative = latest.players[this.coopSelfSlot];
-      if (authoritative) {
-        this.guestPrediction.reconcile(
-          localPlayer,
-          authoritative,
-          latest.inputSeqBySlot[this.coopSelfSlot] ?? -1,
-        );
+      this.guestPrediction.acknowledge(latest.inputSeqBySlot[this.coopSelfSlot] ?? -1);
+    }
+    if (localPlayer) {
+      const authoritative = latest?.players[this.coopSelfSlot];
+      const safe = this.isGuestPredictionSafe(localPlayer, authoritative);
+      if (!safe && authoritative) {
+        this.guestPredictionActive = false;
+        this.freezePuppet(localPlayer);
+        applyNetPlayer(localPlayer, authoritative);
+        this.guestPredictionMovement.reset();
+      } else {
+        if (!this.guestPredictionActive) {
+          this.enablePredictedPlayer(localPlayer);
+          this.guestPredictionActive = true;
+        }
+        if (authoritative && this.guestPrediction.needsAuthoritativeReset(localPlayer, authoritative)) {
+          localPlayer.setPosition(authoritative.x, authoritative.y);
+          const body = localPlayer.body as Phaser.Physics.Arcade.Body;
+          body.setVelocity(authoritative.vx, authoritative.vy);
+          this.guestPredictionMovement.reset();
+          this.guestPredictionMovement.update(
+            localPlayer,
+            this.guestPrediction.latestPendingFrame(),
+            0,
+          );
+        }
+        const jumped = this.guestPredictionMovement.update(localPlayer, input, delta);
+        if (jumped) this.playSfx("jump");
+        this.playPredictedActions(localPlayer, input);
       }
     }
     const frame = this.coopLink?.renderSnapshot();
@@ -1994,6 +2015,17 @@ export class PuzzleScene extends Phaser.Scene {
     this.guestPrediction.reset();
     this.guestPredictionMovement.reset();
     this.lastReconciledSnapshotSeq = -1;
+    this.guestPredictionActive = false;
+  }
+
+  private isGuestPredictionSafe(
+    player: Player,
+    authoritative: WorldSnapshot["players"][number] | undefined,
+  ): boolean {
+    if (player.y > GAME_HEIGHT + 60) return false;
+    const points = [[player.x, player.y], [authoritative?.x ?? player.x, authoritative?.y ?? player.y]];
+    return !this.crates.some((crate) => points.some(([x, y]) =>
+      Math.hypot(crate.x - x, crate.y - y) < 120));
   }
 
   private playPredictedActions(player: Player, input: GameplayInputFrame): void {
@@ -2194,18 +2226,17 @@ export class PuzzleScene extends Phaser.Scene {
     const target = this.playerAtSlot(slot);
     if (!target) return;
     this.freezePuppet(target);
-    target.setActive(false);
-    target.setVisible(false);
+    target.setNetworkPresence(false);
   }
 
   private handleParticipantRejoined(slot: number): void {
     const target = this.playerAtSlot(slot);
     if (!target) return;
-    target.setActive(true);
-    target.setVisible(true);
+    target.setNetworkPresence(true);
     const body = target.body as Phaser.Physics.Arcade.Body;
-    body.enable = this.isHost;
-    if (this.isHost) body.setAllowGravity(true);
+    const locallyPredicted = this.isGuest && slot === this.coopSelfSlot;
+    body.enable = this.isHost || locallyPredicted;
+    body.setAllowGravity(this.isHost || locallyPredicted);
   }
 
   private handleParticipantReconnectExpired(slot: number): void {

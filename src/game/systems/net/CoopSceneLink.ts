@@ -23,6 +23,7 @@ import {
   type SnapshotRenderFrame,
   type TimedSnapshot,
 } from "./CoopSnapshotInterpolator";
+import type { CoopPredictionCommand } from "./CoopLocalPrediction";
 
 // Transporte minimo que necesita el link. CoopSession lo satisface tal cual;
 // los tests inyectan una implementacion falsa sin tocar Supabase.
@@ -123,7 +124,6 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
   // Guest: throttling de input saliente y ultimo snapshot aceptado.
   private lastInputSentAt = 0;
   private lastInputBits = -1;
-  private lastLocalInputSeq = 0;
   // Flancos locales que aun no pudieron cruzar la red por el throttle. El
   // contador conserva incluso pulsaciones repetidas de una misma accion; si el
   // ultimo paquete aun la tenia activa, primero se envia su liberacion y luego
@@ -296,7 +296,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
   // Los taps mobile pueden vivir un unico frame solo como "justPressed", sin
   // estado sostenido (cola de TouchInputStore): se funden en los bits para que
   // el host siempre reciba al menos un mensaje con la accion activa.
-  sendLocalInput(timeMs: number, frame: GameplayInputFrame): number {
+  sendLocalInput(timeMs: number, frame: GameplayInputFrame): CoopPredictionCommand | undefined {
     for (const [action, edge] of LOCAL_PRESS_EDGES) {
       if (frame[edge]) {
         this.pendingLocalPresses[action] = (this.pendingLocalPresses[action] ?? 0) + 1;
@@ -334,15 +334,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
     const elapsed = timeMs - this.lastInputSentAt;
     const changed = bits !== this.lastInputBits;
     if (changed ? elapsed < MIN_INPUT_INTERVAL_MS : elapsed < COOP_INPUT_KEEPALIVE_MS) {
-      // Los frames locales posteriores al ultimo paquete pertenecen al proximo
-      // seq: asi un ACK del paquete sostenido anterior no borra prediccion que
-      // ocurrio despues del snapshot autoritativo.
-      return this.lastLocalInputSeq + 1;
+      return undefined;
     }
 
     const nextSeq = this.transport.generateInputSeq();
     this.transport.sendInput({ slot: this.localSlot, seq: nextSeq, bits });
-    this.lastLocalInputSeq = nextSeq;
 
     // Solo consumir flancos y avanzar el estado despues de que el transporte
     // haya aceptado el envio; si lanza un error, la cola queda intacta.
@@ -353,7 +349,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
     }
     this.lastInputBits = bits;
     this.lastInputSentAt = timeMs;
-    return nextSeq;
+    return { seq: nextSeq, state: unpackInputState(bits) };
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.

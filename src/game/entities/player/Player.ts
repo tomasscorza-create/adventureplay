@@ -183,6 +183,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.playAnimation("dead");
   }
 
+  // Player y arma son GameObjects separados: presencia de red debe cambiar el
+  // lifecycle de ambos de forma atomica para no dejar armas/fantasmas visibles.
+  setNetworkPresence(present: boolean): void {
+    this.setActive(present);
+    this.setVisible(present);
+    this.equippedWeapon?.setActive(present).setVisible(present);
+  }
+
   // Co-op (lado guest): aplica el estado autoritativo recibido por red a este
   // titere, sin simular fisica. Solo actualiza direccion y animacion visibles.
   renderNetState(state: PlayerState, facing: -1 | 1): void {

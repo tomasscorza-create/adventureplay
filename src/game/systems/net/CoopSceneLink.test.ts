@@ -282,6 +282,21 @@ describe("CoopSceneLink guest", () => {
     expect(transport.sentInputs[2].bits).toBe(packInputState(idle));
   });
 
+  it("expone para prediccion solo comandos que realmente cruzaron el transporte", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    const running = asFrame({ right: true });
+
+    const sent = link.sendLocalInput(100, running);
+    const throttled = link.sendLocalInput(110, running);
+
+    expect(sent).toEqual({
+      seq: 1,
+      state: { ...emptyGameplayInputState, right: true },
+    });
+    expect(throttled).toBeUndefined();
+  });
+
   it("estampa su slot local en cada input enviado", () => {
     const transport = new FakeTransport();
     const link = makeGuest(transport, 2);

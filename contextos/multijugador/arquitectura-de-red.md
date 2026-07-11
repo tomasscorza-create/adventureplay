@@ -15,7 +15,7 @@ No hay sockets acoplados dentro de escenas ni entidades.
 | `src/game/systems/net/levelCoopMessages.ts` | `LevelSnapshot` (Explorar): entidades propias de `LevelScene`. |
 | `src/game/systems/net/CoopSceneLink.ts` | **Plumbing compartido** por ambas escenas: dedupe por seq, flancos del input remoto por slot, throttling de envíos, guardas de fin de sesión. Testeable con transporte inyectado. |
 | `src/game/systems/net/CoopSnapshotInterpolator.ts` | Buffer temporal de tres snapshots, reloj del host, interpolación a 85 ms y extrapolación limitada a 100 ms. |
-| `src/game/systems/net/CoopLocalPrediction.ts` | Historial acotado de inputs/desplazamientos locales y reconciliación suave contra ACK autoritativo. |
+| `src/game/systems/net/CoopLocalPrediction.ts` | Historial acotado de comandos realmente enviados, limpieza por ACK y replay de intención sostenida sin repetir flancos. |
 | `src/game/systems/net/coopPlayerNet.ts` | `toNetPlayer` / `applyNetPlayer` compartidos. |
 | `src/game/systems/net/CoopProjectilePuppets.ts` | Sprites sin física que representan los proyectiles del host en el guest (interpola + destello al desaparecer). |
 | `src/game/events/EventBus.ts` | `START_GAME` lleva `coop?: CoopSessionInfo` (`{ role, code, localSlot, roster }`). |
@@ -135,12 +135,13 @@ GUEST                              HOST (CoopSceneLink)
   remotos, enemigos y proyectiles entre snapshots del host con 85 ms de retraso. Si falta el
   siguiente snapshot, solo los jugadores extrapolan con `vx/vy`, durante un máximo de 100 ms.
   El personaje local del guest habilita su cuerpo y reutiliza `MovementSystem`; cada snapshot
-  confirma el último input consumido por slot. Se eliminan muestras confirmadas y se reaplican los
-  desplazamientos pendientes. Errores de hasta 96 px se corrigen con factor 0,35; errores mayores
-  hacen snap. El historial se limita a 180 muestras y 3 segundos.
+  confirma el último input consumido por slot. Se eliminan comandos confirmados y se conserva la
+  intención sostenida pendiente, sin volver a disparar flancos. En geometría estática Phaser y
+  `MovementSystem` son los únicos escritores; una divergencia mayor a 96 px hace un reset único
+  antes del tick físico. El historial se limita a 96 paquetes.
 - La predicción no resuelve daño, vida, cargas, enemigos, cajas, puertas, resultados ni proyectiles.
-  Plataformas móviles, cajas y peligros siguen siendo exclusivamente autoritativos; por eso solo se
-  anticipan locomoción sobre geometría estática y animación/SFX local de acciones.
+  Cerca de plataformas móviles/hundibles o cajas se degrada temporalmente a render autoritativo;
+  también se recupera desde snapshot si el guest cae fuera del mundo.
 - El `seq` (por slot en el input, global en el snapshot) descarta mensajes fuera de orden.
 
 Detalle de la aplicación por escena en `integracion-en-escenas.md`.

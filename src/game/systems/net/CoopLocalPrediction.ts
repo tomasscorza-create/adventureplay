@@ -1,117 +1,66 @@
-import type { GameplayInputFrame } from "../../../shared/types/input";
-import type { Player } from "../../entities/player/Player";
-import type { NetPlayerState } from "./coopMessages";
+import {
+  emptyGameplayInputState,
+  type GameplayInputFrame,
+  type GameplayInputState,
+} from "../../../shared/types/input";
 
-export const COOP_PREDICTION_SNAP_DISTANCE = 96;
-export const COOP_PREDICTION_SOFT_FACTOR = 0.35;
-export const COOP_PREDICTION_MAX_HISTORY = 180;
-const COOP_PREDICTION_MAX_AGE_MS = 3000;
+export const COOP_PREDICTION_MAX_HISTORY = 96;
+export const COOP_PREDICTION_HARD_RESET_DISTANCE = 96;
 
-interface PredictedInputSample {
+export interface CoopPredictionCommand {
   seq: number;
-  elapsedMs: number;
-  dx: number;
-  dy: number;
-  vx: number;
-  vy: number;
-  input: GameplayInputFrame;
+  state: GameplayInputState;
 }
 
-export interface PredictionReconciliation {
-  acknowledged: number;
-  pending: number;
-  error: number;
-  snapped: boolean;
-}
-
-// Conserva solo el movimiento visual reproducible. No modela colisiones con
-// entidades dinámicas ni consecuencias de combate: esas siguen en el host.
+// El historial usa exactamente la granularidad del transporte: una entrada por
+// paquete realmente enviado. No captura posiciones ni desplazamientos Phaser.
 export class CoopLocalPrediction {
-  private readonly pending: PredictedInputSample[] = [];
-  private lastObservedPosition?: { x: number; y: number };
+  private readonly pending: CoopPredictionCommand[] = [];
 
-  recordPlayer(seq: number, input: GameplayInputFrame, deltaMs: number, player: Player): void {
-    const body = player.body as Phaser.Physics.Arcade.Body;
-    const previous = this.lastObservedPosition;
-    this.record(
-      seq,
-      input,
-      deltaMs,
-      body.velocity,
-      previous ? { x: player.x - previous.x, y: player.y - previous.y } : { x: 0, y: 0 },
-    );
-    this.lastObservedPosition = { x: player.x, y: player.y };
-  }
-
-  record(
-    seq: number,
-    input: GameplayInputFrame,
-    deltaMs: number,
-    velocity: { x: number; y: number },
-    displacement?: { x: number; y: number },
-  ): void {
-    if (seq <= 0) return;
-    const elapsedMs = Math.max(0, Math.min(50, deltaMs));
-    this.pending.push({
-      seq,
-      elapsedMs,
-      dx: displacement?.x ?? velocity.x * elapsedMs / 1000,
-      dy: displacement?.y ?? velocity.y * elapsedMs / 1000,
-      vx: velocity.x,
-      vy: velocity.y,
-      input,
-    });
+  record(command: CoopPredictionCommand): void {
+    if (command.seq <= 0 || this.pending.some((entry) => entry.seq === command.seq)) return;
+    this.pending.push({ seq: command.seq, state: { ...command.state } });
+    this.pending.sort((a, b) => a.seq - b.seq);
     while (this.pending.length > COOP_PREDICTION_MAX_HISTORY) this.pending.shift();
-    while (this.pending.length > 0 && this.totalAgeMs() > COOP_PREDICTION_MAX_AGE_MS) {
-      this.pending.shift();
-    }
   }
 
-  reconcile(player: Player, authoritative: NetPlayerState, acknowledgedSeq: number): PredictionReconciliation {
-    let acknowledged = 0;
-    while (this.pending.length > 0 && this.pending[0].seq <= acknowledgedSeq) {
+  acknowledge(processedSeq: number): number {
+    let removed = 0;
+    while (this.pending.length > 0 && this.pending[0].seq <= processedSeq) {
       this.pending.shift();
-      acknowledged += 1;
+      removed += 1;
     }
+    return removed;
+  }
 
-    let targetX = authoritative.x;
-    let targetY = authoritative.y;
-    for (const sample of this.pending) {
-      targetX += sample.dx;
-      targetY += sample.dy;
-    }
-    const errorX = targetX - player.x;
-    const errorY = targetY - player.y;
-    const error = Math.hypot(errorX, errorY);
-    const snapped = error > COOP_PREDICTION_SNAP_DISTANCE;
-    if (snapped) {
-      player.setPosition(targetX, targetY);
-    } else {
-      player.setPosition(
-        player.x + errorX * COOP_PREDICTION_SOFT_FACTOR,
-        player.y + errorY * COOP_PREDICTION_SOFT_FACTOR,
-      );
-    }
+  // Reproduce solo intención sostenida. Los flancos ya ejecutados localmente no
+  // se vuelven a disparar al reconciliar, evitando dobles saltos/ataques/poderes.
+  latestPendingFrame(): GameplayInputFrame {
+    const state = this.pending[this.pending.length - 1]?.state ?? emptyGameplayInputState;
+    return {
+      ...state,
+      jumpJustPressed: false,
+      meleeJustPressed: false,
+      spinJustPressed: false,
+      healJustPressed: false,
+      powerJustPressed: false,
+      pauseJustPressed: false,
+    };
+  }
 
-    const body = player.body as Phaser.Physics.Arcade.Body;
-    const latest = this.pending[this.pending.length - 1];
-    body.setVelocity(latest?.vx ?? authoritative.vx, latest?.vy ?? authoritative.vy);
-    player.stats.health = authoritative.health;
-    if (!latest) player.renderNetState(authoritative.state, authoritative.facing);
-    this.lastObservedPosition = { x: player.x, y: player.y };
-    return { acknowledged, pending: this.pending.length, error, snapped };
+  needsAuthoritativeReset(
+    local: { x: number; y: number },
+    authoritative: { x: number; y: number },
+  ): boolean {
+    return Math.hypot(local.x - authoritative.x, local.y - authoritative.y)
+      > COOP_PREDICTION_HARD_RESET_DISTANCE;
   }
 
   reset(): void {
     this.pending.length = 0;
-    this.lastObservedPosition = undefined;
   }
 
   get pendingCount(): number {
     return this.pending.length;
-  }
-
-  private totalAgeMs(): number {
-    return this.pending.reduce((total, sample) => total + sample.elapsedMs, 0);
   }
 }
