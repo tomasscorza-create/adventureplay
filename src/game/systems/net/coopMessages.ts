@@ -28,8 +28,8 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 //     las compras del guest viajan como delta `charges` hacia el host.
 // v8: canal de input separado y snapshots con delta en arrays (secciones opcionales).
 // v9: reserva temporal de identidad/slot y recuperacion por snapshot completo.
-// v10: envelope comun con identidad/rol, validacion defensiva y rate limiting.
-export const COOP_PROTOCOL_VERSION = 10;
+// v11: reloj autoritativo del host para interpolacion temporal de snapshots.
+export const COOP_PROTOCOL_VERSION = 11;
 
 // Tiempo durante el cual una ausencia de presence en partida se considera una
 // desconexion recuperable. Al vencer, la salida se vuelve definitiva.
@@ -227,6 +227,7 @@ export type NetProjectile = [number, number, number, -1 | 1];
 // arreglo admite mas sin cambiar la forma del mensaje.
 export interface WorldSnapshot {
   seq: number;
+  hostTimeMs: number;
   players: NetPlayerState[];
   crates?: Array<[number, number]>;
   // [netId, x, y] por enemigo vivo; los ausentes fueron derrotados.

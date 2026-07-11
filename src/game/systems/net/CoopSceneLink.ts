@@ -18,6 +18,11 @@ import {
   type CoopRole,
   type CoopStartMessage,
 } from "./coopMessages";
+import {
+  CoopSnapshotInterpolator,
+  type SnapshotRenderFrame,
+  type TimedSnapshot,
+} from "./CoopSnapshotInterpolator";
 
 // Transporte minimo que necesita el link. CoopSession lo satisface tal cual;
 // los tests inyectan una implementacion falsa sin tocar Supabase.
@@ -102,7 +107,7 @@ const OPTIONAL_SECTIONS = new Set([
 // por seq en ambas direcciones, reconstruccion de flancos del input remoto,
 // throttling de envios y guardas de fin de sesion. Vive fuera de Phaser: las
 // escenas solo aportan como construir/aplicar su snapshot especifico.
-export class CoopSceneLink<TSnapshot extends { seq: number }> {
+export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number }> {
   readonly role: CoopRole;
   readonly localSlot: number;
   private readonly transport: CoopLinkTransport;
@@ -120,6 +125,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
   // el siguiente flanco para que el host pueda reconstruir ambas transiciones.
   private readonly pendingLocalPresses: Partial<Record<keyof GameplayInputState, number>> = {};
   private latest?: TSnapshot;
+  private readonly snapshotTimeline = new CoopSnapshotInterpolator<TSnapshot & TimedSnapshot>();
 
   // Host: throttling y numeracion de snapshots salientes.
   private lastSnapshotSentAt = 0;
@@ -135,6 +141,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     this.role = info.role;
     this.localSlot = info.localSlot;
     this.transport = transport;
+  }
+
+  renderSnapshot(localNowMs?: number): SnapshotRenderFrame<TSnapshot & TimedSnapshot> | undefined {
+    const now = localNowMs ?? (typeof performance !== "undefined" ? performance.now() : Date.now());
+    return this.snapshotTimeline.sample(now);
   }
 
   get isHost(): boolean {
@@ -169,6 +180,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
       this.unbinds.push(
         this.transport.onSnapshot<TSnapshot>((snapshot) => {
           if (this.latest && snapshot.seq <= this.latest.seq) return;
+          if (typeof snapshot.hostTimeMs !== "number") return;
           if (this.latest && snapshot.seq > this.latest.seq + 1) {
             this.transport.recordDesync?.();
           }
@@ -183,7 +195,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
             }
           }
           
-          this.latest = snapshot;
+          const accepted = this.snapshotTimeline.push(
+            snapshot as TSnapshot & TimedSnapshot,
+            typeof performance !== "undefined" ? performance.now() : Date.now(),
+          );
+          if (accepted) this.latest = snapshot;
         }),
       );
     }
@@ -329,6 +345,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number }> {
     this.snapshotSeq += 1;
     
     const snap = build(this.snapshotSeq) as Record<string, unknown>;
+    snap.hostTimeMs = timeMs;
     const out: Record<string, unknown> = {};
     const isKeyframe = this.forceFullSnapshot
       || this.snapshotSeq % COOP_SNAPSHOT_RATE_HZ === 0;

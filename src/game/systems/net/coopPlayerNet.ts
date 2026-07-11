@@ -32,9 +32,9 @@ export function toNetPlayer(
   };
 }
 
-export function applyNetPlayer(player: Player, net: NetPlayerState, smoothing: number): void {
-  player.x = Phaser.Math.Linear(player.x, net.x, smoothing);
-  player.y = Phaser.Math.Linear(player.y, net.y, smoothing);
+export function applyNetPlayer(player: Player, net: NetPlayerState): void {
+  player.x = net.x;
+  player.y = net.y;
   player.stats.health = net.health;
   player.renderNetState(net.state, net.facing);
 }

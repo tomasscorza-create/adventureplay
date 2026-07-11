@@ -52,6 +52,12 @@ import { CoopProjectilePuppets } from "../systems/net/CoopProjectilePuppets";
 import { applyNetPlayer, toNetPlayer } from "../systems/net/coopPlayerNet";
 import type { CoopStartPlayer, NetProjectile } from "../systems/net/coopMessages";
 import type { LevelSnapshot } from "../systems/net/levelCoopMessages";
+import {
+  interpolatePlayer,
+  interpolatePositionTuples,
+  interpolateProjectiles,
+  type SnapshotRenderFrame,
+} from "../systems/net/CoopSnapshotInterpolator";
 
 // Margen fijo (px) que la linea de presion co-op mantiene detras del jugador mas
 // atrasado. Independiente de la camara, que ahora es por dispositivo.
@@ -2292,6 +2298,7 @@ export class LevelScene extends Phaser.Scene {
     ];
     return {
       seq,
+      hostTimeMs: this.time.now,
       players,
       enemies,
       platforms,
@@ -2314,26 +2321,47 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
     this.coopLink?.sendLocalInput(time, input);
-    const snapshot = this.coopLink?.latestSnapshot;
-    if (snapshot) {
-      const isNew = snapshot.seq !== this.lastAppliedSnapshotSeq;
-      this.lastAppliedSnapshotSeq = snapshot.seq;
+    const frame = this.coopLink?.renderSnapshot();
+    if (frame) {
+      const snapshot = this.interpolateSnapshot(frame);
+      const isNew = frame.previous.seq !== this.lastAppliedSnapshotSeq;
+      this.lastAppliedSnapshotSeq = frame.previous.seq;
       this.applySnapshot(snapshot, isNew);
-      this.remainingTimeMs = snapshot.timeMs;
+      this.remainingTimeMs = frame.previous.timeMs;
     }
     this.emitHud();
   }
 
+  private interpolateSnapshot(frame: SnapshotRenderFrame<LevelSnapshot>): LevelSnapshot {
+    const { previous, next, alpha, extrapolationMs } = frame;
+    const latest = this.coopLink?.latestSnapshot ?? previous;
+    return {
+      ...previous,
+      players: previous.players.map((player, slot) => slot === this.coopSelfSlot
+        ? latest.players[slot] ?? player
+        : interpolatePlayer(player, next?.players[slot], alpha, extrapolationMs)),
+      enemies: previous.enemies
+        ? interpolatePositionTuples(previous.enemies, next?.enemies, alpha)
+        : undefined,
+      platforms: previous.platforms
+        ? interpolatePositionTuples(previous.platforms, next?.platforms, alpha)
+        : undefined,
+      hazards: previous.hazards
+        ? interpolatePositionTuples(previous.hazards, next?.hazards, alpha)
+        : undefined,
+      projectiles: interpolateProjectiles(previous.projectiles, next?.projectiles, alpha),
+    };
+  }
+
   private applySnapshot(snap: LevelSnapshot, isNew: boolean): void {
-    const s = 0.4;
     // players[] esta indexado por slot: se resuelve cada jugador por su slot y
     // NO por posicion en allPlayers(), que filtra a los que abandonaron y
     // desalinearia los estados (aplicaria el estado del que se fue al siguiente).
     snap.players.forEach((net, slot) => {
       const target = this.playerAtSlot(slot);
-      if (target && net) applyNetPlayer(target, net, s);
+      if (target && net) applyNetPlayer(target, net);
     });
-    this.projectilePuppets?.apply(snap.projectiles, s);
+    this.projectilePuppets?.apply(snap.projectiles);
 
     // Deteccion de dano propio para el destello/sacudida local del guest, leido
     // en su slot dentro del snapshot.
@@ -2361,66 +2389,21 @@ export class LevelScene extends Phaser.Scene {
             enemy.destroy();
             return true;
           }
-          enemy.setData("netTargetX", target[0]);
-          enemy.setData("netTargetY", target[1]);
+          enemy.x = target[0];
+          enemy.y = target[1];
           enemy.setFlipX(target[2] === 1);
           return true;
         });
       }
-      this.enemies.children.each((obj) => {
-        const enemy = obj as BaseEnemy;
-        const tx = enemy.getData("netTargetX");
-        const ty = enemy.getData("netTargetY");
-        if (tx !== undefined && ty !== undefined) {
-          enemy.x = Phaser.Math.Linear(enemy.x, tx, s);
-          enemy.y = Phaser.Math.Linear(enemy.y, ty, s);
-        }
-        return true;
-      });
+      if (!isNew) this.applyNetTransforms(this.enemies, snap.enemies);
     }
 
     if (snap.platforms !== undefined) {
-      if (isNew) {
-        snap.platforms.forEach(([x, y], index) => {
-          const platform = this.movingPlatforms.getChildren()[index] as MovingPlatform;
-          if (platform) {
-            platform.setData("netTargetX", x);
-            platform.setData("netTargetY", y);
-          }
-        });
-      }
-      this.movingPlatforms.children.each((obj) => {
-        const platform = obj as MovingPlatform;
-        const tx = platform.getData("netTargetX");
-        const ty = platform.getData("netTargetY");
-        if (tx !== undefined && ty !== undefined) {
-          platform.x = Phaser.Math.Linear(platform.x, tx, s);
-          platform.y = Phaser.Math.Linear(platform.y, ty, s);
-        }
-        return true;
-      });
+      this.applyNetTransforms(this.movingPlatforms, snap.platforms);
     }
 
     if (snap.hazards !== undefined) {
-      if (isNew) {
-        snap.hazards.forEach(([x, y], index) => {
-          const hazard = this.movingHazards.getChildren()[index] as MovingHazard;
-          if (hazard) {
-            hazard.setData("netTargetX", x);
-            hazard.setData("netTargetY", y);
-          }
-        });
-      }
-      this.movingHazards.children.each((obj) => {
-        const hazard = obj as MovingHazard;
-        const tx = hazard.getData("netTargetX");
-        const ty = hazard.getData("netTargetY");
-        if (tx !== undefined && ty !== undefined) {
-          hazard.x = Phaser.Math.Linear(hazard.x, tx, s);
-          hazard.y = Phaser.Math.Linear(hazard.y, ty, s);
-        }
-        return true;
-      });
+      this.applyNetTransforms(this.movingHazards, snap.hazards);
     }
 
     if (isNew) {
@@ -2455,8 +2438,7 @@ export class LevelScene extends Phaser.Scene {
 
   private applyNetTransforms(
     group: Phaser.Physics.Arcade.Group,
-    positions: Array<[number, number, number]>,
-    smoothing: number,
+    positions: Array<[number, number, number, ...number[]]>,
   ): void {
     const byId = new Map<number, [number, number]>();
     for (const [id, x, y] of positions) byId.set(id, [x, y]);
@@ -2467,8 +2449,8 @@ export class LevelScene extends Phaser.Scene {
       const pos = byId.get(netId);
       if (pos) {
         const t = go as unknown as { x: number; y: number };
-        t.x = Phaser.Math.Linear(t.x, pos[0], smoothing);
-        t.y = Phaser.Math.Linear(t.y, pos[1], smoothing);
+        t.x = pos[0];
+        t.y = pos[1];
       }
       return true;
     });

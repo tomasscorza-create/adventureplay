@@ -53,6 +53,13 @@ import { CoopSceneLink } from "../systems/net/CoopSceneLink";
 import { CoopProjectilePuppets } from "../systems/net/CoopProjectilePuppets";
 import { applyNetPlayer, toNetPlayer } from "../systems/net/coopPlayerNet";
 import type { CoopStartPlayer, NetProjectile, WorldSnapshot } from "../systems/net/coopMessages";
+import {
+  interpolateIndexedPositions,
+  interpolatePlayer,
+  interpolatePositionTuples,
+  interpolateProjectiles,
+  type SnapshotRenderFrame,
+} from "../systems/net/CoopSnapshotInterpolator";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -1909,6 +1916,7 @@ export class PuzzleScene extends Phaser.Scene {
     ];
     return {
       seq,
+      hostTimeMs: this.time.now,
       players,
       crates: this.crates.map((crate) => [Math.round(crate.x), Math.round(crate.y)]),
       enemies,
@@ -1931,28 +1939,46 @@ export class PuzzleScene extends Phaser.Scene {
       return;
     }
     this.coopLink?.sendLocalInput(time, input);
-    const snapshot = this.coopLink?.latestSnapshot;
-    if (snapshot) {
-      const isNew = snapshot.seq !== this.lastAppliedSnapshotSeq;
-      this.lastAppliedSnapshotSeq = snapshot.seq;
+    const frame = this.coopLink?.renderSnapshot();
+    if (frame) {
+      const snapshot = this.interpolateSnapshot(frame);
+      const isNew = frame.previous.seq !== this.lastAppliedSnapshotSeq;
+      this.lastAppliedSnapshotSeq = frame.previous.seq;
       this.applySnapshot(snapshot, isNew);
-      this.remainingTimeMs = snapshot.timeMs;
+      this.remainingTimeMs = frame.previous.timeMs;
     }
     this.updatePlateKeyInterface();
     this.updateObjectiveText();
     this.emitHud();
   }
 
+  private interpolateSnapshot(frame: SnapshotRenderFrame<WorldSnapshot>): WorldSnapshot {
+    const { previous, next, alpha, extrapolationMs } = frame;
+    const latest = this.coopLink?.latestSnapshot ?? previous;
+    return {
+      ...previous,
+      players: previous.players.map((player, slot) => slot === this.coopSelfSlot
+        ? latest.players[slot] ?? player
+        : interpolatePlayer(player, next?.players[slot], alpha, extrapolationMs)),
+      crates: previous.crates
+        ? interpolateIndexedPositions(previous.crates, next?.crates, alpha)
+        : undefined,
+      enemies: previous.enemies
+        ? interpolatePositionTuples(previous.enemies, next?.enemies, alpha)
+        : undefined,
+      projectiles: interpolateProjectiles(previous.projectiles, next?.projectiles, alpha),
+    };
+  }
+
   private applySnapshot(snap: WorldSnapshot, isNew: boolean): void {
-    const smoothing = 0.4;
     // players[] esta indexado por slot: se resuelve cada jugador por su slot y
     // NO por posicion en allPlayers(), que filtra a los que abandonaron y
     // desalinearia los estados (aplicaria el estado del que se fue al siguiente).
     snap.players.forEach((net, slot) => {
       const target = this.playerAtSlot(slot);
-      if (target && net) applyNetPlayer(target, net, smoothing);
+      if (target && net) applyNetPlayer(target, net);
     });
-    this.projectilePuppets?.apply(snap.projectiles, smoothing);
+    this.projectilePuppets?.apply(snap.projectiles);
 
     // Deteccion de dano propio para el destello local del guest, leido en su slot.
     const self = snap.players[this.coopSelfSlot];
@@ -1967,18 +1993,14 @@ export class PuzzleScene extends Phaser.Scene {
         snap.crates.forEach(([x, y], index) => {
           const crate = this.crates[index];
           if (crate) {
-            crate.setData("netTargetX", x);
-            crate.setData("netTargetY", y);
+            crate.x = x;
+            crate.y = y;
           }
         });
       }
-      this.crates.forEach((crate) => {
-        const tx = crate.getData("netTargetX");
-        const ty = crate.getData("netTargetY");
-        if (tx !== undefined && ty !== undefined) {
-          crate.x = Phaser.Math.Linear(crate.x, tx, smoothing);
-          crate.y = Phaser.Math.Linear(crate.y, ty, smoothing);
-        }
+      if (!isNew) snap.crates.forEach(([x, y], index) => {
+        const crate = this.crates[index];
+        if (crate) { crate.x = x; crate.y = y; }
       });
     }
 
@@ -1995,21 +2017,20 @@ export class PuzzleScene extends Phaser.Scene {
             enemy.destroy();
             return true;
           }
-          enemy.setData("netTargetX", target[0]);
-          enemy.setData("netTargetY", target[1]);
+          enemy.x = target[0];
+          enemy.y = target[1];
           return true;
         });
       }
-      this.enemies.children.each((obj) => {
-        const enemy = obj as BaseEnemy;
-        const tx = enemy.getData("netTargetX");
-        const ty = enemy.getData("netTargetY");
-        if (tx !== undefined && ty !== undefined) {
-          enemy.x = Phaser.Math.Linear(enemy.x, tx, smoothing);
-          enemy.y = Phaser.Math.Linear(enemy.y, ty, smoothing);
-        }
-        return true;
-      });
+      if (!isNew) {
+        const positions = new Map(snap.enemies.map(([id, x, y]) => [id, [x, y]]));
+        this.enemies.children.each((obj) => {
+          const enemy = obj as BaseEnemy;
+          const pos = positions.get(enemy.getData("netId") as number);
+          if (pos) { enemy.x = pos[0]; enemy.y = pos[1]; }
+          return true;
+        });
+      }
     }
 
     // Estado de objetivos: activaciones, placas, puertas, sellos y portal.

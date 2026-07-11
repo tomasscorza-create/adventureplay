@@ -14,6 +14,7 @@ No hay sockets acoplados dentro de escenas ni entidades.
 | `src/game/systems/net/coopMessages.ts` | Tipos y serialización comunes: input empaquetado con slot, `NetPlayerState`, `WorldSnapshot` (Desafío), roster (`assignSlots`), código de sala, versión de protocolo, tasas y eventos. |
 | `src/game/systems/net/levelCoopMessages.ts` | `LevelSnapshot` (Explorar): entidades propias de `LevelScene`. |
 | `src/game/systems/net/CoopSceneLink.ts` | **Plumbing compartido** por ambas escenas: dedupe por seq, flancos del input remoto por slot, throttling de envíos, guardas de fin de sesión. Testeable con transporte inyectado. |
+| `src/game/systems/net/CoopSnapshotInterpolator.ts` | Buffer temporal de tres snapshots, reloj del host, interpolación a 85 ms y extrapolación limitada a 100 ms. |
 | `src/game/systems/net/coopPlayerNet.ts` | `toNetPlayer` / `applyNetPlayer` compartidos. |
 | `src/game/systems/net/CoopProjectilePuppets.ts` | Sprites sin física que representan los proyectiles del host en el guest (interpola + destello al desaparecer). |
 | `src/game/events/EventBus.ts` | `START_GAME` lleva `coop?: CoopSessionInfo` (`{ role, code, localSlot, roster }`). |
@@ -66,7 +67,7 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `10`. Envelope validado, guardas de autoridad/rate/slot y diagnóstico opt-in; conserva la reconexión v9. |
+| `COOP_PROTOCOL_VERSION` | `11`. Agrega `hostTimeMs` para interpolación temporal; conserva seguridad v10 y reconexión v9. |
 | `COOP_RECONNECT_WINDOW_MS` | `10000`. Ventana para recuperar el mismo slot antes de convertir la ausencia en salida definitiva. |
 | `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
@@ -80,7 +81,7 @@ instancie y valide compatibilidad.
 | `assignSlots(entries)` | Roster determinista: host → slot 0; guests ordenados por clientId → 1..N. Igual en todos los clientes. |
 | `NetPlayerState` | `{ x, y, vx, vy, facing, state, health, maxHealth, healCharges, powerCharges, spinCdMs }` |
 | `NetProjectile` | `[netId, x, y, dir]` por proyectil de poder letal vivo. |
-| `WorldSnapshot` (Desafío) | `{ seq, players[], crates?, enemies?, projectiles, active?, gatesOpen?, sealsAlive?, goalOpen, timeMs }` — Usa campos opcionales para compresión delta (solo se envían si cambiaron respecto al último snapshot). |
+| `WorldSnapshot` (Desafío) | `{ seq, hostTimeMs, players[], crates?, enemies?, projectiles, active?, gatesOpen?, sealsAlive?, goalOpen, timeMs }` — Usa campos opcionales para compresión delta (solo se envían si cambiaron respecto al último snapshot). |
 | Código de sala | `ROOM_CODE_LENGTH = 4`, alfabeto sin caracteres ambiguos; `generateRoomCode` / `normalizeRoomCode` / `isValidRoomCode`. |
 
 **Input robusto ante pérdidas (`CoopSceneLink`):** el guest envía su input **solo al cambiar**
@@ -129,9 +130,10 @@ GUEST                              HOST (CoopSceneLink)
   `players` del snapshot está indexado por slot; el guest lee su propio estado en
   `snap.players[coopSelfSlot]` (`= coopSession.localSlot`). `COOP_MAX_PLAYERS = 4`; la cantidad y
   los héroes vienen del roster autoritativo del host.
-- El guest **congela** sus cuerpos (`freezePuppet` → `body.enable = false`) y solo mueve los
-  sprites por interpolación (`Phaser.Math.Linear`, factor `0.4`) + `Player.renderNetState`
-  (facing + animación). Los proyectiles del host se dibujan con `CoopProjectilePuppets`.
+- El guest **congela** sus cuerpos (`freezePuppet` → `body.enable = false`) y renderiza jugadores
+  remotos, enemigos y proyectiles entre snapshots del host con 85 ms de retraso. Si falta el
+  siguiente snapshot, solo los jugadores extrapolan con `vx/vy`, durante un máximo de 100 ms.
+  El personaje local del guest sigue autoritativo y sin predicción/reconciliación.
 - El `seq` (por slot en el input, global en el snapshot) descarta mensajes fuera de orden.
 
 Detalle de la aplicación por escena en `integracion-en-escenas.md`.
@@ -141,7 +143,7 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 - Presence conserva una identidad estable mientras vive `CoopSession`; una resuscripción reutiliza esa identidad.
 - Al desaparecer un participante durante la partida, su slot queda reservado 10 segundos. Ningún late join puede ocuparlo.
 - El host neutraliza inmediatamente el último input remoto para evitar movimiento atascado y las escenas ocultan/congelan la entidad sin destruir su vida, cargas ni posición.
-- Si vuelve con protocolo v10 dentro de la ventana, se reactiva la misma entidad y el host fuerza el siguiente snapshot como keyframe completo.
+- Si vuelve con protocolo v11 dentro de la ventana, se reactiva la misma entidad y el host fuerza el siguiente snapshot como keyframe completo.
 - Si la partida terminó durante la ausencia, el host repite `end("won" | "lost")` al detectar el regreso.
 - Si vence la ventana, se emite la salida definitiva, se elimina la reserva y el host rechaza inputs posteriores de ese slot.
 - No hay migración de host. Un refresh completo de página tampoco recupera la escena: esta fase cubre cortes transitorios mientras la sesión y la escena siguen vivas.

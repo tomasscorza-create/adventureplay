@@ -16,6 +16,7 @@ import {
 
 interface TestSnapshot {
   seq: number;
+  hostTimeMs?: number;
   value: string;
   enemies?: Array<[number, number, number]>;
   platforms?: Array<[number, number, number]>;
@@ -83,7 +84,8 @@ class FakeTransport implements CoopLinkTransport {
     this.inputHandlers.forEach((cb) => cb(message));
   }
   emitSnapshot(snapshot: TestSnapshot): void {
-    this.snapshotHandlers.forEach((cb) => cb(snapshot));
+    const timed = { ...snapshot, hostTimeMs: snapshot.hostTimeMs ?? snapshot.seq * 50 };
+    this.snapshotHandlers.forEach((cb) => cb(timed));
   }
   emitEnd(reason: CoopEndReason, slot?: number): void {
     this.endHandlers.forEach((cb) => cb({ reason, slot }));
@@ -223,8 +225,8 @@ describe("CoopSceneLink host", () => {
     link.maybeSendSnapshot(105, build);
 
     expect(transport.sentSnapshots).toEqual([
-      { seq: 1, value: "estado" },
-      { seq: 2, value: "estado" },
+      { seq: 1, hostTimeMs: 50, value: "estado" },
+      { seq: 2, hostTimeMs: 105, value: "estado" },
     ]);
   });
 
@@ -238,9 +240,9 @@ describe("CoopSceneLink host", () => {
     link.maybeSendSnapshot(150, (seq) => ({ seq, value: "estado", enemies: [[1, 15, 20]], platforms: [] }));
 
     expect(transport.sentSnapshots).toEqual([
-      { seq: 1, value: "estado", enemies: [[1, 10, 20]], platforms: [] },
-      { seq: 2, value: "estado" },
-      { seq: 3, value: "estado", enemies: [[1, 15, 20]] },
+      { seq: 1, hostTimeMs: 50, value: "estado", enemies: [[1, 10, 20]], platforms: [] },
+      { seq: 2, hostTimeMs: 100, value: "estado" },
+      { seq: 3, hostTimeMs: 150, value: "estado", enemies: [[1, 15, 20]] },
     ]);
   });
 });
@@ -457,7 +459,7 @@ describe("CoopSceneLink guest", () => {
     transport.emitSnapshot({ seq: 2, value: "b" });
     transport.emitSnapshot({ seq: 3, value: "duplicado" });
 
-    expect(link.latestSnapshot).toEqual({ seq: 3, value: "c" });
+    expect(link.latestSnapshot).toEqual({ seq: 3, hostTimeMs: 150, value: "c" });
   });
 
   it("reconstruye secciones opcionales omitidas usando el estado previo", () => {
@@ -466,13 +468,13 @@ describe("CoopSceneLink guest", () => {
     link.bind(noopHooks);
 
     transport.emitSnapshot({ seq: 1, value: "a", enemies: [[1, 10, 20]], platforms: [] } as TestSnapshot);
-    expect(link.latestSnapshot).toEqual({ seq: 1, value: "a", enemies: [[1, 10, 20]], platforms: [] });
+    expect(link.latestSnapshot).toEqual({ seq: 1, hostTimeMs: 50, value: "a", enemies: [[1, 10, 20]], platforms: [] });
 
     transport.emitSnapshot({ seq: 2, value: "b" } as TestSnapshot);
-    expect(link.latestSnapshot).toEqual({ seq: 2, value: "b", enemies: [[1, 10, 20]], platforms: [] });
+    expect(link.latestSnapshot).toEqual({ seq: 2, hostTimeMs: 100, value: "b", enemies: [[1, 10, 20]], platforms: [] });
 
     transport.emitSnapshot({ seq: 3, value: "c", platforms: [[2, 5, 5]] } as TestSnapshot);
-    expect(link.latestSnapshot).toEqual({ seq: 3, value: "c", enemies: [[1, 10, 20]], platforms: [[2, 5, 5]] });
+    expect(link.latestSnapshot).toEqual({ seq: 3, hostTimeMs: 150, value: "c", enemies: [[1, 10, 20]], platforms: [[2, 5, 5]] });
   });
 });
 

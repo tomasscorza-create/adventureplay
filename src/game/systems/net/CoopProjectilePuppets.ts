@@ -13,14 +13,14 @@ export class CoopProjectilePuppets {
     private readonly onSpawn?: () => void,
   ) {}
 
-  apply(entries: NetProjectile[], smoothing: number): void {
+  apply(entries: NetProjectile[]): void {
     const alive = new Set<number>();
     for (const [netId, x, y, direction] of entries) {
       alive.add(netId);
       const existing = this.sprites.get(netId);
       if (existing) {
-        existing.x = Phaser.Math.Linear(existing.x, x, smoothing);
-        existing.y = Phaser.Math.Linear(existing.y, y, smoothing);
+        existing.x = x;
+        existing.y = y;
         continue;
       }
       const sprite = this.scene.add
