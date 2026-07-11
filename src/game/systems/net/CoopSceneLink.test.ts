@@ -225,9 +225,25 @@ describe("CoopSceneLink host", () => {
     link.maybeSendSnapshot(105, build);
 
     expect(transport.sentSnapshots).toEqual([
-      { seq: 1, hostTimeMs: 50, value: "estado" },
-      { seq: 2, hostTimeMs: 105, value: "estado" },
+      { seq: 1, hostTimeMs: 50, inputSeqBySlot: [0], value: "estado" },
+      { seq: 2, hostTimeMs: 105, inputSeqBySlot: [0], value: "estado" },
     ]);
+  });
+
+  it("confirma en el snapshot el ultimo input consumido por cada slot", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    link.bind(noopHooks);
+    transport.emitInput({
+      slot: 1,
+      seq: 7,
+      bits: packInputState({ ...emptyGameplayInputState, right: true }),
+    });
+    link.consumeRemoteInputFrame(1);
+
+    link.maybeSendSnapshot(50, (seq) => ({ seq, value: "estado" }));
+
+    expect(transport.sentSnapshots[0]).toMatchObject({ inputSeqBySlot: [0, 7] });
   });
 
   it("omite secciones opcionales si no cambiaron (delta compression)", () => {
@@ -240,9 +256,9 @@ describe("CoopSceneLink host", () => {
     link.maybeSendSnapshot(150, (seq) => ({ seq, value: "estado", enemies: [[1, 15, 20]], platforms: [] }));
 
     expect(transport.sentSnapshots).toEqual([
-      { seq: 1, hostTimeMs: 50, value: "estado", enemies: [[1, 10, 20]], platforms: [] },
-      { seq: 2, hostTimeMs: 100, value: "estado" },
-      { seq: 3, hostTimeMs: 150, value: "estado", enemies: [[1, 15, 20]] },
+      { seq: 1, hostTimeMs: 50, inputSeqBySlot: [0], value: "estado", enemies: [[1, 10, 20]], platforms: [] },
+      { seq: 2, hostTimeMs: 100, inputSeqBySlot: [0], value: "estado" },
+      { seq: 3, hostTimeMs: 150, inputSeqBySlot: [0], value: "estado", enemies: [[1, 15, 20]] },
     ]);
   });
 });

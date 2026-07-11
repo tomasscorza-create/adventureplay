@@ -7,7 +7,7 @@ valores y nombres exactos del código fuente.
 > **Estado (actualizado):** co-op online **funcional** de **2 a 4 jugadores** en los dos modos
 > jugables: **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Host-autoritativo sobre
 > Supabase Realtime, cámara independiente por dispositivo, fin de partida compartido. Protocolo
-> **v11** con interpolación temporal de entidades remotas, validación defensiva, diagnóstico opt-in, reconexión automática de 10 segundos, canal de input separado y delta encoding, modelo de slots (`COOP_MAX_PLAYERS = 4`), niveles encadenados por el host, manejo de
+> **v12** con predicción/reconciliación del jugador local del guest, interpolación temporal de entidades remotas, validación defensiva, diagnóstico opt-in, reconexión automática de 10 segundos, canal de input separado y delta encoding, modelo de slots (`COOP_MAX_PLAYERS = 4`), niveles encadenados por el host, manejo de
 > salidas individuales, cargas reales por jugador y tienda funcional en co-op. Ver historial en
 > `decisiones-limitaciones-historial.md`.
 
@@ -27,7 +27,8 @@ valores y nombres exactos del código fuente.
   (broadcast + presence, canal `coop-room-<CÓDIGO>`). Sin servidor propio, sin tablas, sin RLS.
 - **Modelo:** **host-autoritativo**. El host simula toda la física de **todos** los jugadores y
   del mundo, y transmite *snapshots* ~20 Hz. Cada guest envía su input **al cambiar** (tope 30 Hz)
-  más un keepalive, **congela** sus cuerpos autoritativos y renderiza el snapshot interpolado.
+  más un keepalive. El guest predice únicamente su propio cuerpo y reconcilia contra el ACK del
+  host; los demás jugadores y entidades continúan como puppets interpolados.
 - **Slots (2-4 jugadores):** `this.player` = **slot 0** = **host**; `remotePlayers[i]` = **slot
   i+1** = guest. El input lleva el slot del emisor y `players` del snapshot es un arreglo por slot.
   `COOP_MAX_PLAYERS = 4`. El roster autoritativo (slot + héroe) lo fija el host en el mensaje de

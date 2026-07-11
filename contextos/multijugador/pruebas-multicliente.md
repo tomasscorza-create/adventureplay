@@ -36,8 +36,8 @@ manteniendo movimiento y un snapshot simple con cuatro estados de jugador.
 | Frecuencia de input por guest | 9,4 Hz |
 | Publicaciones | 459 |
 | Entregas después de fan-out | 813 |
-| Bytes JSON publicados | ~102.207 B |
-| Bytes JSON entregados | ~251.967 B |
+| Bytes JSON publicados | ~112.968 B |
+| Bytes JSON entregados | ~284.250 B |
 | Snapshots publicados / entregados | 177 / 531 |
 | Inputs publicados | 282 |
 

@@ -58,6 +58,7 @@ import {
   interpolateProjectiles,
   type SnapshotRenderFrame,
 } from "../systems/net/CoopSnapshotInterpolator";
+import { CoopLocalPrediction } from "../systems/net/CoopLocalPrediction";
 
 // Margen fijo (px) que la linea de presion co-op mantiene detras del jugador mas
 // atrasado. Independiente de la camara, que ahora es por dispositivo.
@@ -82,6 +83,8 @@ export class LevelScene extends Phaser.Scene {
   private inputSystem!: GameplayInputSystem;
   private activeCheckpoint?: { x: number; y: number; id: string };
   private readonly movement = new MovementSystem();
+  private readonly guestPredictionMovement = new MovementSystem();
+  private readonly guestPrediction = new CoopLocalPrediction();
   private readonly combat = new CombatSystem();
   private readonly progression = new ProgressionSystem();
   private readonly inventory = new InventorySystem();
@@ -135,6 +138,7 @@ export class LevelScene extends Phaser.Scene {
   // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
   private lastGuestHudKey = "";
   private lastAppliedSnapshotSeq = -1;
+  private lastReconciledSnapshotSeq = -1;
   private coopPressureX = 0;
   // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
   private pressureCooldownSlot0 = 0;
@@ -144,6 +148,9 @@ export class LevelScene extends Phaser.Scene {
   }
 
   create(data: { levelId?: string; coop?: CoopSessionInfo }): void {
+    this.guestPrediction.reset();
+    this.guestPredictionMovement.reset();
+    this.lastReconciledSnapshotSeq = -1;
     const requestedLevelId = data.levelId ?? "meadowOutpost";
     this.level = levelDefinitions[requestedLevelId] ?? levelDefinitions.meadowOutpost;
     this.levelFinished = false;
@@ -336,6 +343,7 @@ export class LevelScene extends Phaser.Scene {
         this.movingPlatforms.add(movingPlatform);
       } else if (platform.sinking) {
         const sinkingPlatform = new SinkingPlatform(this, platform, this.level.theme);
+        if (this.isGuest) this.freezePuppet(sinkingPlatform);
         this.sinkingPlatforms.add(sinkingPlatform);
       } else {
         this.createPlatform(platform);
@@ -383,7 +391,12 @@ export class LevelScene extends Phaser.Scene {
     this.cameraSystem.setBounds(this, this.level.worldWidth);
 
     if (this.coop) {
-      if (this.isGuest) this.allPlayers().forEach((player) => this.freezePuppet(player));
+      if (this.isGuest) {
+        this.forEachPlayer((player, slot) => {
+          if (slot === this.coopSelfSlot) this.enablePredictedPlayer(player);
+          else this.freezePuppet(player);
+        });
+      }
       // Camara independiente por dispositivo: cada pantalla ancla a su propio
       // personaje local (slot `coopSelfSlot`). En single-player la camara se
       // controla manualmente por la presion, asi que no se toca.
@@ -404,6 +417,12 @@ export class LevelScene extends Phaser.Scene {
     const body = target.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.enable = false;
+  }
+
+  private enablePredictedPlayer(target: Player): void {
+    const body = target.body as Phaser.Physics.Arcade.Body;
+    body.enable = true;
+    body.setAllowGravity(true);
   }
 
   private forEachPlayer(callback: (player: Player, slot: number) => void): void {
@@ -2160,6 +2179,7 @@ export class LevelScene extends Phaser.Scene {
       onParticipantLeft: (slot) => this.handleParticipantDisconnected(slot),
       onParticipantRejoined: (slot) => this.handleParticipantRejoined(slot),
       onParticipantReconnectExpired: (slot) => this.handleParticipantReconnectExpired(slot),
+      onPredictionReset: () => this.resetGuestPrediction(),
       onStartNextLevel: (message) => {
         // El host encadeno el siguiente nivel: el guest lo sigue solo cuando su
         // propio nivel ya termino (evita reinicios a mitad de partida).
@@ -2299,6 +2319,7 @@ export class LevelScene extends Phaser.Scene {
     return {
       seq,
       hostTimeMs: this.time.now,
+      inputSeqBySlot: [],
       players,
       enemies,
       platforms,
@@ -2314,13 +2335,34 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateGuest(time: number, delta: number): void {
-    void delta;
     const input = this.inputSystem.readFrame();
     if (input.pauseJustPressed) {
       this.handlePausePressed();
       return;
     }
-    this.coopLink?.sendLocalInput(time, input);
+    const predictionSeq = this.coopLink?.sendLocalInput(time, input) ?? 0;
+    const localPlayer = this.playerAtSlot(this.coopSelfSlot);
+    if (localPlayer) {
+      const didJump = this.guestPredictionMovement.update(localPlayer, input, delta);
+      if (didJump) {
+        this.playSfx("jump");
+        this.requestHaptic("jump");
+      }
+      this.playPredictedActions(localPlayer, input);
+      this.guestPrediction.recordPlayer(predictionSeq, input, delta, localPlayer);
+    }
+    const latest = this.coopLink?.latestSnapshot;
+    if (latest && latest.seq !== this.lastReconciledSnapshotSeq && localPlayer) {
+      this.lastReconciledSnapshotSeq = latest.seq;
+      const authoritative = latest.players[this.coopSelfSlot];
+      if (authoritative) {
+        this.guestPrediction.reconcile(
+          localPlayer,
+          authoritative,
+          latest.inputSeqBySlot[this.coopSelfSlot] ?? -1,
+        );
+      }
+    }
     const frame = this.coopLink?.renderSnapshot();
     if (frame) {
       const snapshot = this.interpolateSnapshot(frame);
@@ -2330,6 +2372,30 @@ export class LevelScene extends Phaser.Scene {
       this.remainingTimeMs = frame.previous.timeMs;
     }
     this.emitHud();
+  }
+
+  private resetGuestPrediction(): void {
+    this.guestPrediction.reset();
+    this.guestPredictionMovement.reset();
+    this.lastReconciledSnapshotSeq = -1;
+  }
+
+  private playPredictedActions(player: Player, input: GameplayInputFrame): void {
+    const now = this.time.now;
+    if (input.meleeJustPressed && player.canMelee(now)) {
+      player.markAttacking(now);
+      this.playSfx("sword-swing");
+      this.requestHaptic("attack");
+    }
+    if (input.spinJustPressed && player.canSpin(now)) {
+      player.markSpinning(now);
+      this.playSfx("sword-swing");
+      this.requestHaptic("spin");
+    }
+    const charges = this.coopLink?.latestSnapshot?.players[this.coopSelfSlot]?.powerCharges ?? 0;
+    if (input.powerJustPressed && charges > 0 && player.canUsePower(now)) {
+      player.markUsingPower(now);
+    }
   }
 
   private interpolateSnapshot(frame: SnapshotRenderFrame<LevelSnapshot>): LevelSnapshot {
@@ -2358,6 +2424,7 @@ export class LevelScene extends Phaser.Scene {
     // NO por posicion en allPlayers(), que filtra a los que abandonaron y
     // desalinearia los estados (aplicaria el estado del que se fue al siguiente).
     snap.players.forEach((net, slot) => {
+      if (slot === this.coopSelfSlot) return;
       const target = this.playerAtSlot(slot);
       if (target && net) applyNetPlayer(target, net);
     });

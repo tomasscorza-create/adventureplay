@@ -7,6 +7,7 @@ import type { NetPlayerState, NetProjectile } from "./coopMessages";
 export interface LevelSnapshot {
   seq: number;
   hostTimeMs: number;
+  inputSeqBySlot: number[];
   // Indexado por slot (0 = host, 1..N = guests); hoy son 2.
   players: NetPlayerState[];
   // [netId, x, y, flip] por enemigo vivo (flip 0/1); los ausentes fueron derrotados.
