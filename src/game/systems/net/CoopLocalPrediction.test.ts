@@ -1,41 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { emptyGameplayInputState } from "../../../shared/types/input";
 import { COOP_PREDICTION_MAX_HISTORY, CoopLocalPrediction } from "./CoopLocalPrediction";
 
 describe("CoopLocalPrediction", () => {
-  it("elimina solamente comandos de red confirmados por el host", () => {
+  it("confirma solamente paquetes realmente procesados", () => {
     const history = new CoopLocalPrediction();
-    history.record({ seq: 1, state: { ...emptyGameplayInputState, right: true } });
-    history.record({ seq: 2, state: { ...emptyGameplayInputState, jump: true } });
+    history.record({ seq: 1, continuous: { left: false, right: true } });
+    history.record({ seq: 2, continuous: { left: false, right: true } });
+    history.record({ seq: 3, continuous: { left: false, right: false } });
+
     expect(history.acknowledge(1)).toBe(1);
-    expect(history.pendingCount).toBe(1);
-    expect(history.latestPendingFrame().jump).toBe(true);
+    expect(history.pendingSeqs).toEqual([2, 3]);
+    expect(history.acknowledge(3)).toBe(2);
+    expect(history.pendingSeqs).toEqual([]);
   });
 
-  it("no reproduce flancos de acciones ya mostradas localmente", () => {
+  it("un ACK atrasado o agrupado no recrea acciones de flanco", () => {
     const history = new CoopLocalPrediction();
-    history.record({ seq: 4, state: { ...emptyGameplayInputState, melee: true, power: true } });
-    const replay = history.latestPendingFrame();
-    expect(replay.melee).toBe(true);
-    expect(replay.power).toBe(true);
-    expect(replay.meleeJustPressed).toBe(false);
-    expect(replay.powerJustPressed).toBe(false);
+    history.record({ seq: 5, continuous: { left: true, right: false } });
+    history.traceEdge("jump");
+    history.traceEdge("melee");
+    history.traceEdge("power");
+
+    expect(history.acknowledge(4)).toBe(0);
+    expect(history.pendingSeqs).toEqual([5]);
+    expect(history.acknowledge(9)).toBe(1);
+    expect(history.pendingCount).toBe(0);
   });
 
   it("deduplica, limita y limpia el historial", () => {
     const history = new CoopLocalPrediction();
     for (let seq = 1; seq <= 200; seq += 1) {
-      history.record({ seq, state: emptyGameplayInputState });
-      history.record({ seq, state: emptyGameplayInputState });
+      history.record({ seq, continuous: { left: false, right: true } });
+      history.record({ seq, continuous: { left: true, right: false } });
     }
     expect(history.pendingCount).toBe(COOP_PREDICTION_MAX_HISTORY);
     history.reset();
     expect(history.pendingCount).toBe(0);
-  });
-
-  it("solo solicita reset autoritativo ante una divergencia grande", () => {
-    const history = new CoopLocalPrediction();
-    expect(history.needsAuthoritativeReset({ x: 0, y: 0 }, { x: 40, y: 20 })).toBe(false);
-    expect(history.needsAuthoritativeReset({ x: 0, y: 0 }, { x: 120, y: 0 })).toBe(true);
   });
 });

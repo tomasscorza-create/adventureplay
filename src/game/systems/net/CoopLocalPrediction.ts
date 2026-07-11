@@ -1,27 +1,28 @@
-import {
-  emptyGameplayInputState,
-  type GameplayInputFrame,
-  type GameplayInputState,
-} from "../../../shared/types/input";
-
 export const COOP_PREDICTION_MAX_HISTORY = 96;
-export const COOP_PREDICTION_HARD_RESET_DISTANCE = 96;
+
+export interface CoopContinuousInput {
+  left: boolean;
+  right: boolean;
+}
 
 export interface CoopPredictionCommand {
   seq: number;
-  state: GameplayInputState;
+  continuous: CoopContinuousInput;
 }
 
-// El historial usa exactamente la granularidad del transporte: una entrada por
-// paquete realmente enviado. No captura posiciones ni desplazamientos Phaser.
+type PredictionTraceEvent = "sent" | "edge" | "ack" | "correction";
+
+// Una entrada por paquete realmente enviado. El historial nunca contiene
+// justPressed ni botones instantaneos: solo intención horizontal continua.
 export class CoopLocalPrediction {
   private readonly pending: CoopPredictionCommand[] = [];
 
   record(command: CoopPredictionCommand): void {
     if (command.seq <= 0 || this.pending.some((entry) => entry.seq === command.seq)) return;
-    this.pending.push({ seq: command.seq, state: { ...command.state } });
+    this.pending.push({ seq: command.seq, continuous: { ...command.continuous } });
     this.pending.sort((a, b) => a.seq - b.seq);
     while (this.pending.length > COOP_PREDICTION_MAX_HISTORY) this.pending.shift();
+    this.trace("sent", { seq: command.seq, continuous: command.continuous });
   }
 
   acknowledge(processedSeq: number): number {
@@ -30,30 +31,16 @@ export class CoopLocalPrediction {
       this.pending.shift();
       removed += 1;
     }
+    this.trace("ack", { processedSeq, removed });
     return removed;
   }
 
-  // Reproduce solo intención sostenida. Los flancos ya ejecutados localmente no
-  // se vuelven a disparar al reconciliar, evitando dobles saltos/ataques/poderes.
-  latestPendingFrame(): GameplayInputFrame {
-    const state = this.pending[this.pending.length - 1]?.state ?? emptyGameplayInputState;
-    return {
-      ...state,
-      jumpJustPressed: false,
-      meleeJustPressed: false,
-      spinJustPressed: false,
-      healJustPressed: false,
-      powerJustPressed: false,
-      pauseJustPressed: false,
-    };
+  traceEdge(action: "jump" | "melee" | "spin" | "power"): void {
+    this.trace("edge", { action });
   }
 
-  needsAuthoritativeReset(
-    local: { x: number; y: number },
-    authoritative: { x: number; y: number },
-  ): boolean {
-    return Math.hypot(local.x - authoritative.x, local.y - authoritative.y)
-      > COOP_PREDICTION_HARD_RESET_DISTANCE;
+  traceCorrection(kind: "authoritative" | "out-of-world" | "none"): void {
+    this.trace("correction", { kind });
   }
 
   reset(): void {
@@ -62,5 +49,21 @@ export class CoopLocalPrediction {
 
   get pendingCount(): number {
     return this.pending.length;
+  }
+
+  get pendingSeqs(): number[] {
+    return this.pending.map((entry) => entry.seq);
+  }
+
+  private trace(event: PredictionTraceEvent, detail: Record<string, unknown>): void {
+    const enabled = import.meta.env.DEV
+      && typeof localStorage !== "undefined"
+      && localStorage.getItem("cd") === "1";
+    if (!enabled) return;
+    console.debug("[coop-prediction]", {
+      event,
+      ...detail,
+      pending: this.pendingSeqs,
+    });
   }
 }

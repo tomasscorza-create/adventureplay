@@ -349,7 +349,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
     }
     this.lastInputBits = bits;
     this.lastInputSentAt = timeMs;
-    return { seq: nextSeq, state: unpackInputState(bits) };
+    const sentState = unpackInputState(bits);
+    return {
+      seq: nextSeq,
+      continuous: { left: sentState.left, right: sentState.right },
+    };
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.

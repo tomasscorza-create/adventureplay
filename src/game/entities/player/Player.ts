@@ -15,6 +15,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastPowerAt = Number.NEGATIVE_INFINITY;
   private lastMeleeAt = 0;
   private actionLockedUntil = 0;
+  private actionRevision = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, stats: PlayerStats, character: CharacterDefinition) {
     super(scene, x, y, character.textureKey);
@@ -104,8 +105,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.actionLockedUntil = now + 240;
     this.state = "attack";
     this.playAnimation("attack");
+    const revision = ++this.actionRevision;
     this.scene.time.delayedCall(260, () => {
-      if (this.active && this.state === "attack") {
+      if (this.active && revision === this.actionRevision && this.state === "attack") {
         this.state = "idle";
         this.playAnimation("idle");
       }
@@ -125,8 +127,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.actionLockedUntil = now + 420;
     this.state = "spin";
     this.playAnimation("attack");
+    const revision = ++this.actionRevision;
     this.scene.time.delayedCall(420, () => {
-      if (this.active && this.state === "spin") {
+      if (this.active && revision === this.actionRevision && this.state === "spin") {
         this.state = "idle";
         this.playAnimation("idle");
       }
@@ -142,8 +145,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.actionLockedUntil = now + 180;
     this.state = "attack";
     this.playAnimation("attack");
+    const revision = ++this.actionRevision;
     this.scene.time.delayedCall(180, () => {
-      if (this.active && this.state === "attack") {
+      if (this.active && revision === this.actionRevision && this.state === "attack") {
         this.state = "idle";
         this.playAnimation("idle");
       }
@@ -155,6 +159,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return false;
     }
 
+    this.actionRevision += 1;
     this.stats.health = Math.max(0, this.stats.health - amount);
     this.invulnerableUntil = this.scene.time.now + 850;
     this.state = this.stats.health <= 0 ? "dead" : "hurt";
@@ -177,6 +182,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   markDefeated(): void {
+    this.actionRevision += 1;
     this.state = "dead";
     this.actionLockedUntil = Number.POSITIVE_INFINITY;
     this.setVelocity(0, 0);
@@ -196,6 +202,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   renderNetState(state: PlayerState, facing: -1 | 1): void {
     this.setFacing(facing);
     if (state !== this.state) {
+      this.actionRevision += 1;
       this.state = state;
       this.playAnimation(state);
     }

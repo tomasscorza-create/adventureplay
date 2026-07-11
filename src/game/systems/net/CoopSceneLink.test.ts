@@ -292,7 +292,7 @@ describe("CoopSceneLink guest", () => {
 
     expect(sent).toEqual({
       seq: 1,
-      state: { ...emptyGameplayInputState, right: true },
+      continuous: { left: false, right: true },
     });
     expect(throttled).toBeUndefined();
   });

@@ -136,9 +136,9 @@ GUEST                              HOST (CoopSceneLink)
   siguiente snapshot, solo los jugadores extrapolan con `vx/vy`, durante un máximo de 100 ms.
   El personaje local del guest habilita su cuerpo y reutiliza `MovementSystem`; cada snapshot
   confirma el último input consumido por slot. Se eliminan comandos confirmados y se conserva la
-  intención sostenida pendiente, sin volver a disparar flancos. En geometría estática Phaser y
-  `MovementSystem` son los únicos escritores; una divergencia mayor a 96 px hace un reset único
-  antes del tick físico. El historial se limita a 96 paquetes.
+  intención horizontal sostenida pendiente, sin guardar ni volver a disparar flancos. En geometría
+  estática Phaser y `MovementSystem` son los únicos escritores; los ACK no reposicionan ni restauran
+  velocidad vertical. El historial se limita a 96 paquetes realmente enviados.
 - La predicción no resuelve daño, vida, cargas, enemigos, cajas, puertas, resultados ni proyectiles.
   Cerca de plataformas móviles/hundibles o cajas se degrada temporalmente a render autoritativo;
   también se recupera desde snapshot si el guest cae fuera del mundo.

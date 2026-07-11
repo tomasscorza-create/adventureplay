@@ -574,6 +574,7 @@ export class PuzzleScene extends Phaser.Scene {
   // el sprite desde los snapshots del host.
   private freezePuppet(target: Phaser.GameObjects.GameObject): void {
     const body = target.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
     body.setAllowGravity(false);
     body.enable = false;
   }
@@ -1968,11 +1969,17 @@ export class PuzzleScene extends Phaser.Scene {
     if (latest && latest.seq !== this.lastReconciledSnapshotSeq && localPlayer) {
       this.lastReconciledSnapshotSeq = latest.seq;
       this.guestPrediction.acknowledge(latest.inputSeqBySlot[this.coopSelfSlot] ?? -1);
+      this.guestPrediction.traceCorrection("none");
     }
     if (localPlayer) {
       const authoritative = latest?.players[this.coopSelfSlot];
       const safe = this.isGuestPredictionSafe(localPlayer, authoritative);
       if (!safe && authoritative) {
+        if (this.guestPredictionActive) {
+          this.guestPrediction.traceCorrection(
+            localPlayer.y > GAME_HEIGHT + 60 ? "out-of-world" : "authoritative",
+          );
+        }
         this.guestPredictionActive = false;
         this.freezePuppet(localPlayer);
         applyNetPlayer(localPlayer, authoritative);
@@ -1982,19 +1989,11 @@ export class PuzzleScene extends Phaser.Scene {
           this.enablePredictedPlayer(localPlayer);
           this.guestPredictionActive = true;
         }
-        if (authoritative && this.guestPrediction.needsAuthoritativeReset(localPlayer, authoritative)) {
-          localPlayer.setPosition(authoritative.x, authoritative.y);
-          const body = localPlayer.body as Phaser.Physics.Arcade.Body;
-          body.setVelocity(authoritative.vx, authoritative.vy);
-          this.guestPredictionMovement.reset();
-          this.guestPredictionMovement.update(
-            localPlayer,
-            this.guestPrediction.latestPendingFrame(),
-            0,
-          );
-        }
         const jumped = this.guestPredictionMovement.update(localPlayer, input, delta);
-        if (jumped) this.playSfx("jump");
+        if (jumped) {
+          this.guestPrediction.traceEdge("jump");
+          this.playSfx("jump");
+        }
         this.playPredictedActions(localPlayer, input);
       }
     }
@@ -2031,15 +2030,18 @@ export class PuzzleScene extends Phaser.Scene {
   private playPredictedActions(player: Player, input: GameplayInputFrame): void {
     const now = this.time.now;
     if (input.meleeJustPressed && player.canMelee(now)) {
+      this.guestPrediction.traceEdge("melee");
       player.markAttacking(now);
       this.playSfx("sword-swing");
     }
     if (input.spinJustPressed && player.canSpin(now)) {
+      this.guestPrediction.traceEdge("spin");
       player.markSpinning(now);
       this.playSfx("sword-swing");
     }
     const charges = this.coopLink?.latestSnapshot?.players[this.coopSelfSlot]?.powerCharges ?? 0;
     if (input.powerJustPressed && charges > 0 && player.canUsePower(now)) {
+      this.guestPrediction.traceEdge("power");
       player.markUsingPower(now);
     }
   }
