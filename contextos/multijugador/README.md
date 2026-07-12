@@ -24,6 +24,7 @@ Antes de modificar el multijugador, debes respetar este orden de prioridad como 
 | [integracion-en-escenas.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/integracion-en-escenas.md) | Implementación en `PuzzleScene` y `LevelScene`: sincronización, colisiones, interpolación. |
 | [decisiones-limitaciones-historial.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/decisiones-limitaciones-historial.md) | Decisiones vigentes vs reemplazadas, limitaciones de arquitectura, y cronología técnica. |
 | [pruebas-multicliente.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/pruebas-multicliente.md) | Harness determinista de 2–4 clientes y línea base de tráfico. |
+| [informe-fase-7-2026-07.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/informe-fase-7-2026-07.md) | Medición de sala de 4, contraste con límites de Supabase y criterios externos pendientes. |
 | [endurecimiento-produccion.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/endurecimiento-produccion.md) | Seguridad de protocolo, diagnóstico y bloqueo de migración de host. |
 
 ## 🎮 Cómo probarlo (2 clientes)

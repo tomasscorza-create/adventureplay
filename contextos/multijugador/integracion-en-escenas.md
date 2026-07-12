@@ -27,10 +27,10 @@ Ambas escenas jugables integran el co-op con el **mismo patrón** host-autoritat
 corriendo** detrás de una confirmación React (`CoopExitConfirmScreen`), porque pausar la escena
 desincronizaría al peer. "Salir" avisa al peer vía `GO_TO_MENU` → `coopLink.finish("left")`.
 
-La **tienda de cargas** en co-op funciona igual (sin pausar): `PAUSE_FOR_POWER_SHOP` solo cambia la
-pantalla. Al volver (`RESUME_GAME` con escena sin pausar), `syncCoopPurchases` refresca ORO y
-cargas desde el save fresco (sin reemplazar `this.save`) y, si compró un guest, envía el delta al
-host (`coopLink.sendChargeDelta` → hook `onRemoteCharges` suma a `remoteCharges[slot-1]`).
+La tienda puede abrirse sin pausar, pero las cargas autorizadas de una partida co-op quedan fijadas
+por presence/roster. `syncCoopPurchases` refresca el save local sin reemplazar `this.save`; las
+compras nuevas de un guest no se inyectan en los contadores autoritativos del host. El antiguo
+runtime de deltas `charges`, rechazado por seguridad, fue eliminado en F6.
 
 ## Plumbing de red compartido (`CoopSceneLink`)
 

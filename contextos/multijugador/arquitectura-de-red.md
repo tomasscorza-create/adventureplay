@@ -71,12 +71,13 @@ instancie y valide compatibilidad.
 |---|---|
 | `COOP_PROTOCOL_VERSION` | `13`. Separa el input en topics WebSocket por slot; conserva ACK v12, interpolación v11, seguridad v10 y reconexión v9. |
 | `COOP_RECONNECT_WINDOW_MS` | `30000`. Ventana para recuperar el mismo slot antes de convertir la ausencia en salida definitiva. |
-| `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
+| `CoopChargesMessage` | Tipo histórico conservado para validación; no tiene handlers runtime porque los incrementos enviados por guests no son autoritativos. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
 | `CoopStartMessage` | `{ levelId, roster: { slot, characterId }[] }` — roster autoritativo del host. |
 | `HOST_SLOT` | `0`. Los guests ocupan slots `1..N`. |
 | `COOP_INPUT_RATE_HZ` / `COOP_INPUT_KEEPALIVE_MS` | `30` (tope al cambiar) / `100` (keepalive sin cambios). |
 | `COOP_SNAPSHOT_RATE_HZ` | `20` (host → guest) |
+| `COOP_KEYFRAME_RATE_HZ` | `4`; reemite secciones completas cada ≈250 ms para recuperar deltas perdidos. |
 | `COOP_EVENTS` | `hello`, `input`, `snapshot`, `start`, `end` |
 | `CoopInputMessage` | `{ slot, seq, bits }` — `slot` = emisor; `bits` empaqueta `GameplayInputState`. |
 | `packInputState` / `unpackInputState` | Empaquetan/desempaquetan el input en un entero (orden fijo `INPUT_ORDER`). |

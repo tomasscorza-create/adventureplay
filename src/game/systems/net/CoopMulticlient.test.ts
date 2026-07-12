@@ -37,7 +37,7 @@ interface ClientRuntime {
 }
 
 class SimulatedCoopGame {
-  readonly room = new SimulatedRoom();
+  readonly room = new SimulatedRoom("TEST", 0);
   readonly runtimes: ClientRuntime[];
   readonly players: SimulatedPlayerState[];
   private levelId = "level-1";
@@ -228,8 +228,12 @@ describe.each([2, 3, 4] as const)("co-op simulado con %i clientes", (playerCount
 });
 
 describe("ciclo de partida multicliente", () => {
+  it("usa jitter determinista no nulo por defecto en el harness", () => {
+    expect(new SimulatedRoom().defaultJitterMs).toBeGreaterThan(0);
+  });
+
   it("rechaza versiones incompatibles y un quinto cliente", () => {
-    const room = new SimulatedRoom();
+    const room = new SimulatedRoom("TEST", 0);
     room.join("host", "host", { characterId: "ruder" });
     expect(() => room.join("legacy", "guest", {
       characterId: "amy",
@@ -300,6 +304,28 @@ describe("ciclo de partida multicliente", () => {
 
     const retry = game.changeLevel("level-1");
     for (const guest of game.runtimes.slice(1)) expect(guest.nextLevels).toEqual([retry]);
+  });
+
+  it("completa ciclo de cuatro con nivel encadenado, reconexion y salida", () => {
+    const game = new SimulatedCoopGame(4);
+    const next = game.changeLevel("level-2");
+    for (const guest of game.runtimes.slice(1)) expect(guest.nextLevels[0]).toEqual(next);
+
+    const reconnecting = game.guest(1);
+    const reconnectingSlot = reconnecting.client.slot;
+    game.room.disconnect(reconnecting.client.id);
+    game.room.flush();
+    game.room.reconnect(reconnecting.client.id);
+    game.room.flush();
+    expect(reconnecting.client.slot).toBe(reconnectingSlot);
+    expect(game.host.rejoinedSlots).toContain(reconnectingSlot);
+
+    const leaving = game.guest(2);
+    const leavingSlot = leaving.client.slot;
+    game.room.leave(leaving.client.id);
+    game.room.flush();
+    expect(game.room.participantCount).toBe(3);
+    expect(game.host.departedSlots).toContain(leavingSlot);
   });
 });
 
@@ -472,6 +498,7 @@ describe("presupuesto de trafico simulado", () => {
       snapshotPublications: metrics.byEvent.snapshot.publications,
       snapshotDeliveries: metrics.byEvent.snapshot.deliveries,
       inputPublications: metrics.byEvent.input.publications,
+      billableMessagesLowerBound: metrics.publications + metrics.deliveries,
     };
     console.info("COOP_NETWORK_SIMULATION", JSON.stringify(report));
 

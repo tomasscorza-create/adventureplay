@@ -59,6 +59,7 @@ import {
   type SnapshotRenderFrame,
 } from "../systems/net/CoopSnapshotInterpolator";
 import { GuestCoopController } from "../systems/net/GuestCoopController";
+import { getCoopSpawnX } from "../systems/net/coopSpawnLayout";
 
 // Margen fijo (px) que la linea de presion co-op mantiene detras del jugador mas
 // atrasado. Independiente de la camara, que ahora es por dispositivo.
@@ -85,6 +86,12 @@ export class LevelScene extends Phaser.Scene {
   private readonly movement = new MovementSystem();
   private readonly guestPredictionMovement = new MovementSystem();
   private guestCoopController?: GuestCoopController<LevelSnapshot>;
+  private guestInterpolatedSnapshot?: LevelSnapshot;
+  private readonly guestInterpolatedPlayers: LevelSnapshot["players"] = [];
+  private readonly guestInterpolatedEnemies: NonNullable<LevelSnapshot["enemies"]> = [];
+  private readonly guestInterpolatedPlatforms: NonNullable<LevelSnapshot["platforms"]> = [];
+  private readonly guestInterpolatedHazards: NonNullable<LevelSnapshot["hazards"]> = [];
+  private readonly guestInterpolatedProjectiles: LevelSnapshot["projectiles"] = [];
   private readonly combat = new CombatSystem();
   private readonly progression = new ProgressionSystem();
   private readonly inventory = new InventorySystem();
@@ -133,8 +140,6 @@ export class LevelScene extends Phaser.Scene {
   private nextProjectileNetId = 1;
   // Al encadenar el siguiente nivel co-op, el SHUTDOWN no debe cerrar la sala.
   private keepCoopSessionOnShutdown = false;
-  // Cargas propias segun el save al entrar (para detectar compras en co-op).
-  private coopChargeBaseline = { healingCharges: 0, powerCharges: 0 };
   // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
   private lastGuestHudKey = "";
   private coopPressureX = 0;
@@ -147,6 +152,7 @@ export class LevelScene extends Phaser.Scene {
 
   create(data: { levelId?: string; coop?: CoopSessionInfo }): void {
     this.guestPredictionMovement.reset();
+    this.guestInterpolatedSnapshot = undefined;
     const requestedLevelId = data.levelId ?? "meadowOutpost";
     this.level = levelDefinitions[requestedLevelId] ?? levelDefinitions.meadowOutpost;
     this.levelFinished = false;
@@ -184,11 +190,6 @@ export class LevelScene extends Phaser.Scene {
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.save = gameSaveStore.load();
     this.save.player.health = this.save.player.maxHealth;
-    const ownCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    this.coopChargeBaseline = {
-      healingCharges: ownCharges?.healingCharges ?? 0,
-      powerCharges: ownCharges?.powerCharges ?? 0,
-    };
     // En co-op ambos empiezan en el inicio del nivel (sin checkpoint asimetrico).
     this.activeCheckpoint = !this.coop && this.save.checkpointId === this.level.checkpoint.id
       ? { ...this.level.checkpoint }
@@ -331,7 +332,6 @@ export class LevelScene extends Phaser.Scene {
     this.sinkingPlatforms = this.physics.add.group({ runChildUpdate: true });
     let movingPlatformNetId = 0;
     
-    console.warn(`[DEBUG] LEVEL SCENE CREATED - ID: ${this.level.id}, Total platforms: ${this.level.platforms.length}`);
     
     for (const platform of this.level.platforms) {
       if (platform.movement) {
@@ -369,7 +369,14 @@ export class LevelScene extends Phaser.Scene {
       const stats: PlayerStats = isLocal
         ? this.save.player
         : { ...this.save.player, health: this.save.player.maxHealth };
-      const player = new Player(this, start.x - 70 * entry.slot, startY, stats, character);
+      const spawnX = getCoopSpawnX(
+        start.x,
+        entry.slot,
+        roster.length,
+        40,
+        GAME_WIDTH - 40,
+      );
+      const player = new Player(this, spawnX, startY, stats, character);
       if (entry.slot === 0) {
         this.player = player;
       } else {
@@ -2143,7 +2150,12 @@ export class LevelScene extends Phaser.Scene {
       if (!player) continue;
 
       const isConnected = coopSession.participants.some(p => p.slot === entry.slot);
-      const charges = this.chargesForSlot(entry.slot);
+      const snapshotPlayer = this.isGuest
+        ? this.coopLink?.latestSnapshot?.players[entry.slot]
+        : undefined;
+      const charges = snapshotPlayer
+        ? { healingCharges: snapshotPlayer.healCharges, powerCharges: snapshotPlayer.powerCharges }
+        : this.chargesForSlot(entry.slot);
       
       let status: import("../../shared/types/game").TeammateConnectionStatus = "connected";
       if (!isConnected) {
@@ -2187,35 +2199,16 @@ export class LevelScene extends Phaser.Scene {
         if (!this.isGuest || !this.levelFinished) return;
         this.restartCoopScene(message.levelId, message.roster);
       },
-      onRemoteCharges: (message) => {
-        // Solo el host administra los contadores vivos de cada guest.
-        if (!this.isHost) return;
-        const charges = this.remoteCharges[message.slot - 1];
-        if (!charges) return;
-        charges.healingCharges += Math.max(0, message.healingDelta);
-        charges.powerCharges += Math.max(0, message.powerDelta);
-      },
     });
   }
 
   // Vuelta de la tienda en co-op (sin pausa): tomar del save fresco solo lo que
   // una compra cambia (ORO y cargas) sin reemplazar `this.save`, porque los
-  // stats vivos del jugador comparten referencia con `this.save.player`. Si
-  // compro un guest, el delta viaja al host que administra sus contadores.
+  // stats vivos del jugador comparten referencia con `this.save.player`.
   private syncCoopPurchases(): void {
     const fresh = gameSaveStore.load();
     this.save.player.coins = fresh.player.coins;
     this.save.characterPowerCharges = fresh.characterPowerCharges;
-    const charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    const healing = charges?.healingCharges ?? 0;
-    const power = charges?.powerCharges ?? 0;
-    if (this.isGuest) {
-      this.coopLink?.sendChargeDelta(
-        Math.max(0, healing - this.coopChargeBaseline.healingCharges),
-        Math.max(0, power - this.coopChargeBaseline.powerCharges),
-      );
-    }
-    this.coopChargeBaseline = { healingCharges: healing, powerCharges: power };
     this.emitHud();
   }
 
@@ -2255,7 +2248,7 @@ export class LevelScene extends Phaser.Scene {
     });
   }
 
-  private buildSnapshot(seq: number): LevelSnapshot {
+  private buildSnapshot(seq: number): Omit<LevelSnapshot, "hostTimeMs" | "inputSeqBySlot"> {
     const hostCharges = this.getActivePowerCharges();
     const enemies: Array<[number, number, number, number]> = [];
     this.enemies.children.each((obj) => {
@@ -2319,8 +2312,6 @@ export class LevelScene extends Phaser.Scene {
     ];
     return {
       seq,
-      hostTimeMs: this.time.now,
-      inputSeqBySlot: [],
       players,
       enemies,
       platforms,
@@ -2337,6 +2328,8 @@ export class LevelScene extends Phaser.Scene {
 
   private updateGuest(time: number, delta: number): void {
     const input = this.inputSystem.readFrame();
+    this.runTracker.advance(delta);
+    this.runTracker.trackInput(input);
     if (input.pauseJustPressed) {
       this.handlePausePressed();
       return;
@@ -2422,27 +2415,64 @@ export class LevelScene extends Phaser.Scene {
       this.guestCoopController?.traceEdge("power");
       player.markUsingPower(now);
     }
+    const self = this.coopLink?.latestSnapshot?.players[this.coopSelfSlot];
+    if (input.healJustPressed && self && self.healCharges > 0 && self.health < self.maxHealth) {
+      this.guestCoopController?.traceEdge("heal");
+      this.playSfx("heal");
+      this.createHealingEffectAt(player);
+    }
   }
 
   private interpolateSnapshot(frame: SnapshotRenderFrame<LevelSnapshot>): LevelSnapshot {
     const { previous, next, alpha, extrapolationMs } = frame;
     const latest = this.coopLink?.latestSnapshot ?? previous;
-    return {
-      ...previous,
-      players: previous.players.map((player, slot) => slot === this.coopSelfSlot
-        ? latest.players[slot] ?? player
-        : interpolatePlayer(player, next?.players[slot], alpha, extrapolationMs)),
-      enemies: previous.enemies
-        ? interpolatePositionTuples(previous.enemies, next?.enemies, alpha)
-        : undefined,
-      platforms: previous.platforms
-        ? interpolatePositionTuples(previous.platforms, next?.platforms, alpha)
-        : undefined,
-      hazards: previous.hazards
-        ? interpolatePositionTuples(previous.hazards, next?.hazards, alpha)
-        : undefined,
-      projectiles: interpolateProjectiles(previous.projectiles, next?.projectiles, alpha),
-    };
+    const snapshot = this.guestInterpolatedSnapshot ?? { ...previous };
+    Object.assign(snapshot, previous);
+    previous.players.forEach((player, slot) => {
+      const source = slot === this.coopSelfSlot ? latest.players[slot] ?? player : player;
+      const target = slot === this.coopSelfSlot ? undefined : next?.players[slot];
+      this.guestInterpolatedPlayers[slot] = interpolatePlayer(
+        source,
+        target,
+        alpha,
+        slot === this.coopSelfSlot ? 0 : extrapolationMs,
+        this.guestInterpolatedPlayers[slot],
+      );
+    });
+    this.guestInterpolatedPlayers.length = previous.players.length;
+    snapshot.players = this.guestInterpolatedPlayers;
+    snapshot.enemies = previous.enemies
+      ? interpolatePositionTuples(
+        previous.enemies,
+        next?.enemies,
+        alpha,
+        this.guestInterpolatedEnemies,
+      )
+      : undefined;
+    snapshot.platforms = previous.platforms
+      ? interpolatePositionTuples(
+        previous.platforms,
+        next?.platforms,
+        alpha,
+        this.guestInterpolatedPlatforms,
+      )
+      : undefined;
+    snapshot.hazards = previous.hazards
+      ? interpolatePositionTuples(
+        previous.hazards,
+        next?.hazards,
+        alpha,
+        this.guestInterpolatedHazards,
+      )
+      : undefined;
+    snapshot.projectiles = interpolateProjectiles(
+      previous.projectiles,
+      next?.projectiles,
+      alpha,
+      this.guestInterpolatedProjectiles,
+    );
+    this.guestInterpolatedSnapshot = snapshot;
+    return snapshot;
   }
 
   private applySnapshot(snap: LevelSnapshot, isNew: boolean): void {

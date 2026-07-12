@@ -11,7 +11,6 @@ import {
   getCoopInputTopic,
   HOST_SLOT,
   normalizeRoomCode,
-  type CoopChargesMessage,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopHello,
@@ -58,7 +57,6 @@ interface CoopCallbacks {
   participantRejoined: Set<(slot: number) => void>;
   participantReconnectExpired: Set<(slot: number) => void>;
   // Compras de cargas durante la partida (delta hacia el host).
-  charges: Set<(message: CoopChargesMessage) => void>;
 }
 
 // Identidad unica del cliente dentro del canal de presence. La key ya no es el
@@ -110,7 +108,6 @@ class CoopSession {
     participantLeft: new Set(),
     participantRejoined: new Set(),
     participantReconnectExpired: new Set(),
-    charges: new Set(),
   };
   private participantsKey = "";
   private authorizedParticipantKeys: Set<string> | null = null;
@@ -381,24 +378,6 @@ class CoopSession {
       if (!decision.accepted || !decision.value) return;
       this.callbacks.end.forEach((cb) => cb(decision.value!));
     });
-    channel.on("broadcast", { event: COOP_EVENTS.charges }, ({ payload }) => {
-      this.trackStat("received", COOP_EVENTS.charges, payload);
-      if (this._role !== "host") return;
-      const nowMs = this.nowMs();
-      const parsed = this.security.parseEnvelope(payload, this._participants, 512, nowMs);
-      if (!parsed.accepted || !parsed.value?.sender) return;
-      const decision = this.security.validateCharges(
-        parsed.value.envelope.payload,
-        parsed.value.sender,
-        nowMs,
-      );
-      if (!decision.accepted) {
-        this.handleSecurityReject(decision, parsed.value.sender);
-        return;
-      }
-      this.callbacks.charges.forEach((cb) => cb(decision.value!));
-    });
-
     channel.on("presence", { event: "sync" }, () => this.syncPresence());
     channel.on("presence", { event: "join" }, () => this.syncPresence());
     channel.on("presence", { event: "leave" }, () => this.syncPresence());
@@ -733,11 +712,6 @@ class CoopSession {
     this.broadcast(COOP_EVENTS.end, { reason, slot: safeSlot } satisfies CoopEndMessage);
   }
 
-  sendCharges(message: CoopChargesMessage): void {
-    if (this._role !== "guest") return;
-    this.broadcast(COOP_EVENTS.charges, { ...message, slot: this._localSlot });
-  }
-
   private broadcast(event: string, payload: unknown): void {
     if (!this.channel) return;
     const envelope = this.wireEnvelope(payload);
@@ -839,9 +813,6 @@ class CoopSession {
   }
   onParticipantReconnectExpired(cb: (slot: number) => void): () => void {
     return this.subscribe("participantReconnectExpired", cb);
-  }
-  onCharges(cb: (message: CoopChargesMessage) => void): () => void {
-    return this.subscribe("charges", cb);
   }
 
   private subscribe<K extends keyof CoopCallbacks>(

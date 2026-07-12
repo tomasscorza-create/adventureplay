@@ -38,6 +38,7 @@ class FakeTransport implements CoopLinkTransport {
   readonly snapshotAgeMetrics: number[] = [];
   readonly divergenceMetrics: number[] = [];
   readonly correctionMetrics: string[] = [];
+  readonly snapshotKinds: boolean[] = [];
   leaveCalls = 0;
   throwOnInputSend = false;
   private inputSeq = 0;
@@ -96,6 +97,9 @@ class FakeTransport implements CoopLinkTransport {
   }
   recordCorrection(reason: string): void {
     this.correctionMetrics.push(reason);
+  }
+  recordSnapshotKind(keyframe: boolean): void {
+    this.snapshotKinds.push(keyframe);
   }
   leave(): void {
     this.leaveCalls += 1;
@@ -281,6 +285,26 @@ describe("CoopSceneLink host", () => {
       { seq: 2, hostTimeMs: 100, inputSeqBySlot: [0], value: "estado" },
       { seq: 3, hostTimeMs: 150, inputSeqBySlot: [0], value: "estado", enemies: [[1, 15, 20]] },
     ]);
+  });
+
+  it("reemite un keyframe completo cuatro veces por segundo", () => {
+    const transport = new FakeTransport();
+    const link = makeHost(transport);
+    const build = (seq: number): TestSnapshot => ({
+      seq,
+      value: "estado",
+      enemies: [[1, 10, 20]],
+      platforms: [],
+    });
+
+    for (let index = 1; index <= 5; index += 1) link.maybeSendSnapshot(index * 50, build);
+
+    expect(transport.snapshotKinds).toEqual([false, false, false, false, true]);
+    expect(transport.sentSnapshots[4]).toMatchObject({
+      seq: 5,
+      enemies: [[1, 10, 20]],
+      platforms: [],
+    });
   });
 });
 

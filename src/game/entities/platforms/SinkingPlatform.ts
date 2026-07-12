@@ -15,7 +15,6 @@ export class SinkingPlatform extends Phaser.GameObjects.Rectangle {
   constructor(scene: Phaser.Scene, definition: PlatformDefinition, theme: LevelTheme) {
     super(scene, definition.x, definition.y, definition.width, definition.height, 0x000000, 0);
 
-    console.warn(`[DEBUG] SINKING PLATFORM INJECTED AT X:${definition.x} Y:${definition.y}`);
 
     const sinking = definition.sinking;
     if (!sinking) {

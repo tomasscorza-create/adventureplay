@@ -22,17 +22,17 @@ congelado sin predicción ni interpolación real.
 | # | Hallazgo (P orig.) | Evidencia original | Estado hoy |
 |---|---|---|---|
 | B1 | Guest sin predicción local: su propio personaje congelado, input-to-photon ~180–280 ms | `freezePuppet` en ambas escenas | ✅ Resuelto en su forma principal (simulación local "segura") — pero ver R2 |
-| B2 | `CoopSecurityGuard` sin reset + `inputSeq` reiniciado por escena → tormenta "old-sequence" al encadenar nivel → guest congelado y **expulsado** | `coopSecurity.ts` (validateInput), `CoopSceneLink` | ✅ Intra-sesión (seq de sesión en `CoopSession.generateInputSeq`) · ⚠️ persiste **entre sesiones** (ver §3) |
+| B2 | `CoopSecurityGuard` sin reset + `inputSeq` reiniciado por escena | `coopSecurity.ts`, `CoopSession` | ✅ Resuelto intra-sesión y entre sesiones (F2) |
 | B3 | "Interpolación" = lerp 0.4 sobre el último snapshot, sin buffer ni timestamps | `applyNetPlayer`, `updateGuest` | ✅ Resuelto (`CoopSnapshotInterpolator`: hostTimeMs, delay 85 ms, extrapolación ≤100 ms) |
-| B4 | Todos los clientes suscritos al canal de input (fan-out inútil ×2-3) | `CoopSession.connect` | ✅ Fan-out eliminado · ❌ el mecanismo elegido creó la regresión R1 (ver §3) |
-| B5 | `validateCharges` rechaza siempre → feature de compras del guest muerta + anomalías | `coopSecurity.ts:180-196` | 🟡 Neutralizada (`sendChargeDelta` es no-op); handlers muertos siguen |
+| B4 | Todos los clientes suscritos al canal de input | `CoopSession.connect` | ✅ Resuelto con topics WebSocket por slot en v13 |
+| B5 | Runtime muerto de deltas de cargas rechazados por seguridad | `CoopSession`, `CoopSceneLink` | ✅ Handlers y no-op eliminados; validación histórica conservada |
 | B6 | Gravedad no restaurada al reconectar (el rejoined flota en el host) | `handleParticipantRejoined` | ✅ Resuelto (+ `setNetworkPresence` atómico jugador+arma) |
-| B7 | Deltas sin fiabilidad (`ack:false`, resultado de `send` descartado) + keyframe 1 Hz → estado atascado hasta 1 s tras una pérdida | `CoopSceneLink.maybeSendSnapshot` | 🟡 Parcial (resultado de `send` ahora se registra; fiabilidad sin cambios) |
-| B8 | Re-aplicación completa del snapshot a 60 Hz en el guest (CPU/GC) | `updateGuest` | 🟡 Parcial (eventos discretos gateados por `isNew`; allocations por frame siguen) |
-| B9 | HUD de compañeros con cargas falsas en pantallas de guest | `chargesForSlot` + `emitTeammateHud` | ❌ Abierto |
+| B7 | Pérdida de secciones delta | `CoopSceneLink.maybeSendSnapshot` | 🟡 Mitigado: resultado visible + keyframes 4 Hz (recuperación ≈250 ms) |
+| B8 | Re-aplicación y allocations del snapshot a 60 Hz | controlador + escenas | ✅ Eventos discretos gateados y buffers de interpolación reutilizados |
+| B9 | HUD de compañeros con cargas falsas en guest | `emitTeammateHud` | ✅ Lee cargas autoritativas por slot desde snapshots |
 | B10 | Ventana de reconexión 10 s vs suspensión de apps móviles | `COOP_RECONNECT_WINDOW_MS` | 🟡 Mejorado (30 s) |
-| B11 | El diagnóstico solo medía latencia intra-host (~8 ms): ciego a la red | `recordInputApplied` | 🟡 Parcial (`sendResults` + visibilidad; sin RTT/edad/divergencia) |
-| B12 | Duplicación y divergencias entre `LevelScene` y `PuzzleScene` | `handleRemoteEnd`, stats guest | ❌ Abierto y **creció** con la predicción |
+| B11 | Diagnóstico ciego a red y divergencia | `CoopDiagnostics` | ✅ F0 añadió input-to-echo, edad, divergencia, correcciones y sendResults |
+| B12 | Duplicación del ciclo guest entre escenas | `GuestCoopController` | ✅ Ciclo unificado en F5 |
 
 Cadena de latencia del guest medida en v10 (por diseño, no por bug): captura → throttle 33 ms →
 Supabase → frame del host → tick de snapshot 20 Hz → Supabase → frame del guest → lerp.
@@ -75,9 +75,9 @@ no cubren donde viven los problemas restantes (ver §5).
 | **R3** | **Degradación brusca**: hallazgo original corregido en código; el modo degradado sigue el snapshot interpolado con blend, entra a 120/140 px y sale a 180 px | helper puro + integración en ambas escenas | ✅ Código; QA pendiente |
 | **R4** | El jugador predicho puede atravesar cuerpos dinámicos congelados; decisión vigente: conservar zonas degradadas con histéresis y postergar colisión local hasta tener métricas reales | `PuzzleScene` / `LevelScene` | Decisión (a); opción (b) diferida |
 | **R5** | **Guard sin reset entre sesiones**: hallazgo original corregido; `connect()` reinicia ahora el guard y `globalInputSeq` como una sola frontera de sesión | `CoopSession.ts` + test de segunda sesión desde seq 1 | ✅ Código; QA pendiente |
-| — | Métricas insuficientes: sin RTT, edad de snapshot, input-to-photon ni divergencia; `clockOffsetMs` existe pero no se expone; diagnóstico detrás de `cd=1` | `CoopDiagnostics.ts` | **P1** |
+| — | Métricas insuficientes | `CoopDiagnostics.ts` | ✅ F0 implementada; línea base manual pendiente |
 | — | Duplicación del ciclo guest | Resuelta: ACK, timeline, predicción, convergencia, degradación y lifecycle viven en `GuestCoopController`; las escenas conservan solo adaptadores | ✅ F5 |
-| — | Menores abiertos: B9 (HUD compañeros), `runTracker` guest en 0, `activations.reset()` a 60 Hz en PuzzleScene, allocations por frame de `interpolateSnapshot`, `console.warn` debug (`LevelScene.ts:338`), handlers muertos de charges, doble `hostTimeMs`, curación sin eco local | ver auditoría | P2/P3 |
+| — | Menores F6 | HUD, runTracker guest, activaciones discretas, buffers, logs, handlers charges, timestamp único y eco local de curación | ✅ Resueltos en código |
 
 ### Hipótesis (requieren medición, no asumir)
 
@@ -105,6 +105,8 @@ no cubren donde viven los problemas restantes (ver §5).
 > calibración y QA real antes de cerrar sus criterios de éxito. Fase 4 implementada con
 > histéresis 120/140→180 px y blend interpolado; QA de PuzzleScene pendiente. Fase 5 implementada
 > como refactor de comportamiento cero con suite unitaria del controlador; QA de regresión pendiente.
+> Fase 6 implementada y validada automáticamente. Fase 7 completó preparación técnica e informe;
+> certificación real de cuatro clientes y contraste con dashboard siguen pendientes.
 
 Dificultad: 🟢 simple · 🟡 delicada · 🔴 asignar a agente fuerte (Codex).
 Regla transversal: **cada fase se valida contra las métricas de la Fase 0** (por eso va primera).
@@ -202,7 +204,7 @@ en PuzzleScene; no forma parte de esta fase.
 - **No tocar**: los P2/P3 (F6).
 - **Va después de F3/F4 a propósito**: refactorizar antes de estabilizar la semántica duplica trabajo.
 
-#### Fase 6 — Limpiezas P2/P3 y fiabilidad de deltas 🟢/🟡
+#### Fase 6 — Limpiezas P2/P3 y fiabilidad de deltas 🟢/🟡 — código implementado
 - **Objetivo**: cerrar los menores confirmados sobre la base unificada.
 - **Ítems**: B9 (HUD compañeros), `runTracker` guest, `activations.reset()` a 60 Hz (PuzzleScene),
   allocations de `interpolateSnapshot`, `console.warn` debug, handlers muertos de charges, doble
@@ -215,7 +217,7 @@ en PuzzleScene; no forma parte de esta fase.
 
 ### Bloque D — Escala
 
-#### Fase 7 — Sala de 4 validada y preparación para 8 🔴 Codex
+#### Fase 7 — Sala de 4 validada y preparación para 8 🔴 Codex — preparación implementada; QA real pendiente
 - **Objetivo**: certificar 4 jugadores con datos y dejar el protocolo listo para iniciar 8.
 - **Archivos**: `coopMessages.ts`, `coopSecurity.ts` (rangos de slot), escenas (spawn),
   `CoopNetworkHarness.ts` (jitter por defecto ≠ 0, más clientes).

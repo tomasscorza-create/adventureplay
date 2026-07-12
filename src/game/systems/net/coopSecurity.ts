@@ -1,5 +1,6 @@
 import {
   COOP_INPUT_RATE_HZ,
+  COOP_MAX_PLAYERS,
   COOP_PROTOCOL_VERSION,
   type CoopChargesMessage,
   type CoopEndMessage,
@@ -138,7 +139,7 @@ export class CoopSecurityGuard {
     nowMs: number,
   ): CoopSecurityDecision<CoopInputMessage> {
     if (!isRecord(payload)
-      || !integerInRange(payload.slot, 1, 3)
+      || !integerInRange(payload.slot, 1, COOP_MAX_PLAYERS - 1)
       || !integerInRange(payload.seq, 1, Number.MAX_SAFE_INTEGER)
       || !integerInRange(payload.bits, 0, INPUT_BITS_MASK)) {
       return this.reject("corrupt-payload", sender.key, nowMs);
@@ -183,7 +184,7 @@ export class CoopSecurityGuard {
     nowMs: number,
   ): CoopSecurityDecision<CoopChargesMessage> {
     if (!isRecord(payload)
-      || !integerInRange(payload.slot, 1, 3)
+      || !integerInRange(payload.slot, 1, COOP_MAX_PLAYERS - 1)
       || !integerInRange(payload.healingDelta, 0, 1000)
       || !integerInRange(payload.powerDelta, 0, 1000)) {
       return this.reject("corrupt-payload", sender.key, nowMs);
@@ -212,7 +213,8 @@ export class CoopSecurityGuard {
   validateEnd(payload: unknown, sender: CoopParticipant, nowMs: number): CoopSecurityDecision<CoopEndMessage> {
     if (!isRecord(payload)
       || (payload.reason !== "won" && payload.reason !== "lost" && payload.reason !== "left")
-      || (payload.slot !== undefined && !integerInRange(payload.slot, 0, 3))) {
+      || (payload.slot !== undefined
+        && !integerInRange(payload.slot, 0, COOP_MAX_PLAYERS - 1))) {
       return this.reject("corrupt-payload", sender.key, nowMs);
     }
     if (payload.reason === "left") {

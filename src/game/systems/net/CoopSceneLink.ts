@@ -8,10 +8,10 @@ import { coopSession, type CoopConnectionState } from "./CoopSession";
 import {
   COOP_INPUT_KEEPALIVE_MS,
   COOP_INPUT_RATE_HZ,
+  COOP_KEYFRAME_RATE_HZ,
   COOP_SNAPSHOT_RATE_HZ,
   packInputState,
   unpackInputState,
-  type CoopChargesMessage,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopInputMessage,
@@ -36,12 +36,10 @@ export interface CoopLinkTransport {
   onParticipantRejoined?(cb: (slot: number) => void): () => void;
   onParticipantReconnectExpired?(cb: (slot: number) => void): () => void;
   onStart?(cb: (message: CoopStartMessage) => void): () => void;
-  onCharges?(cb: (message: CoopChargesMessage) => void): () => void;
   onConnectionState?(cb: (state: CoopConnectionState) => void): () => void;
   sendInput(message: CoopInputMessage): void;
   sendSnapshot(snapshot: unknown): void;
   sendEnd(reason: CoopEndReason, slot?: number): void;
-  sendCharges?(message: CoopChargesMessage): void;
   recordSnapshotKind?(keyframe: boolean): void;
   recordInputApplied?(slot: number, latencyMs: number): void;
   recordInputSent?(seq: number, sentAtMs: number): void;
@@ -64,12 +62,15 @@ export interface CoopLinkHooks {
   // la sala; los guests lo reciben aqui una vez terminado el nivel actual.
   onStartNextLevel?: (message: CoopStartMessage) => void;
   // Host: un jugador compro cargas durante la partida (delta por slot).
-  onRemoteCharges?: (message: CoopChargesMessage) => void;
   onPredictionReset?: () => void;
 }
 
 const MIN_INPUT_INTERVAL_MS = 1000 / COOP_INPUT_RATE_HZ;
 const SNAPSHOT_INTERVAL_MS = 1000 / COOP_SNAPSHOT_RATE_HZ;
+const SNAPSHOTS_PER_KEYFRAME = Math.max(
+  1,
+  Math.round(COOP_SNAPSHOT_RATE_HZ / COOP_KEYFRAME_RATE_HZ),
+);
 const LOCAL_PRESS_EDGES = [
   ["jump", "jumpJustPressed"],
   ["melee", "meleeJustPressed"],
@@ -246,21 +247,11 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
     if (this.transport.onStart && hooks.onStartNextLevel) {
       this.unbinds.push(this.transport.onStart((message) => hooks.onStartNextLevel!(message)));
     }
-    if (this.transport.onCharges && hooks.onRemoteCharges) {
-      this.unbinds.push(this.transport.onCharges((message) => hooks.onRemoteCharges!(message)));
-    }
     if (this.isGuest && this.transport.onConnectionState && hooks.onPredictionReset) {
       this.unbinds.push(this.transport.onConnectionState((state) => {
         if (state === "reconnecting") hooks.onPredictionReset!();
       }));
     }
-  }
-
-  // Guest: las compras durante la partida estan deshabilitadas en co-op remoto (Fase 1).
-  sendChargeDelta(healingDelta: number, powerDelta: number): void {
-    void healingDelta;
-    void powerDelta;
-    // this.transport.sendCharges?.({ slot: this.localSlot, healingDelta, powerDelta });
   }
 
   private remoteSlot(slot: number): RemoteInputSlot {
@@ -392,7 +383,10 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.
-  maybeSendSnapshot(timeMs: number, build: (seq: number) => TSnapshot): void {
+  maybeSendSnapshot(
+    timeMs: number,
+    build: (seq: number) => Omit<TSnapshot, "hostTimeMs" | "inputSeqBySlot">,
+  ): void {
     if (timeMs - this.lastSnapshotSentAt < SNAPSHOT_INTERVAL_MS) return;
     this.lastSnapshotSentAt = timeMs;
     this.snapshotSeq += 1;
@@ -406,7 +400,7 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
     );
     const out: Record<string, unknown> = {};
     const isKeyframe = this.forceFullSnapshot
-      || this.snapshotSeq % COOP_SNAPSHOT_RATE_HZ === 0;
+      || this.snapshotSeq % SNAPSHOTS_PER_KEYFRAME === 0;
     this.forceFullSnapshot = false;
     this.transport.recordSnapshotKind?.(isKeyframe);
     

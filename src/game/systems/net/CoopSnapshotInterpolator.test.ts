@@ -61,6 +61,22 @@ describe("CoopSnapshotInterpolator", () => {
     expect(result).toEqual([[7, 25, 25, 1]]);
   });
 
+  it("reutiliza buffers de salida cuando el caller los proporciona", () => {
+    const playerBuffer = player(0);
+    const tupleBuffer: Array<[number, number, number, number]> = [];
+    const interpolatedPlayer = interpolatePlayer(player(0), player(100), 0.5, 0, playerBuffer);
+    const tuples = interpolatePositionTuples(
+      [[7, 0, 20, 0]],
+      [[7, 100, 40, 1]],
+      0.5,
+      tupleBuffer,
+    );
+    expect(interpolatedPlayer).toBe(playerBuffer);
+    expect(interpolatedPlayer.x).toBe(50);
+    expect(tuples).toBe(tupleBuffer);
+    expect(tuples).toEqual([[7, 50, 30, 1]]);
+  });
+
   it("produce desplazamientos lineales entre snapshots enviados a veinte hertz", () => {
     const buffer = new CoopSnapshotInterpolator<{ seq: number; hostTimeMs: number }>();
     buffer.push({ seq: 1, hostTimeMs: 0 }, 1000);

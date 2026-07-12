@@ -35,7 +35,7 @@ export class CoopLocalPrediction {
     return removed;
   }
 
-  traceEdge(action: "jump" | "melee" | "spin" | "power"): void {
+  traceEdge(action: "jump" | "melee" | "spin" | "heal" | "power"): void {
     this.trace("edge", { action });
   }
 

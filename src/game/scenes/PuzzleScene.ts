@@ -61,6 +61,7 @@ import {
   type SnapshotRenderFrame,
 } from "../systems/net/CoopSnapshotInterpolator";
 import { GuestCoopController } from "../systems/net/GuestCoopController";
+import { getCoopSpawnX } from "../systems/net/coopSpawnLayout";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -129,6 +130,11 @@ export class PuzzleScene extends Phaser.Scene {
   private readonly movement = new MovementSystem();
   private readonly guestPredictionMovement = new MovementSystem();
   private guestCoopController?: GuestCoopController<WorldSnapshot>;
+  private guestInterpolatedSnapshot?: WorldSnapshot;
+  private readonly guestInterpolatedPlayers: WorldSnapshot["players"] = [];
+  private readonly guestInterpolatedCrates: NonNullable<WorldSnapshot["crates"]> = [];
+  private readonly guestInterpolatedEnemies: NonNullable<WorldSnapshot["enemies"]> = [];
+  private readonly guestInterpolatedProjectiles: WorldSnapshot["projectiles"] = [];
   private readonly inventory = new InventorySystem();
   private readonly progression = new ProgressionSystem();
   private readonly achievements = new AchievementSystem();
@@ -161,8 +167,6 @@ export class PuzzleScene extends Phaser.Scene {
   private nextProjectileNetId = 1;
   // Al encadenar el siguiente nivel co-op, el SHUTDOWN no debe cerrar la sala.
   private keepCoopSessionOnShutdown = false;
-  // Cargas propias segun el save al entrar (para detectar compras en co-op).
-  private coopChargeBaseline = { healingCharges: 0, powerCharges: 0 };
   // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
   private lastGuestHudKey = "";
 
@@ -172,6 +176,7 @@ export class PuzzleScene extends Phaser.Scene {
 
   create(data: { levelId?: string; coop?: CoopSessionInfo }): void {
     this.guestPredictionMovement.reset();
+    this.guestInterpolatedSnapshot = undefined;
     this.level = puzzleLevelDefinitions[data.levelId ?? "trialChamber1"]
       ?? puzzleLevelDefinitions.trialChamber1;
     this.save = gameSaveStore.load();
@@ -209,11 +214,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.nextProjectileNetId = 1;
     this.keepCoopSessionOnShutdown = false;
     this.lastGuestHudKey = "";
-    const ownCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    this.coopChargeBaseline = {
-      healingCharges: ownCharges?.healingCharges ?? 0,
-      powerCharges: ownCharges?.powerCharges ?? 0,
-    };
 
     gameEvents.emit(EVENTS.ACTIVE_LEVEL_CHANGED, { levelId: this.level.id });
     this.inputSystem = new GameplayInputSystem(this);
@@ -520,7 +520,14 @@ export class PuzzleScene extends Phaser.Scene {
       const stats: PlayerStats = isLocal
         ? this.save.player
         : { ...this.save.player, health: this.save.player.maxHealth };
-      const player = new Player(this, start.x - 70 * entry.slot, start.y, stats, character);
+      const spawnX = getCoopSpawnX(
+        start.x,
+        entry.slot,
+        roster.length,
+        40,
+        GAME_WIDTH - 40,
+      );
+      const player = new Player(this, spawnX, start.y, stats, character);
       if (entry.slot === 0) {
         this.player = player;
       } else {
@@ -1833,35 +1840,16 @@ export class PuzzleScene extends Phaser.Scene {
         if (!this.isGuest || !this.levelFinished) return;
         this.restartCoopScene(message.levelId, message.roster);
       },
-      onRemoteCharges: (message) => {
-        // Solo el host administra los contadores vivos de cada guest.
-        if (!this.isHost) return;
-        const charges = this.remoteCharges[message.slot - 1];
-        if (!charges) return;
-        charges.healingCharges += Math.max(0, message.healingDelta);
-        charges.powerCharges += Math.max(0, message.powerDelta);
-      },
     });
   }
 
   // Vuelta de la tienda en co-op (sin pausa): tomar del save fresco solo lo que
   // una compra cambia (ORO y cargas) sin reemplazar `this.save`, porque los
-  // stats vivos del jugador comparten referencia con `this.save.player`. Si
-  // compro un guest, el delta viaja al host que administra sus contadores.
+  // stats vivos del jugador comparten referencia con `this.save.player`.
   private syncCoopPurchases(): void {
     const fresh = gameSaveStore.load();
     this.save.player.coins = fresh.player.coins;
     this.save.characterPowerCharges = fresh.characterPowerCharges;
-    const charges = this.save.characterPowerCharges[this.save.selectedCharacterId];
-    const healing = charges?.healingCharges ?? 0;
-    const power = charges?.powerCharges ?? 0;
-    if (this.isGuest) {
-      this.coopLink?.sendChargeDelta(
-        Math.max(0, healing - this.coopChargeBaseline.healingCharges),
-        Math.max(0, power - this.coopChargeBaseline.powerCharges),
-      );
-    }
-    this.coopChargeBaseline = { healingCharges: healing, powerCharges: power };
     this.emitHud();
   }
 
@@ -1901,7 +1889,7 @@ export class PuzzleScene extends Phaser.Scene {
     });
   }
 
-  private buildSnapshot(seq: number): WorldSnapshot {
+  private buildSnapshot(seq: number): Omit<WorldSnapshot, "hostTimeMs" | "inputSeqBySlot"> {
     const hostCharges = this.save.characterPowerCharges[this.save.selectedCharacterId];
     const enemies: Array<[number, number, number]> = [];
     this.enemies.children.each((obj) => {
@@ -1936,8 +1924,6 @@ export class PuzzleScene extends Phaser.Scene {
     ];
     return {
       seq,
-      hostTimeMs: this.time.now,
-      inputSeqBySlot: [],
       players,
       crates: this.crates.map((crate) => [Math.round(crate.x), Math.round(crate.y)]),
       enemies,
@@ -1954,6 +1940,8 @@ export class PuzzleScene extends Phaser.Scene {
 
   private updateGuest(time: number, delta: number): void {
     const input = this.inputSystem.readFrame();
+    this.runTracker.advance(delta);
+    this.runTracker.trackInput(input);
     if (input.pauseJustPressed) {
       this.handlePausePressed();
       return;
@@ -2033,24 +2021,55 @@ export class PuzzleScene extends Phaser.Scene {
       this.guestCoopController?.traceEdge("power");
       player.markUsingPower(now);
     }
+    const self = this.coopLink?.latestSnapshot?.players[this.coopSelfSlot];
+    if (input.healJustPressed && self && self.healCharges > 0 && self.health < self.maxHealth) {
+      this.guestCoopController?.traceEdge("heal");
+      this.playSfx("heal");
+    }
   }
 
   private interpolateSnapshot(frame: SnapshotRenderFrame<WorldSnapshot>): WorldSnapshot {
     const { previous, next, alpha, extrapolationMs } = frame;
     const latest = this.coopLink?.latestSnapshot ?? previous;
-    return {
-      ...previous,
-      players: previous.players.map((player, slot) => slot === this.coopSelfSlot
-        ? latest.players[slot] ?? player
-        : interpolatePlayer(player, next?.players[slot], alpha, extrapolationMs)),
-      crates: previous.crates
-        ? interpolateIndexedPositions(previous.crates, next?.crates, alpha)
-        : undefined,
-      enemies: previous.enemies
-        ? interpolatePositionTuples(previous.enemies, next?.enemies, alpha)
-        : undefined,
-      projectiles: interpolateProjectiles(previous.projectiles, next?.projectiles, alpha),
-    };
+    const snapshot = this.guestInterpolatedSnapshot ?? { ...previous };
+    Object.assign(snapshot, previous);
+    previous.players.forEach((player, slot) => {
+      const source = slot === this.coopSelfSlot ? latest.players[slot] ?? player : player;
+      const target = slot === this.coopSelfSlot ? undefined : next?.players[slot];
+      this.guestInterpolatedPlayers[slot] = interpolatePlayer(
+        source,
+        target,
+        alpha,
+        slot === this.coopSelfSlot ? 0 : extrapolationMs,
+        this.guestInterpolatedPlayers[slot],
+      );
+    });
+    this.guestInterpolatedPlayers.length = previous.players.length;
+    snapshot.players = this.guestInterpolatedPlayers;
+    snapshot.crates = previous.crates
+      ? interpolateIndexedPositions(
+        previous.crates,
+        next?.crates,
+        alpha,
+        this.guestInterpolatedCrates,
+      )
+      : undefined;
+    snapshot.enemies = previous.enemies
+      ? interpolatePositionTuples(
+        previous.enemies,
+        next?.enemies,
+        alpha,
+        this.guestInterpolatedEnemies,
+      )
+      : undefined;
+    snapshot.projectiles = interpolateProjectiles(
+      previous.projectiles,
+      next?.projectiles,
+      alpha,
+      this.guestInterpolatedProjectiles,
+    );
+    this.guestInterpolatedSnapshot = snapshot;
+    return snapshot;
   }
 
   private applySnapshot(snap: WorldSnapshot, isNew: boolean): void {
@@ -2118,7 +2137,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     // Estado de objetivos: activaciones, placas, puertas, sellos y portal.
-    if (snap.active !== undefined) {
+    if (snap.active !== undefined && isNew) {
       this.activations.reset(this.level.requiredActivations);
       for (const id of snap.active) this.activations.setParticipantActive(id, "net", true);
       for (const plate of this.plates) {
@@ -2185,7 +2204,12 @@ export class PuzzleScene extends Phaser.Scene {
       if (!player) continue;
 
       const isConnected = coopSession.participants.some(p => p.slot === entry.slot);
-      const charges = this.chargesForSlot(entry.slot);
+      const snapshotPlayer = this.isGuest
+        ? this.coopLink?.latestSnapshot?.players[entry.slot]
+        : undefined;
+      const charges = snapshotPlayer
+        ? { healingCharges: snapshotPlayer.healCharges, powerCharges: snapshotPlayer.powerCharges }
+        : this.chargesForSlot(entry.slot);
       
       let status: import("../../shared/types/game").TeammateConnectionStatus = "connected";
       if (!isConnected) {

@@ -83,22 +83,23 @@ export function interpolatePlayer(
   next: NetPlayerState | undefined,
   alpha: number,
   extrapolationMs: number,
+  target?: NetPlayerState,
 ): NetPlayerState {
   if (!next) {
     const seconds = extrapolationMs / 1000;
-    return {
+    return Object.assign(target ?? {}, {
       ...previous,
       x: previous.x + previous.vx * seconds,
       y: previous.y + previous.vy * seconds,
-    };
+    });
   }
-  return {
+  return Object.assign(target ?? {}, {
     ...next,
     x: lerp(previous.x, next.x, alpha),
     y: lerp(previous.y, next.y, alpha),
     vx: lerp(previous.vx, next.vx, alpha),
     vy: lerp(previous.vy, next.vy, alpha),
-  };
+  });
 }
 
 type PositionedTuple = [number, number, number, ...number[]];
@@ -107,10 +108,16 @@ export function interpolatePositionTuples<T extends PositionedTuple>(
   previous: T[],
   next: T[] | undefined,
   alpha: number,
+  output?: T[],
 ): T[] {
-  if (!next) return previous;
+  if (!next && !output) return previous;
+  const result = output ?? [];
+  result.length = 0;
+  if (!next) {
+    result.push(...previous);
+    return result;
+  }
   const nextById = new Map(next.map((entry) => [entry[0], entry]));
-  const result: T[] = [];
   for (const entry of previous) {
     const target = nextById.get(entry[0]);
     if (!target) {
@@ -135,18 +142,26 @@ export function interpolateIndexedPositions(
   previous: Array<[number, number]>,
   next: Array<[number, number]> | undefined,
   alpha: number,
+  output?: Array<[number, number]>,
 ): Array<[number, number]> {
-  if (!next) return previous;
-  return previous.map(([x, y], index) => {
-    const target = next[index];
-    return target ? [lerp(x, target[0], alpha), lerp(y, target[1], alpha)] : [x, y];
+  if (!next && !output) return previous;
+  const result = output ?? [];
+  result.length = previous.length;
+  previous.forEach(([x, y], index) => {
+    const target = next?.[index];
+    const entry = result[index] ?? [0, 0];
+    entry[0] = target ? lerp(x, target[0], alpha) : x;
+    entry[1] = target ? lerp(y, target[1], alpha) : y;
+    result[index] = entry;
   });
+  return result;
 }
 
 export function interpolateProjectiles(
   previous: NetProjectile[],
   next: NetProjectile[] | undefined,
   alpha: number,
+  output?: NetProjectile[],
 ): NetProjectile[] {
-  return interpolatePositionTuples(previous, next, alpha);
+  return interpolatePositionTuples(previous, next, alpha, output);
 }

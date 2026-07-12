@@ -6,7 +6,6 @@ import {
   assignSlots,
   COOP_MAX_PLAYERS,
   COOP_PROTOCOL_VERSION,
-  type CoopChargesMessage,
   type CoopEndMessage,
   type CoopEndReason,
   type CoopHello,
@@ -21,7 +20,6 @@ export type SimulatedEvent =
   | "snapshot"
   | "start"
   | "end"
-  | "charges"
   | "participant-left"
   | "participant-rejoined"
   | "participant-reconnect-expired"
@@ -87,7 +85,7 @@ export class SimulatedRoom {
   private readonly traffic = new Map<SimulatedEvent, EventTraffic>();
   private readonly publicationPayloads = new Map<SimulatedEvent, unknown[]>();
 
-  constructor(code = "TEST") {
+  constructor(code = "TEST", readonly defaultJitterMs = 4) {
     this.code = code;
   }
 
@@ -290,7 +288,10 @@ export class SimulatedRoom {
         continue;
       }
       const delays = this.nextDelays.get(event);
-      const delayMs = delays?.shift() ?? 0;
+      const defaultDelayMs = this.defaultJitterMs > 0
+        ? (this.nextEnvelopeId * 3) % (this.defaultJitterMs + 1)
+        : 0;
+      const delayMs = delays?.shift() ?? defaultDelayMs;
       this.queue.push({
         id: this.nextEnvelopeId++,
         from,
@@ -305,7 +306,7 @@ export class SimulatedRoom {
 
   private targetsFor(from: string, event: SimulatedEvent): string[] {
     if (this.disconnectedMembers.has(from)) return [];
-    if (event === "input" || event === "charges") {
+    if (event === "input") {
       const hostId = this.hostMember().id;
       return this.disconnectedMembers.has(hostId) ? [] : [hostId];
     }
@@ -389,7 +390,6 @@ export class SimulatedTransport implements CoopLinkTransport {
   private readonly participantRejoinedHandlers = new Set<(slot: number) => void>();
   private readonly participantReconnectExpiredHandlers = new Set<(slot: number) => void>();
   private readonly startHandlers = new Set<(message: CoopStartMessage) => void>();
-  private readonly chargesHandlers = new Set<(message: CoopChargesMessage) => void>();
   private inputSeq = 0;
 
   constructor(
@@ -444,11 +444,6 @@ export class SimulatedTransport implements CoopLinkTransport {
     return () => this.startHandlers.delete(cb);
   }
 
-  onCharges(cb: (message: CoopChargesMessage) => void): () => void {
-    this.chargesHandlers.add(cb);
-    return () => this.chargesHandlers.delete(cb);
-  }
-
   sendInput(message: CoopInputMessage): void {
     this.room.publish(this.clientId, "input", message);
   }
@@ -459,10 +454,6 @@ export class SimulatedTransport implements CoopLinkTransport {
 
   sendEnd(reason: CoopEndReason, slot?: number): void {
     this.room.publish(this.clientId, "end", { reason, slot } satisfies CoopEndMessage);
-  }
-
-  sendCharges(message: CoopChargesMessage): void {
-    this.room.publish(this.clientId, "charges", message);
   }
 
   leave(): void {
@@ -478,8 +469,6 @@ export class SimulatedTransport implements CoopLinkTransport {
       this.startHandlers.forEach((handler) => handler(payload as CoopStartMessage));
     } else if (event === "end") {
       this.endHandlers.forEach((handler) => handler(payload as CoopEndMessage));
-    } else if (event === "charges") {
-      this.chargesHandlers.forEach((handler) => handler(payload as CoopChargesMessage));
     } else if (event === "participant-left") {
       this.participantLeftHandlers.forEach((handler) => handler(payload as number));
     } else if (event === "participant-rejoined") {

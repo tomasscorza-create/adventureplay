@@ -63,6 +63,7 @@ export class GuestCoopController<TSnapshot extends GuestCoopSnapshot> {
   private predictionActive = false;
   private degraded = false;
   private lastAuthoritativePosition?: CoopPosition;
+  private renderedSelf?: NetPlayerState;
 
   constructor(private readonly link: GuestCoopLink<TSnapshot>) {}
 
@@ -79,8 +80,10 @@ export class GuestCoopController<TSnapshot extends GuestCoopSnapshot> {
         frame.next?.players[adapter.localSlot],
         frame.alpha,
         frame.extrapolationMs,
+        this.renderedSelf,
       )
       : undefined;
+    if (renderedSelf) this.renderedSelf = renderedSelf;
     let forceAuthoritativeSnap = false;
 
     if (latest && latest.seq !== this.lastReconciledSnapshotSeq) {
@@ -167,7 +170,7 @@ export class GuestCoopController<TSnapshot extends GuestCoopSnapshot> {
     }
   }
 
-  traceEdge(action: "jump" | "melee" | "spin" | "power"): void {
+  traceEdge(action: "jump" | "melee" | "spin" | "heal" | "power"): void {
     this.prediction.traceEdge(action);
   }
 
@@ -178,6 +181,7 @@ export class GuestCoopController<TSnapshot extends GuestCoopSnapshot> {
     this.predictionActive = false;
     this.degraded = false;
     this.lastAuthoritativePosition = undefined;
+    this.renderedSelf = undefined;
   }
 
   private recordCorrection(kind: Parameters<CoopLocalPrediction["traceCorrection"]>[0]): void {

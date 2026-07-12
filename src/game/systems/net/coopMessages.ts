@@ -8,6 +8,7 @@ import {
 // de Supabase Realtime. El guest interpola entre snapshots del host.
 export const COOP_INPUT_RATE_HZ = 30;
 export const COOP_SNAPSHOT_RATE_HZ = 20;
+export const COOP_KEYFRAME_RATE_HZ = 4;
 
 // El input solo se transmite cuando cambia; este keepalive reenvia el estado
 // sostenido sin cambios para corregir cualquier mensaje perdido sin volver a
