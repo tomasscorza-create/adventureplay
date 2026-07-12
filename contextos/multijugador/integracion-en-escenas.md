@@ -21,7 +21,7 @@ Ambas escenas jugables integran el co-op con el **mismo patrón** host-autoritat
 |---|---|
 | **single** | Igual que antes del co-op (sin cambios). |
 | **host** | Lee input local (slot 0) + `coopLink.consumeRemoteInputFrame(slot)` por cada guest de `remotePlayers` → mueve a todos → simula mundo → `coopLink.maybeSendSnapshot`. |
-| **guest** | `updateGuest`: envía input, simula localmente al jugador en zonas seguras, corrige deriva `x/y` hacia el snapshot interpolado y aplica el resto del mundo autoritativo. |
+| **guest** | `updateGuest` delega el ciclo a `GuestCoopController`; la escena aporta movimiento/SFX, distancia a geometría dinámica e interpolación/aplicación de sus secciones propias. |
 
 `pauseJustPressed` en co-op → emite `SCREEN_CHANGED "coop-exit-confirm"`: la partida **sigue
 corriendo** detrás de una confirmación React (`CoopExitConfirmScreen`), porque pausar la escena
@@ -60,6 +60,10 @@ transporte inyectado). La escena solo aporta cómo construir/aplicar su snapshot
 | `emitGuestHud` | El guest arma su HUD desde el snapshot de **su** slot (`coopSelfSlot`). |
 | `handleRemoteEnd` / `endCoopToMenu` | Gestión de fin de sesión. |
 | `finalizeCompletion` | Bookkeeping de nivel completado, compartido host/guest. |
+
+`GuestCoopController` es la única implementación de ACK, timeline, convergencia, transición
+predicted/degraded, histéresis y reset de lifecycle. Las escenas no deciden esos estados: solo
+inyectan adaptadores para Phaser y para la forma específica de `LevelSnapshot`/`WorldSnapshot`.
 
 ## Qué se sincroniza (tabla por modo)
 
@@ -143,4 +147,4 @@ objetivos en simultáneo sin conflicto.
 
 ## ⚠️ Advertencia sobre Pruebas (Test Coverage)
 
-La función pura de corrección posicional está cubierta por tests, pero la integración Phaser de la predicción local, degradación de colisiones e interpolación todavía requiere QA manual. Cualquier modificación en `updateGuest`, colisiones con cajas o transiciones de modo debe probarse rigurosamente con 2 a 4 clientes reales.
+El controlador y la función pura de corrección están cubiertos por tests, pero sus adaptadores Phaser, las colisiones y el feel todavía requieren QA manual. Cualquier modificación en movimiento, cajas o secciones específicas del snapshot debe probarse rigurosamente con 2 a 4 clientes reales.

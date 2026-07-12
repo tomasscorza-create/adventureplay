@@ -16,6 +16,7 @@ No hay sockets acoplados dentro de escenas ni entidades.
 | `src/game/systems/net/CoopSceneLink.ts` | **Plumbing compartido** por ambas escenas: dedupe por seq, flancos del input remoto por slot, throttling de envíos, guardas de fin de sesión. Testeable con transporte inyectado. |
 | `src/game/systems/net/CoopSnapshotInterpolator.ts` | Buffer temporal de tres snapshots, reloj del host, interpolación a 85 ms y extrapolación limitada a 100 ms. |
 | `src/game/systems/net/CoopLocalPrediction.ts` | Historial acotado de comandos realmente enviados, limpieza por ACK y replay de intención sostenida sin repetir flancos. |
+| `src/game/systems/net/GuestCoopController.ts` | Ciclo unificado del guest: input/ACK, timeline, convergencia, histéresis, degradación, métricas y aplicación de snapshots mediante adaptadores de escena. |
 | `src/game/systems/net/coopPlayerNet.ts` | `toNetPlayer` / `applyNetPlayer` compartidos. |
 | `src/game/systems/net/CoopProjectilePuppets.ts` | Sprites sin física que representan los proyectiles del host en el guest (interpola + destello al desaparecer). |
 | `src/game/events/EventBus.ts` | `START_GAME` lleva `coop?: CoopSessionInfo` (`{ role, code, localSlot, roster }`). |

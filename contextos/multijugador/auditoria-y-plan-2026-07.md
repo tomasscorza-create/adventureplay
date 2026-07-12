@@ -76,7 +76,7 @@ no cubren donde viven los problemas restantes (ver §5).
 | **R4** | El jugador predicho puede atravesar cuerpos dinámicos congelados; decisión vigente: conservar zonas degradadas con histéresis y postergar colisión local hasta tener métricas reales | `PuzzleScene` / `LevelScene` | Decisión (a); opción (b) diferida |
 | **R5** | **Guard sin reset entre sesiones**: hallazgo original corregido; `connect()` reinicia ahora el guard y `globalInputSeq` como una sola frontera de sesión | `CoopSession.ts` + test de segunda sesión desde seq 1 | ✅ Código; QA pendiente |
 | — | Métricas insuficientes: sin RTT, edad de snapshot, input-to-photon ni divergencia; `clockOffsetMs` existe pero no se expone; diagnóstico detrás de `cd=1` | `CoopDiagnostics.ts` | **P1** |
-| — | Duplicación creció: `updateGuest`, `isGuestPredictionSafe`, `playPredictedActions`, `interpolateSnapshot`, `resetGuestPrediction` duplicados (~150 líneas nuevas) entre escenas | ambas escenas | **P1** |
+| — | Duplicación del ciclo guest | Resuelta: ACK, timeline, predicción, convergencia, degradación y lifecycle viven en `GuestCoopController`; las escenas conservan solo adaptadores | ✅ F5 |
 | — | Menores abiertos: B9 (HUD compañeros), `runTracker` guest en 0, `activations.reset()` a 60 Hz en PuzzleScene, allocations por frame de `interpolateSnapshot`, `console.warn` debug (`LevelScene.ts:338`), handlers muertos de charges, doble `hostTimeMs`, curación sin eco local | ver auditoría | P2/P3 |
 
 ### Hipótesis (requieren medición, no asumir)
@@ -103,7 +103,8 @@ no cubren donde viven los problemas restantes (ver §5).
 > validada automáticamente; falta comprobar dos salas consecutivas en el QA manual. Fase 3
 > implementada con umbrales provisionales 32/160 px y validada automáticamente; requiere
 > calibración y QA real antes de cerrar sus criterios de éxito. Fase 4 implementada con
-> histéresis 120/140→180 px y blend interpolado; QA de PuzzleScene pendiente.
+> histéresis 120/140→180 px y blend interpolado; QA de PuzzleScene pendiente. Fase 5 implementada
+> como refactor de comportamiento cero con suite unitaria del controlador; QA de regresión pendiente.
 
 Dificultad: 🟢 simple · 🟡 delicada · 🔴 asignar a agente fuerte (Codex).
 Regla transversal: **cada fase se valida contra las métricas de la Fase 0** (por eso va primera).
@@ -187,7 +188,7 @@ en PuzzleScene; no forma parte de esta fase.
 
 ### Bloque C — Deuda técnica
 
-#### Fase 5 — Controlador guest unificado 🔴 Codex
+#### Fase 5 — Controlador guest unificado 🔴 Codex — código implementado
 - **Objetivo**: una sola implementación de la lógica co-op del guest.
 - **Archivos**: nuevo `src/game/systems/net/GuestCoopController.ts` + reducción en ambas escenas.
 - **Cambios**: extraer el ciclo guest completo parametrizando lo específico de cada escena
@@ -253,9 +254,9 @@ viven los problemas abiertos:
 
 - `SimulatedTransport` puentea `CoopSession` y `CoopSecurityGuard` → R1 (REST) y R5 (guard entre
   sesiones) son **indetectables** por la suite actual.
-- La corrección posicional pura de R2 tiene tests desde F3, pero su integración con Phaser y toda
-  la semántica de degradación siguen en las escenas sin cobertura → R3 y R4 aún no tienen red de
-  seguridad completa (F5 lo corrige al extraer el controlador).
+- La corrección, el lifecycle y la degradación del guest tienen cobertura unitaria en
+  `GuestCoopController.test.ts`. Los adaptadores Phaser de cada escena y el feel real de colisiones
+  siguen requiriendo QA manual.
 - El harness entrega con retardo 0 por defecto, sin REST, sin reordenamiento, sin visibilidad
   ni suspensión de pestañas.
 

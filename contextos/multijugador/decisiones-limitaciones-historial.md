@@ -117,7 +117,7 @@
 ## Archivos clave (para retomar)
 
 - Red: `src/game/systems/net/CoopSession.ts`, `coopMessages.ts`, `levelCoopMessages.ts`,
-  `CoopSceneLink.ts`, `coopPlayerNet.ts`, `CoopProjectilePuppets.ts`.
+  `CoopSceneLink.ts`, `GuestCoopController.ts`, `coopPlayerNet.ts`, `CoopProjectilePuppets.ts`.
 - Tests de red: `coopMessages.test.ts`, `CoopSceneLink.test.ts`.
 - Escenas: `src/game/scenes/PuzzleScene.ts`, `src/game/scenes/LevelScene.ts`.
 - Entidad: `src/game/entities/player/Player.ts` (`renderNetState`).

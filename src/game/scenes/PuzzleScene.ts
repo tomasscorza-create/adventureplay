@@ -60,13 +60,7 @@ import {
   interpolateProjectiles,
   type SnapshotRenderFrame,
 } from "../systems/net/CoopSnapshotInterpolator";
-import { CoopLocalPrediction } from "../systems/net/CoopLocalPrediction";
-import {
-  computeGuestPositionCorrection,
-  isAuthoritativeTeleport,
-  shouldUseDegradedMode,
-  type CoopPosition,
-} from "../systems/net/coopGuestReconciliation";
+import { GuestCoopController } from "../systems/net/GuestCoopController";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -134,7 +128,7 @@ export class PuzzleScene extends Phaser.Scene {
   private unbindCameraZoom?: () => void;
   private readonly movement = new MovementSystem();
   private readonly guestPredictionMovement = new MovementSystem();
-  private readonly guestPrediction = new CoopLocalPrediction();
+  private guestCoopController?: GuestCoopController<WorldSnapshot>;
   private readonly inventory = new InventorySystem();
   private readonly progression = new ProgressionSystem();
   private readonly achievements = new AchievementSystem();
@@ -171,24 +165,13 @@ export class PuzzleScene extends Phaser.Scene {
   private coopChargeBaseline = { healingCharges: 0, powerCharges: 0 };
   // Firma del ultimo HUD emitido por el guest (evita emitir a 60 Hz).
   private lastGuestHudKey = "";
-  private lastAppliedSnapshotSeq = -1;
-  private lastReconciledSnapshotSeq = -1;
-  private guestPredictionActive = false;
-  private guestPredictionDegraded = false;
-  private guestLastAuthoritativePosition?: CoopPosition;
 
   constructor() {
     super("PuzzleScene");
   }
 
   create(data: { levelId?: string; coop?: CoopSessionInfo }): void {
-    this.guestPrediction.reset();
     this.guestPredictionMovement.reset();
-    this.lastReconciledSnapshotSeq = -1;
-    this.lastAppliedSnapshotSeq = -1;
-    this.guestPredictionActive = false;
-    this.guestPredictionDegraded = false;
-    this.guestLastAuthoritativePosition = undefined;
     this.level = puzzleLevelDefinitions[data.levelId ?? "trialChamber1"]
       ?? puzzleLevelDefinitions.trialChamber1;
     this.save = gameSaveStore.load();
@@ -212,6 +195,9 @@ export class PuzzleScene extends Phaser.Scene {
     this.isHost = this.coop?.role === "host";
     this.isGuest = this.coop?.role === "guest";
     this.coopSelfSlot = this.coop?.localSlot ?? 0;
+    this.guestCoopController = this.isGuest && this.coopLink
+      ? new GuestCoopController(this.coopLink)
+      : undefined;
     this.remotePlayers = [];
     this.remoteMovement = [];
     this.remoteCharges = [];
@@ -1972,112 +1958,41 @@ export class PuzzleScene extends Phaser.Scene {
       this.handlePausePressed();
       return;
     }
-    const sentCommand = this.coopLink?.sendLocalInput(time, input);
-    if (sentCommand) this.guestPrediction.record(sentCommand);
     const localPlayer = this.playerAtSlot(this.coopSelfSlot);
-    const latest = this.coopLink?.latestSnapshot;
-    const frame = this.coopLink?.renderSnapshot();
-    const previousRenderedSelf = frame?.previous.players[this.coopSelfSlot];
-    const renderedSelf = frame && previousRenderedSelf
-      ? interpolatePlayer(
-        previousRenderedSelf,
-        frame.next?.players[this.coopSelfSlot],
-        frame.alpha,
-        frame.extrapolationMs,
-      )
-      : undefined;
-    let forceAuthoritativeSnap = false;
-    if (latest && latest.seq !== this.lastReconciledSnapshotSeq && localPlayer) {
-      this.lastReconciledSnapshotSeq = latest.seq;
-      this.guestPrediction.acknowledge(latest.inputSeqBySlot[this.coopSelfSlot] ?? -1);
-      this.guestPrediction.traceCorrection("none");
-      const authoritative = latest.players[this.coopSelfSlot];
-      if (authoritative) {
-        forceAuthoritativeSnap = isAuthoritativeTeleport(
-          this.guestLastAuthoritativePosition,
-          authoritative,
-        );
-        this.guestLastAuthoritativePosition = { x: authoritative.x, y: authoritative.y };
-        this.coopLink?.recordGuestSnapshotMetrics(
-          latest,
-          localPlayer.x,
-          localPlayer.y,
-          authoritative.x,
-          authoritative.y,
-        );
-      }
-    }
-    if (localPlayer) {
-      const authoritative = latest?.players[this.coopSelfSlot];
-      const outOfWorld = localPlayer.y > GAME_HEIGHT + 60;
-      const degraded = this.shouldGuestUseDegradedMode(localPlayer, authoritative, outOfWorld);
-      const degradedTarget = forceAuthoritativeSnap || outOfWorld
-        ? authoritative
-        : renderedSelf ?? authoritative;
-      if (degraded && degradedTarget) {
-        if (!this.guestPredictionDegraded) {
-          const reason = outOfWorld ? "out-of-world" : "degraded-enter";
-          this.guestPrediction.traceCorrection(reason);
-          this.coopLink?.recordGuestCorrection(reason);
-          this.guestPredictionMovement.reset();
-        }
-        this.guestPredictionDegraded = true;
-        this.guestPredictionActive = false;
-        this.freezePuppet(localPlayer);
-        const correction = computeGuestPositionCorrection(
-          localPlayer,
-          degradedTarget,
-          delta,
-          forceAuthoritativeSnap || outOfWorld,
-          false,
-          0,
-        );
-        applyNetPlayer(localPlayer, degradedTarget);
-        localPlayer.x = correction.x;
-        localPlayer.y = correction.y;
-        if (correction.kind !== "none") {
-          this.guestPrediction.traceCorrection(correction.kind);
-          this.coopLink?.recordGuestCorrection(correction.kind);
-        }
-      } else {
-        if (this.guestPredictionDegraded) {
-          this.guestPredictionDegraded = false;
-          this.guestPrediction.traceCorrection("degraded-exit");
-          this.coopLink?.recordGuestCorrection("degraded-exit");
-        }
-        if (!this.guestPredictionActive) {
-          this.enablePredictedPlayer(localPlayer);
-          this.guestPredictionActive = true;
-        }
-        const jumped = this.guestPredictionMovement.update(localPlayer, input, delta);
-        if (jumped) {
-          this.guestPrediction.traceEdge("jump");
-          this.playSfx("jump");
-        }
-        this.playPredictedActions(localPlayer, input);
-        const correctionTarget = forceAuthoritativeSnap ? authoritative : renderedSelf;
-        if (correctionTarget) {
-          const correction = computeGuestPositionCorrection(
-            localPlayer,
-            correctionTarget,
-            delta,
-            forceAuthoritativeSnap,
-          );
-          if (correction.kind !== "none") {
-            localPlayer.x = correction.x;
-            localPlayer.y = correction.y;
-            this.guestPrediction.traceCorrection(correction.kind);
-            this.coopLink?.recordGuestCorrection(correction.kind);
+    const controller = this.guestCoopController;
+    if (localPlayer && controller) {
+      const authoritative = this.coopLink?.latestSnapshot?.players[this.coopSelfSlot];
+      controller.update({
+        timeMs: time,
+        deltaMs: delta,
+        input,
+        localPlayer,
+        localSlot: this.coopSelfSlot,
+        outOfWorld: localPlayer.y > GAME_HEIGHT + 60,
+        nearestDynamicDistancePx: this.nearestGuestDynamicDistance(localPlayer, authoritative),
+        degradedEnterDistancePx: 120,
+        setPredictionEnabled: (enabled) => {
+          if (enabled) this.enablePredictedPlayer(localPlayer);
+          else this.freezePuppet(localPlayer);
+        },
+        resetMovement: () => this.guestPredictionMovement.reset(),
+        simulatePredicted: () => {
+          const jumped = this.guestPredictionMovement.update(localPlayer, input, delta);
+          if (jumped) {
+            controller.traceEdge("jump");
+            this.playSfx("jump");
           }
-        }
-      }
-    }
-    if (frame) {
-      const snapshot = this.interpolateSnapshot(frame);
-      const isNew = frame.previous.seq !== this.lastAppliedSnapshotSeq;
-      this.lastAppliedSnapshotSeq = frame.previous.seq;
-      this.applySnapshot(snapshot, isNew);
-      this.remainingTimeMs = frame.previous.timeMs;
+          this.playPredictedActions(localPlayer, input);
+        },
+        applyDegradedPlayer: (net, position) => {
+          applyNetPlayer(localPlayer, net);
+          localPlayer.x = position.x;
+          localPlayer.y = position.y;
+        },
+        interpolateSnapshot: (frame) => this.interpolateSnapshot(frame),
+        applySnapshot: (snapshot, isNew) => this.applySnapshot(snapshot, isNew),
+        applyRemainingTime: (remainingTimeMs) => { this.remainingTimeMs = remainingTimeMs; },
+      });
     }
     this.updatePlateKeyInterface();
     this.updateObjectiveText();
@@ -2085,43 +2000,37 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   private resetGuestPrediction(): void {
-    this.guestPrediction.reset();
+    this.guestCoopController?.reset();
     this.guestPredictionMovement.reset();
-    this.lastReconciledSnapshotSeq = -1;
-    this.guestPredictionActive = false;
-    this.guestPredictionDegraded = false;
-    this.guestLastAuthoritativePosition = undefined;
   }
 
-  private shouldGuestUseDegradedMode(
+  private nearestGuestDynamicDistance(
     player: Player,
     authoritative: WorldSnapshot["players"][number] | undefined,
-    outOfWorld: boolean,
-  ): boolean {
-    if (outOfWorld) return true;
+  ): number {
     const points = [[player.x, player.y], [authoritative?.x ?? player.x, authoritative?.y ?? player.y]];
     let nearestDistance = Number.POSITIVE_INFINITY;
     this.crates.forEach((crate) => points.forEach(([x, y]) => {
       nearestDistance = Math.min(nearestDistance, Math.hypot(crate.x - x, crate.y - y));
     }));
-    return shouldUseDegradedMode(nearestDistance, this.guestPredictionDegraded, 120);
+    return nearestDistance;
   }
 
   private playPredictedActions(player: Player, input: GameplayInputFrame): void {
     const now = this.time.now;
     if (input.meleeJustPressed && player.canMelee(now)) {
-      this.guestPrediction.traceEdge("melee");
+      this.guestCoopController?.traceEdge("melee");
       player.markAttacking(now);
       this.playSfx("sword-swing");
     }
     if (input.spinJustPressed && player.canSpin(now)) {
-      this.guestPrediction.traceEdge("spin");
+      this.guestCoopController?.traceEdge("spin");
       player.markSpinning(now);
       this.playSfx("sword-swing");
     }
     const charges = this.coopLink?.latestSnapshot?.players[this.coopSelfSlot]?.powerCharges ?? 0;
     if (input.powerJustPressed && charges > 0 && player.canUsePower(now)) {
-      this.guestPrediction.traceEdge("power");
+      this.guestCoopController?.traceEdge("power");
       player.markUsingPower(now);
     }
   }
