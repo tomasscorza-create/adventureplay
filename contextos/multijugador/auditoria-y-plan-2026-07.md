@@ -71,7 +71,7 @@ no cubren donde viven los problemas restantes (ver §5).
 | ID | Hallazgo | Evidencia | Prioridad |
 |---|---|---|---|
 | **R1** | **Input del guest viaja por REST HTTP**: el guest crea el canal de input pero nunca se suscribe, y publica igual; `realtime-js` 2.108.2 cae al fallback REST cuando el canal no está `joined`. Un POST por input (10–30/s), `console.warn` por mensaje, ruta deprecada y **sin orden garantizado** → un input viejo que llega tarde se descarta por seq → taps perdidos + anomalías hacia el umbral de expulsión | `CoopSession.ts:398-404` y `sendInput`; `RealtimeChannel.js:519` + `channelAdapter.js:65-67` (`canPush()` exige `joined`) | **P0/P1** |
-| **R2** | **Simulación dual sin reconciliación**: el host simula al guest desde sus inputs y el guest se simula localmente; mientras es "seguro", el guest **ignora por completo** la posición autoritativa (`applySnapshot` salta su slot) y nada converge. Todo el gameplay real (monedas, daño, línea de presión, pozos, meta) se evalúa en la **posición del host**. Escenario confirmado: la copia del host cae a un pozo → respawn + daño → el guest ve su vida bajar "sin razón" mientras camina normal, sin mecanismo que lo corrija | `updateGuest` en ambas escenas; `CoopLocalPrediction.acknowledge` solo poda; `handlePitFall` | **P0** |
+| **R2** | **Simulación dual sin reconciliación**: hallazgo original corregido en código con convergencia posicional suave hacia el snapshot interpolado, snap por divergencia extrema y detección de discontinuidades autoritativas | `coopGuestReconciliation.ts` + integración en ambas escenas | ✅ Código; calibración/QA pendiente |
 | **R3** | **Degradación brusca**: dentro del radio de seguridad (120 px cajas / 140 px plataformas móviles) se congela el cuerpo y se aplica el **último snapshot crudo** (no el interpolado) en asignación dura → teleport de toda la divergencia acumulada + escalonado 20 Hz + flapping en el borde. En PuzzleScene empujar cajas (mecánica central) vive dentro del radio | `LevelScene.ts:2402-2413`, `PuzzleScene.ts:2020-2028`, rama `!safe` de `updateGuest` | **P1** |
 | **R4** | El jugador predicho **atraviesa cuerpos dinámicos congelados** (cajas, plataformas móviles/hundibles tienen `body.enable=false` en el guest); el radio de seguridad solo lo enmascara | `PuzzleScene.ts:623`, `LevelScene.ts:345-349` | P2 |
 | **R5** | **Guard sin reset entre sesiones**: hallazgo original corregido; `connect()` reinicia ahora el guard y `globalInputSeq` como una sola frontera de sesión | `CoopSession.ts` + test de segunda sesión desde seq 1 | ✅ Código; QA pendiente |
@@ -100,7 +100,9 @@ no cubren donde viven los problemas restantes (ver §5).
 > Estado de ejecución local: Fase 0 implementada y validada automáticamente; línea base manual
 > pendiente. Fase 1 implementada en protocolo v13 y validada automáticamente; QA real de dos
 > clientes pendiente antes de dar por cumplidos sus criterios de éxito. Fase 2 implementada y
-> validada automáticamente; falta comprobar dos salas consecutivas en el QA manual.
+> validada automáticamente; falta comprobar dos salas consecutivas en el QA manual. Fase 3
+> implementada con umbrales provisionales 32/160 px y validada automáticamente; requiere
+> calibración y QA real antes de cerrar sus criterios de éxito.
 
 Dificultad: 🟢 simple · 🟡 delicada · 🔴 asignar a agente fuerte (Codex).
 Regla transversal: **cada fase se valida contra las métricas de la Fase 0** (por eso va primera).
@@ -147,7 +149,7 @@ Todo cambio de mensajes exige subir `COOP_PROTOCOL_VERSION` (rompe PWAs cacheada
 
 ### Bloque B — Cerrar la reconciliación
 
-#### Fase 3 — Convergencia mínima host↔guest (R2) 🔴 Codex
+#### Fase 3 — Convergencia mínima host↔guest (R2) 🔴 Codex — código implementado
 - **Objetivo**: acotar la divergencia entre las dos simulaciones del personaje del guest.
 - **Archivos**: `updateGuest` de ambas escenas (o helper que anticipe F5), `coopPlayerNet.ts`,
   `CoopLocalPrediction.ts` (contadores), `CoopSnapshotInterpolator.ts` (reuso).
@@ -245,8 +247,9 @@ viven los problemas abiertos:
 
 - `SimulatedTransport` puentea `CoopSession` y `CoopSecurityGuard` → R1 (REST) y R5 (guard entre
   sesiones) son **indetectables** por la suite actual.
-- Toda la semántica de predicción/degradación vive en las escenas, **sin tests** → R2, R3 y R4
-  no tienen red de seguridad (F5 lo corrige al extraer el controlador).
+- La corrección posicional pura de R2 tiene tests desde F3, pero su integración con Phaser y toda
+  la semántica de degradación siguen en las escenas sin cobertura → R3 y R4 aún no tienen red de
+  seguridad completa (F5 lo corrige al extraer el controlador).
 - El harness entrega con retardo 0 por defecto, sin REST, sin reordenamiento, sin visibilidad
   ni suspensión de pestañas.
 

@@ -137,11 +137,14 @@ GUEST                              HOST (CoopSceneLink)
   El personaje local del guest habilita su cuerpo y reutiliza `MovementSystem`; cada snapshot
   confirma el último input consumido por slot. Se eliminan comandos confirmados y se conserva la
   intención horizontal sostenida pendiente, sin guardar ni volver a disparar flancos. En geometría
-  estática Phaser y `MovementSystem` son los únicos escritores; los ACK no reposicionan ni restauran
-  velocidad vertical. El historial se limita a 96 paquetes realmente enviados.
+  estática Phaser y `MovementSystem` resuelven el movimiento del frame; después se aplica una
+  corrección exclusivamente posicional hacia el estado autoritativo interpolado cuando la deriva
+  supera 32 px, con snap desde 160 px o ante respawn/teleport. Nunca se restaura velocidad vertical.
+  El historial se limita a 96 paquetes realmente enviados.
 - La predicción no resuelve daño, vida, cargas, enemigos, cajas, puertas, resultados ni proyectiles.
   Cerca de plataformas móviles/hundibles o cajas se degrada temporalmente a render autoritativo;
-  también se recupera desde snapshot si el guest cae fuera del mundo. **Nota:** La predicción local carece de una convergencia completa con el host (ver Problemas Conocidos).
+  también se recupera desde snapshot si el guest cae fuera del mundo. Los umbrales 32/160 px son
+  provisionales hasta completar la calibración manual de Fase 0/Fase 3.
 - El `seq` (por slot en el input, global en el snapshot) descarta mensajes fuera de orden.
 
 Detalle de la aplicación por escena en `integracion-en-escenas.md`.
@@ -161,7 +164,7 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 ⚠️ **Importante:** El modelo descrito arriba tiene fallas en la implementación actual que deben consultarse en [auditoria-y-plan-2026-07.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md). Los fallos principales incluyen:
 
 1. **Bug REST (R1):** Corregido en código con topics WebSocket por slot en v13; pendiente confirmar en QA manual que no aparezcan warnings de fallback ni `old-sequence` en juego normal.
-2. **Divergencia de Predicción (R2):** Hay simulación dual sin reconciliación. El guest ignora la posición autoritativa en modo seguro, por lo que las caídas a pozos y otros daños en el host causan bajadas de vida inexplicables en la pantalla del guest.
+2. **Divergencia de Predicción (R2):** Corregida en código con convergencia suave y snaps autoritativos; pendiente validar p95, respawns y ausencia de rubber-banding con dos clientes reales.
 3. **Degradación Brusca (R3 y R4):** Cerca de cajas/plataformas, el guest salta al último snapshot crudo (teleports y tirones) en vez de interpolar, y atraviesa cuerpos congelados.
 4. **Fuga entre sesiones (R5):** Corregida en código: cada `connect()` reinicia conjuntamente `CoopSecurityGuard` y `globalInputSeq`; pendiente confirmar dos salas consecutivas en QA manual.
 

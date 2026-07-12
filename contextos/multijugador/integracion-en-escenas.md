@@ -21,7 +21,7 @@ Ambas escenas jugables integran el co-op con el **mismo patrón** host-autoritat
 |---|---|
 | **single** | Igual que antes del co-op (sin cambios). |
 | **host** | Lee input local (slot 0) + `coopLink.consumeRemoteInputFrame(slot)` por cada guest de `remotePlayers` → mueve a todos → simula mundo → `coopLink.maybeSendSnapshot`. |
-| **guest** | `updateGuest`: `coopLink.sendLocalInput(time, frame)`; aplica `coopLink.latestSnapshot` (`applySnapshot` recorre `allPlayers()`) + `emitGuestHud`. No simula. |
+| **guest** | `updateGuest`: envía input, simula localmente al jugador en zonas seguras, corrige deriva `x/y` hacia el snapshot interpolado y aplica el resto del mundo autoritativo. |
 
 `pauseJustPressed` en co-op → emite `SCREEN_CHANGED "coop-exit-confirm"`: la partida **sigue
 corriendo** detrás de una confirmación React (`CoopExitConfirmScreen`), porque pausar la escena
@@ -131,4 +131,4 @@ objetivos en simultáneo sin conflicto.
 
 ## ⚠️ Advertencia sobre Pruebas (Test Coverage)
 
-La semántica de predicción local, degradación de colisiones e interpolación descrita en este documento **no está cubierta por la suite de tests automatizados** (como se detalla en la [auditoría](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md)). Cualquier modificación en la lógica de las escenas (`updateGuest`, colisiones con cajas, etc.) debe ser probada rigurosamente con QA manual de 2 a 4 clientes reales.
+La función pura de corrección posicional está cubierta por tests, pero la integración Phaser de la predicción local, degradación de colisiones e interpolación todavía requiere QA manual. Cualquier modificación en `updateGuest`, colisiones con cajas o transiciones de modo debe probarse rigurosamente con 2 a 4 clientes reales.

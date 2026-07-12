@@ -61,6 +61,11 @@ import {
   type SnapshotRenderFrame,
 } from "../systems/net/CoopSnapshotInterpolator";
 import { CoopLocalPrediction } from "../systems/net/CoopLocalPrediction";
+import {
+  computeGuestPositionCorrection,
+  isAuthoritativeTeleport,
+  type CoopPosition,
+} from "../systems/net/coopGuestReconciliation";
 
 export class PuzzleScene extends Phaser.Scene {
   private readonly _id = "PuzzleScene";
@@ -168,6 +173,7 @@ export class PuzzleScene extends Phaser.Scene {
   private lastAppliedSnapshotSeq = -1;
   private lastReconciledSnapshotSeq = -1;
   private guestPredictionActive = false;
+  private guestLastAuthoritativePosition?: CoopPosition;
 
   constructor() {
     super("PuzzleScene");
@@ -179,6 +185,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.lastReconciledSnapshotSeq = -1;
     this.lastAppliedSnapshotSeq = -1;
     this.guestPredictionActive = false;
+    this.guestLastAuthoritativePosition = undefined;
     this.level = puzzleLevelDefinitions[data.levelId ?? "trialChamber1"]
       ?? puzzleLevelDefinitions.trialChamber1;
     this.save = gameSaveStore.load();
@@ -1966,12 +1973,28 @@ export class PuzzleScene extends Phaser.Scene {
     if (sentCommand) this.guestPrediction.record(sentCommand);
     const localPlayer = this.playerAtSlot(this.coopSelfSlot);
     const latest = this.coopLink?.latestSnapshot;
+    const frame = this.coopLink?.renderSnapshot();
+    const previousRenderedSelf = frame?.previous.players[this.coopSelfSlot];
+    const renderedSelf = frame && previousRenderedSelf
+      ? interpolatePlayer(
+        previousRenderedSelf,
+        frame.next?.players[this.coopSelfSlot],
+        frame.alpha,
+        frame.extrapolationMs,
+      )
+      : undefined;
+    let forceAuthoritativeSnap = false;
     if (latest && latest.seq !== this.lastReconciledSnapshotSeq && localPlayer) {
       this.lastReconciledSnapshotSeq = latest.seq;
       this.guestPrediction.acknowledge(latest.inputSeqBySlot[this.coopSelfSlot] ?? -1);
       this.guestPrediction.traceCorrection("none");
       const authoritative = latest.players[this.coopSelfSlot];
       if (authoritative) {
+        forceAuthoritativeSnap = isAuthoritativeTeleport(
+          this.guestLastAuthoritativePosition,
+          authoritative,
+        );
+        this.guestLastAuthoritativePosition = { x: authoritative.x, y: authoritative.y };
         this.coopLink?.recordGuestSnapshotMetrics(
           latest,
           localPlayer.x,
@@ -2005,9 +2028,23 @@ export class PuzzleScene extends Phaser.Scene {
           this.playSfx("jump");
         }
         this.playPredictedActions(localPlayer, input);
+        const correctionTarget = forceAuthoritativeSnap ? authoritative : renderedSelf;
+        if (correctionTarget) {
+          const correction = computeGuestPositionCorrection(
+            localPlayer,
+            correctionTarget,
+            delta,
+            forceAuthoritativeSnap,
+          );
+          if (correction.kind !== "none") {
+            localPlayer.x = correction.x;
+            localPlayer.y = correction.y;
+            this.guestPrediction.traceCorrection(correction.kind);
+            this.coopLink?.recordGuestCorrection(correction.kind);
+          }
+        }
       }
     }
-    const frame = this.coopLink?.renderSnapshot();
     if (frame) {
       const snapshot = this.interpolateSnapshot(frame);
       const isNew = frame.previous.seq !== this.lastAppliedSnapshotSeq;
@@ -2025,6 +2062,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.guestPredictionMovement.reset();
     this.lastReconciledSnapshotSeq = -1;
     this.guestPredictionActive = false;
+    this.guestLastAuthoritativePosition = undefined;
   }
 
   private isGuestPredictionSafe(

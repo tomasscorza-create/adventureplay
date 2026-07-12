@@ -59,6 +59,11 @@ import {
   type SnapshotRenderFrame,
 } from "../systems/net/CoopSnapshotInterpolator";
 import { CoopLocalPrediction } from "../systems/net/CoopLocalPrediction";
+import {
+  computeGuestPositionCorrection,
+  isAuthoritativeTeleport,
+  type CoopPosition,
+} from "../systems/net/coopGuestReconciliation";
 
 // Margen fijo (px) que la linea de presion co-op mantiene detras del jugador mas
 // atrasado. Independiente de la camara, que ahora es por dispositivo.
@@ -140,6 +145,7 @@ export class LevelScene extends Phaser.Scene {
   private lastAppliedSnapshotSeq = -1;
   private lastReconciledSnapshotSeq = -1;
   private guestPredictionActive = false;
+  private guestLastAuthoritativePosition?: CoopPosition;
   private coopPressureX = 0;
   // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
   private pressureCooldownSlot0 = 0;
@@ -154,6 +160,7 @@ export class LevelScene extends Phaser.Scene {
     this.lastReconciledSnapshotSeq = -1;
     this.lastAppliedSnapshotSeq = -1;
     this.guestPredictionActive = false;
+    this.guestLastAuthoritativePosition = undefined;
     const requestedLevelId = data.levelId ?? "meadowOutpost";
     this.level = levelDefinitions[requestedLevelId] ?? levelDefinitions.meadowOutpost;
     this.levelFinished = false;
@@ -2349,12 +2356,28 @@ export class LevelScene extends Phaser.Scene {
     if (sentCommand) this.guestPrediction.record(sentCommand);
     const localPlayer = this.playerAtSlot(this.coopSelfSlot);
     const latest = this.coopLink?.latestSnapshot;
+    const frame = this.coopLink?.renderSnapshot();
+    const previousRenderedSelf = frame?.previous.players[this.coopSelfSlot];
+    const renderedSelf = frame && previousRenderedSelf
+      ? interpolatePlayer(
+        previousRenderedSelf,
+        frame.next?.players[this.coopSelfSlot],
+        frame.alpha,
+        frame.extrapolationMs,
+      )
+      : undefined;
+    let forceAuthoritativeSnap = false;
     if (latest && latest.seq !== this.lastReconciledSnapshotSeq && localPlayer) {
       this.lastReconciledSnapshotSeq = latest.seq;
       this.guestPrediction.acknowledge(latest.inputSeqBySlot[this.coopSelfSlot] ?? -1);
       this.guestPrediction.traceCorrection("none");
       const authoritative = latest.players[this.coopSelfSlot];
       if (authoritative) {
+        forceAuthoritativeSnap = isAuthoritativeTeleport(
+          this.guestLastAuthoritativePosition,
+          authoritative,
+        );
+        this.guestLastAuthoritativePosition = { x: authoritative.x, y: authoritative.y };
         this.coopLink?.recordGuestSnapshotMetrics(
           latest,
           localPlayer.x,
@@ -2389,9 +2412,23 @@ export class LevelScene extends Phaser.Scene {
           this.requestHaptic("jump");
         }
         this.playPredictedActions(localPlayer, input);
+        const correctionTarget = forceAuthoritativeSnap ? authoritative : renderedSelf;
+        if (correctionTarget) {
+          const correction = computeGuestPositionCorrection(
+            localPlayer,
+            correctionTarget,
+            delta,
+            forceAuthoritativeSnap,
+          );
+          if (correction.kind !== "none") {
+            localPlayer.x = correction.x;
+            localPlayer.y = correction.y;
+            this.guestPrediction.traceCorrection(correction.kind);
+            this.coopLink?.recordGuestCorrection(correction.kind);
+          }
+        }
       }
     }
-    const frame = this.coopLink?.renderSnapshot();
     if (frame) {
       const snapshot = this.interpolateSnapshot(frame);
       const isNew = frame.previous.seq !== this.lastAppliedSnapshotSeq;
@@ -2407,6 +2444,7 @@ export class LevelScene extends Phaser.Scene {
     this.guestPredictionMovement.reset();
     this.lastReconciledSnapshotSeq = -1;
     this.guestPredictionActive = false;
+    this.guestLastAuthoritativePosition = undefined;
   }
 
   private isGuestPredictionSafe(
