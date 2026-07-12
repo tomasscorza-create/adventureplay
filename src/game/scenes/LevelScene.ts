@@ -2353,15 +2353,25 @@ export class LevelScene extends Phaser.Scene {
       this.lastReconciledSnapshotSeq = latest.seq;
       this.guestPrediction.acknowledge(latest.inputSeqBySlot[this.coopSelfSlot] ?? -1);
       this.guestPrediction.traceCorrection("none");
+      const authoritative = latest.players[this.coopSelfSlot];
+      if (authoritative) {
+        this.coopLink?.recordGuestSnapshotMetrics(
+          latest,
+          localPlayer.x,
+          localPlayer.y,
+          authoritative.x,
+          authoritative.y,
+        );
+      }
     }
     if (localPlayer) {
       const authoritative = latest?.players[this.coopSelfSlot];
       const safe = this.isGuestPredictionSafe(localPlayer, authoritative);
       if (!safe && authoritative) {
         if (this.guestPredictionActive) {
-          this.guestPrediction.traceCorrection(
-            localPlayer.y > GAME_HEIGHT + 60 ? "out-of-world" : "authoritative",
-          );
+          const reason = localPlayer.y > GAME_HEIGHT + 60 ? "out-of-world" : "authoritative";
+          this.guestPrediction.traceCorrection(reason);
+          this.coopLink?.recordGuestCorrection(reason);
         }
         this.guestPredictionActive = false;
         this.freezePuppet(localPlayer);

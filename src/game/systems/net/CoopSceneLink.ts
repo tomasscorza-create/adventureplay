@@ -44,6 +44,11 @@ export interface CoopLinkTransport {
   sendCharges?(message: CoopChargesMessage): void;
   recordSnapshotKind?(keyframe: boolean): void;
   recordInputApplied?(slot: number, latencyMs: number): void;
+  recordInputSent?(seq: number, sentAtMs: number): void;
+  recordInputEcho?(ackSeq: number, receivedAtMs: number): void;
+  recordSnapshotAge?(ageMs: number): void;
+  recordDivergence?(distancePx: number): void;
+  recordCorrection?(reason: string): void;
   recordDesync?(): void;
   generateInputSeq(): number;
   leave(): void;
@@ -204,7 +209,15 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
             snapshot as TSnapshot & TimedSnapshot,
             typeof performance !== "undefined" ? performance.now() : Date.now(),
           );
-          if (accepted) this.latest = snapshot;
+          if (accepted) {
+            this.latest = snapshot;
+            const ackSeq = (snapshot as TSnapshot & { inputSeqBySlot?: number[] })
+              .inputSeqBySlot?.[this.localSlot];
+            if (ackSeq !== undefined) {
+              const receivedAtMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+              this.transport.recordInputEcho?.(ackSeq, receivedAtMs);
+            }
+          }
         }),
       );
     }
@@ -339,6 +352,8 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
 
     const nextSeq = this.transport.generateInputSeq();
     this.transport.sendInput({ slot: this.localSlot, seq: nextSeq, bits });
+    const sentAtMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    this.transport.recordInputSent?.(nextSeq, sentAtMs);
 
     // Solo consumir flancos y avanzar el estado despues de que el transporte
     // haya aceptado el envio; si lanza un error, la cola queda intacta.
@@ -354,6 +369,26 @@ export class CoopSceneLink<TSnapshot extends { seq: number; hostTimeMs?: number 
       seq: nextSeq,
       continuous: { left: sentState.left, right: sentState.right },
     };
+  }
+
+  recordGuestSnapshotMetrics(
+    snapshot: TSnapshot & TimedSnapshot,
+    localX: number,
+    localY: number,
+    authoritativeX: number,
+    authoritativeY: number,
+    localNowMs?: number,
+  ): void {
+    const now = localNowMs ?? (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const ageMs = this.snapshotTimeline.snapshotAgeMs(snapshot.hostTimeMs, now);
+    if (ageMs !== undefined) this.transport.recordSnapshotAge?.(ageMs);
+    this.transport.recordDivergence?.(
+      Math.hypot(localX - authoritativeX, localY - authoritativeY),
+    );
+  }
+
+  recordGuestCorrection(reason: string): void {
+    this.transport.recordCorrection?.(reason);
   }
 
   // Host: construye y transmite un snapshot como maximo a COOP_SNAPSHOT_RATE_HZ.

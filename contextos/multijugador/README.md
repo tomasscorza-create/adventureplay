@@ -1,60 +1,41 @@
 # 🌐 Multijugador Co-op — Guía del área
 
 Documentación completa y de continuidad del **modo cooperativo online** de Adventure Play.
-Cubre todo lo construido, no solo lo último. Optimizada para agentes de IA: tablas sobre prosa,
-valores y nombres exactos del código fuente.
+Optimizada para agentes de IA: lee esta guía y sigue los enlaces antes de tocar código.
 
-> **Estado (actualizado):** co-op online **funcional** de **2 a 4 jugadores** en los dos modos
-> jugables: **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Host-autoritativo sobre
-> Supabase Realtime, cámara independiente por dispositivo, fin de partida compartido. Protocolo
-> **v12** con predicción/reconciliación del jugador local del guest, interpolación temporal de entidades remotas, validación defensiva, diagnóstico opt-in, reconexión automática de 10 segundos, canal de input separado y delta encoding, modelo de slots (`COOP_MAX_PLAYERS = 4`), niveles encadenados por el host, manejo de
-> salidas individuales, cargas reales por jugador y tienda funcional en co-op. Ver historial en
-> `decisiones-limitaciones-historial.md`.
+> **Estado (Julio 2026):** co-op online **funcional** de **2 a 4 jugadores** en **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Protocolo **v12** con predicción/reconciliación local del guest, interpolación temporal de entidades remotas, y reconexión automática de 30 segundos.
+> **Advertencia:** Existen problemas conocidos de divergencia y fallos de transporte documentados en la auditoría.
 
-## Índice del área
+## ⚖️ Jerarquía de Verdad (¡Importante!)
+
+Antes de modificar el multijugador, debes respetar este orden de prioridad como fuente de verdad:
+
+1. **El código actual verificado** (Phaser, React, Supabase).
+2. [**auditoria-y-plan-2026-07.md**](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md): Documento vivo con los fallos reales vigentes, métricas y plan de trabajo.
+3. [**arquitectura-de-red.md**](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/arquitectura-de-red.md): Modelo teórico, API de sesión, diccionarios de mensajes y problemas actuales.
+4. **Resto de documentos** (este README, integraciones, historial).
+
+## 📂 Índice del área
 
 | Documento | Qué contiene |
 |---|---|
-| `arquitectura-de-red.md` | Transporte (Supabase Realtime), `CoopSession`, mensajes, modelo host-autoritativo, mapa de archivos. |
-| `integracion-en-escenas.md` | Cómo `PuzzleScene` y `LevelScene` implementan el co-op: jugadores, snapshots, interpolación, colisiones, fin compartido. Tabla de qué se sincroniza por modo. |
-| `decisiones-limitaciones-historial.md` | Decisiones de diseño y su porqué (cámara, presión, fate), limitaciones conocidas, evolución y continuidad. |
-| `pruebas-multicliente.md` | Harness determinista de 2–4 clientes, fallos de red simulados y línea base de tráfico. |
-| `endurecimiento-produccion.md` | Seguridad de protocolo v10, diagnóstico, pruebas y bloqueo/diseño seguro de migración de host. |
+| [arquitectura-de-red.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/arquitectura-de-red.md) | Transporte (Supabase Realtime), `CoopSession`, modelo host-autoritativo, problemas actuales y limitaciones de tests. |
+| [auditoria-y-plan-2026-07.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md) | Diagnóstico exhaustivo de v10 a v12, plan de fases (0 a 7). |
+| [integracion-en-escenas.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/integracion-en-escenas.md) | Implementación en `PuzzleScene` y `LevelScene`: sincronización, colisiones, interpolación. |
+| [decisiones-limitaciones-historial.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/decisiones-limitaciones-historial.md) | Decisiones vigentes vs reemplazadas, limitaciones de arquitectura, y cronología técnica. |
+| [pruebas-multicliente.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/pruebas-multicliente.md) | Harness determinista de 2–4 clientes y línea base de tráfico. |
+| [endurecimiento-produccion.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/endurecimiento-produccion.md) | Seguridad de protocolo, diagnóstico y bloqueo de migración de host. |
 
-## Resumen ejecutivo (30 segundos)
+## 🎮 Cómo probarlo (2 clientes)
 
-- **Transporte:** un singleton fuera de Phaser (`coopSession`) sobre **Supabase Realtime**
-  (broadcast + presence, canal `coop-room-<CÓDIGO>`). Sin servidor propio, sin tablas, sin RLS.
-- **Modelo:** **host-autoritativo**. El host simula toda la física de **todos** los jugadores y
-  del mundo, y transmite *snapshots* ~20 Hz. Cada guest envía su input **al cambiar** (tope 30 Hz)
-  más un keepalive. El guest predice únicamente su propio cuerpo y reconcilia contra el ACK del
-  host; los demás jugadores y entidades continúan como puppets interpolados.
-- **Slots (2-4 jugadores):** `this.player` = **slot 0** = **host**; `remotePlayers[i]` = **slot
-  i+1** = guest. El input lleva el slot del emisor y `players` del snapshot es un arreglo por slot.
-  `COOP_MAX_PLAYERS = 4`. El roster autoritativo (slot + héroe) lo fija el host en el mensaje de
-  inicio. Toda la mecánica de red común vive en `CoopSceneLink`.
-- **Cámara:** **independiente por dispositivo** (cada pantalla sigue a su personaje local).
-- **Fin compartido:** muerte de cualquiera o tiempo agotado → derrota para ambos; llegar a la
-  meta → victoria para ambos.
-- **UI:** `CoopLobby.tsx` (parametrizado por modo) abierto desde `ChallengeView`/`ExploreView`.
-- **Regla de oro:** el modo red **solo se activa si llega `coop`**; single-player queda idéntico.
-
-## Cómo probarlo (2 clientes)
-
-Las pruebas de navegador las hace el usuario (regla de `AGENTS.md`). Requisito clave:
-**ambos clientes deben apuntar al mismo proyecto Supabase** (el deploy de Netlify ya lo comparte;
-en local, ambos contra la misma instancia).
+Las pruebas de navegador las hace el usuario (regla de `AGENTS.md`). Requisito clave: **ambos clientes deben apuntar al mismo proyecto Supabase**.
 
 1. De 2 a 4 máquinas o pestañas, cada una autenticada con una cuenta distinta.
 2. Menú → **Explorar** o **Desafío** → **Cooperativo / Jugar en cooperativo**.
-3. Uno pulsa **Crear sala** (muestra un código de 4 caracteres). Los demás **Unirse** con ese
-   código (hasta `COOP_MAX_PLAYERS`; un quinto recibe "La sala está llena").
-4. La lista de participantes muestra a cada jugador con su héroe. El **host** elige el nivel y
-   pulsa **Comenzar** cuando estén listos.
-5. Verificar: movimiento independiente de cada uno, colisiones/objetivos que responden a todos, y
-   derrota/victoria compartida.
+3. Uno pulsa **Crear sala** (muestra un código de 4 caracteres). Los demás **Unirse** con ese código.
+4. El host elige el nivel y pulsa **Comenzar** cuando estén listos.
 
-## Verificación de código
+## ✅ Verificación de código
 
-- `npm run test:coop`: protocolo, link y simulación multicliente con reporte de tráfico.
-- `npm run check`: lint + tipos + suite completa + auditorías + build; debe pasar antes de entregar.
+* `npm run test:coop`: protocolo, link y simulación multicliente. **Nota:** Estos tests *no* cubren transporte real, seguridad entre sesiones continuas, ni la semántica de predicción en las escenas.
+* `npm run check`: lint + tipos + suite completa; obligatorio antes de entregar.

@@ -44,6 +44,14 @@ describe("CoopSnapshotInterpolator", () => {
     expect(interpolatePlayer(player(10), undefined, 0, 100).x).toBe(20);
   });
 
+  it("expone la edad del snapshot usando el offset minimo observado", () => {
+    const buffer = new CoopSnapshotInterpolator<{ seq: number; hostTimeMs: number }>();
+    expect(buffer.snapshotAgeMs(100, 1100)).toBeUndefined();
+    buffer.push({ seq: 1, hostTimeMs: 100 }, 1100);
+    buffer.push({ seq: 2, hostTimeMs: 150 }, 1180);
+    expect(buffer.snapshotAgeMs(150, 1180)).toBe(30);
+  });
+
   it("interpola entidades por id sin acelerar desde la posicion renderizada previa", () => {
     const result = interpolatePositionTuples(
       [[7, 0, 20, 0]],

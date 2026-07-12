@@ -18,14 +18,21 @@
 | **Modelo de slots (protocolo N-ready antes que gameplay N)** | Separar la generalización del protocolo (slots, `players[]`, input con emisor) del render de 3-4 jugadores permite subir versión una sola vez y validar el modelo con tests, manteniendo el gameplay de 2 idéntico. |
 | **Plumbing en `CoopSceneLink`** | Deduplicación, flancos, throttling y guardas de fin viven en un solo lugar testeable, no duplicados en cada escena. |
 
+## Decisiones reemplazadas (Obsoletas)
+
+| Decisión | Por qué se reemplazó |
+|---|---|
+| **Cámara compartida (punto medio)** | Castigaba la exploración. Reemplazada por cámara independiente. |
+| **Guest sin predicción (títere congelado)** | Generaba latencia inaceptable. Reemplazada por predicción local con eco de input (aunque la convergencia actual es imperfecta). |
+| **Reconexión de 10 segundos** | Demasiado breve para dispositivos móviles. Ampliada a 30 segundos en fases posteriores. |
+
 ## Limitaciones conocidas
 
-- **Latencia del guest:** al ser host-autoritativo sin predicción, el guest ve un pequeño retraso
-  en su propio personaje. Aceptable para co-op de ingenio/exploración; no para acción competitiva.
+- **Convergencia incompleta de la predicción:** El guest posee predicción local, pero ignora la posición autoritativa en modo seguro. Por esto, existen divergencias sin reconciliar (ej: caídas en el host que restan vida inexplicablemente en el guest).
 - **Poses finas de M2/M3 en el guest son aproximadas:** se sincroniza posición y `flipX`, no cada
   pose de ataque. El **daño es autoritativo del host**, así que la jugabilidad es correcta aunque
   la animación puntual difiera.
-- **Reconexión transitoria disponible; sin migración de host ni anti-cheat.** La identidad y el slot se reservan 10 segundos mientras la escena sigue viva. Un refresh completo no restaura la partida.
+- **Reconexión transitoria disponible; sin migración de host ni anti-cheat.** La identidad y el slot se reservan 30 segundos mientras la escena sigue viva. Un refresh completo no restaura la partida.
 - **Ambos clientes deben apuntar al mismo proyecto Supabase.**
 - **Gameplay de 2 a 4 jugadores** (`COOP_MAX_PLAYERS = 4`). Con salas de 4, revisar el costo de
   broadcasts contra las cuotas de Supabase Realtime antes de promocionar el modo (Fase 4).
@@ -34,7 +41,7 @@
 - **Pausa real no sincronizada:** en co-op no se puede pausar; solo existe la confirmación de
   salida. Una pausa acordada entre peers queda pendiente.
 
-## Historial de implementación (cronología)
+## Cronología Histórica de Implementación
 
 1. **Base cooperativa (previa):** `PuzzleActivationSystem` con participantes múltiples y
    `supportsCooperative: true` en los niveles, pero **sin** capa de red ni segundo jugador.
@@ -90,7 +97,7 @@
    emitirse a 60 Hz hacia React: solo emite cuando cambia algo visible (rendimiento).
 11. **Retry co-op soportado:** Tras derrota, el host puede reintentar el mismo nivel reutilizando el mecanismo de encadenado. La derrota en Explorar co-op ya no pasa por `GameOverScene`, conservando la escena viva al igual que en Desafío.
 12. **Fase 4 - Optimización de red (protocolo v8):** Se agregó telemetría de red en consola (solo DEV), se dividió el tráfico usando un canal secundario `coop-room-<CÓDIGO>-input` para evitar que los guests reciban broadcasts cruzados inútiles, y se implementó *delta encoding* genérico en `CoopSceneLink`: las secciones pesadas de los snapshots (enemigos, plataformas, etc.) pasan a ser opcionales y solo se transmiten cuando cambian, reconstruyéndose automáticamente en el receptor. Esto baja drásticamente el consumo de bytes.
-13. **Fase 5 - Reconexión automática (protocolo v9):** reserva de identidad y slot por 10 segundos, estado `reconnecting`, neutralización del input remoto, entidad suspendida sin destruir estado, reactivación en el mismo slot, keyframe completo forzado y repetición del resultado si la partida terminó durante la ausencia. No incluye migración de host.
+13. **Fase 5 - Reconexión automática (protocolo v9):** reserva de identidad y slot por 30 segundos (originalmente 10s), estado `reconnecting`, neutralización del input remoto, entidad suspendida sin destruir estado, reactivación en el mismo slot, keyframe completo forzado y repetición del resultado si la partida terminó durante la ausencia. No incluye migración de host.
 14. **Fase 7A/7B - Endurecimiento (protocolo v10):** envelope común y validación de versión,
     emisor, rol, slot, secuencia, rangos, tamaño y rate; autoridad explícita para mensajes de
     control; compras guest bloqueadas hasta disponer de RPC autoritativa; diagnóstico opt-in sin

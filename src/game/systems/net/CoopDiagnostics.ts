@@ -12,6 +12,14 @@ interface EventStats extends DirectionStats {
   perSlot: Record<number, number>;
 }
 
+export interface MetricSummary {
+  samples: number;
+  average: number;
+  p50: number;
+  p95: number;
+  max: number;
+}
+
 export interface CoopDiagnosticsSnapshot {
   enabled: boolean;
   elapsedSeconds: number;
@@ -21,7 +29,15 @@ export interface CoopDiagnosticsSnapshot {
   receivedPerSecond: number;
   byEvent: Record<string, { sent: EventStats; received: EventStats }>;
   snapshots: { keyframes: number; deltas: number; effectiveHz: number };
-  inputs: { applied: number; averageApplyLatencyMs: number };
+  inputs: {
+    applied: number;
+    averageApplyLatencyMs: number;
+    inputToEchoMs: MetricSummary;
+    pendingEchoes: number;
+  };
+  snapshotAgeMs: MetricSummary;
+  divergencePx: MetricSummary;
+  corrections: { total: number; byReason: Record<string, number> };
   desyncsDetected: number;
   reconnects: { successful: number; failed: number };
   sendResults: Record<string, Record<string, number>>;
@@ -45,6 +61,34 @@ function eventStats(): EventStats {
   return { messages: 0, bytes: 0, perSlot: {} };
 }
 
+const MAX_METRIC_SAMPLES = 2048;
+
+function recordSample(samples: number[], value: number): void {
+  if (!Number.isFinite(value) || value < 0) return;
+  if (samples.length >= MAX_METRIC_SAMPLES) samples.shift();
+  samples.push(value);
+}
+
+function percentile(sorted: number[], ratio: number): number {
+  if (sorted.length === 0) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)];
+}
+
+function summarize(samples: number[]): MetricSummary {
+  if (samples.length === 0) {
+    return { samples: 0, average: 0, p50: 0, p95: 0, max: 0 };
+  }
+  const sorted = [...samples].sort((a, b) => a - b);
+  const total = samples.reduce((sum, value) => sum + value, 0);
+  return {
+    samples: samples.length,
+    average: total / samples.length,
+    p50: percentile(sorted, 0.5),
+    p95: percentile(sorted, 0.95),
+    max: sorted[sorted.length - 1],
+  };
+}
+
 export class CoopDiagnostics {
   private enabledState = false;
   private startedAtMs = 0;
@@ -55,6 +99,11 @@ export class CoopDiagnostics {
   private deltas = 0;
   private inputsApplied = 0;
   private inputLatencyTotalMs = 0;
+  private readonly inputSentAtMs = new Map<number, number>();
+  private readonly inputToEchoMs: number[] = [];
+  private readonly snapshotAgeMs: number[] = [];
+  private readonly divergencePx: number[] = [];
+  private corrections: Record<string, number> = {};
   private desyncs = 0;
   private reconnectSuccess = 0;
   private reconnectFailure = 0;
@@ -99,6 +148,42 @@ export class CoopDiagnostics {
     if (!this.enabledState || !Number.isFinite(latencyMs) || latencyMs < 0) return;
     this.inputsApplied += 1;
     this.inputLatencyTotalMs += latencyMs;
+  }
+
+  recordInputSent(seq: number, sentAtMs: number): void {
+    if (!this.enabledState || !Number.isInteger(seq) || seq < 0 || !Number.isFinite(sentAtMs)) return;
+    this.inputSentAtMs.set(seq, sentAtMs);
+    if (this.inputSentAtMs.size > 256) {
+      const oldest = this.inputSentAtMs.keys().next().value;
+      if (oldest !== undefined) this.inputSentAtMs.delete(oldest);
+    }
+  }
+
+  recordInputEcho(ackSeq: number, receivedAtMs: number): void {
+    if (!this.enabledState || !Number.isInteger(ackSeq) || ackSeq < 0
+      || !Number.isFinite(receivedAtMs)) return;
+    let latestConfirmedSentAt: number | undefined;
+    for (const [seq, sentAtMs] of this.inputSentAtMs) {
+      if (seq > ackSeq) continue;
+      latestConfirmedSentAt = sentAtMs;
+      this.inputSentAtMs.delete(seq);
+    }
+    if (latestConfirmedSentAt !== undefined) {
+      recordSample(this.inputToEchoMs, receivedAtMs - latestConfirmedSentAt);
+    }
+  }
+
+  recordSnapshotAge(ageMs: number): void {
+    if (this.enabledState) recordSample(this.snapshotAgeMs, ageMs);
+  }
+
+  recordDivergence(distancePx: number): void {
+    if (this.enabledState) recordSample(this.divergencePx, distancePx);
+  }
+
+  recordCorrection(reason: string): void {
+    if (!this.enabledState) return;
+    this.corrections[reason] = (this.corrections[reason] ?? 0) + 1;
   }
 
   recordDesync(): void {
@@ -154,6 +239,14 @@ export class CoopDiagnostics {
       inputs: {
         applied: this.inputsApplied,
         averageApplyLatencyMs: this.inputsApplied ? this.inputLatencyTotalMs / this.inputsApplied : 0,
+        inputToEchoMs: summarize(this.inputToEchoMs),
+        pendingEchoes: this.inputSentAtMs.size,
+      },
+      snapshotAgeMs: summarize(this.snapshotAgeMs),
+      divergencePx: summarize(this.divergencePx),
+      corrections: {
+        total: Object.values(this.corrections).reduce((sum, value) => sum + value, 0),
+        byReason: { ...this.corrections },
       },
       desyncsDetected: this.desyncs,
       reconnects: { successful: this.reconnectSuccess, failed: this.reconnectFailure },
@@ -172,6 +265,11 @@ export class CoopDiagnostics {
     this.deltas = 0;
     this.inputsApplied = 0;
     this.inputLatencyTotalMs = 0;
+    this.inputSentAtMs.clear();
+    this.inputToEchoMs.length = 0;
+    this.snapshotAgeMs.length = 0;
+    this.divergencePx.length = 0;
+    this.corrections = {};
     this.desyncs = 0;
     this.reconnectSuccess = 0;
     this.reconnectFailure = 0;

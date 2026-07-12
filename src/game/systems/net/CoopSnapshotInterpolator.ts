@@ -66,6 +66,12 @@ export class CoopSnapshotInterpolator<TSnapshot extends TimedSnapshot> {
       ),
     };
   }
+
+  snapshotAgeMs(hostTimeMs: number, localNowMs: number): number | undefined {
+    if (!Number.isFinite(this.clockOffsetMs) || !Number.isFinite(hostTimeMs)
+      || !Number.isFinite(localNowMs)) return undefined;
+    return Math.max(0, localNowMs - (hostTimeMs + this.clockOffsetMs));
+  }
 }
 
 function lerp(from: number, to: number, alpha: number): number {

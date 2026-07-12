@@ -109,7 +109,7 @@ objetivos en simultáneo sin conflicto.
   El host transmite `end("won")`; cada cliente hace su **propio** bookkeeping de guardado y emite
   `LEVEL_COMPLETED` para ver el resumen.
 - **Salida individual:** el `end("left")` lleva el slot del que se va. Una desconexión súbita
-  primero suspende la entidad y reserva su slot durante 10 segundos. Si vuelve, la entidad se
+  primero suspende la entidad y reserva su slot durante 30 segundos. Si vuelve, la entidad se
   reactiva y recibe un snapshot completo; si vence la ventana, la salida se vuelve definitiva. En
   salas de 3-4 los restantes continúan; si expira el host o la sala es de 2, todos vuelven al menú.
 - **Siguiente nivel (encadenado):** solo el host avanza con `Próximo` → `startNextCoopLevel` reenvía
@@ -128,3 +128,7 @@ objetivos en simultáneo sin conflicto.
 - **Pozos:** respawn por jugador anclado a su propia `x` (`handlePitFall(player, slot)`); en
   single-player conserva el respawn anclado a la vista.
 - **Sin checkpoint persistente** en co-op: ambos arrancan en el inicio del nivel.
+
+## ⚠️ Advertencia sobre Pruebas (Test Coverage)
+
+La semántica de predicción local, degradación de colisiones e interpolación descrita en este documento **no está cubierta por la suite de tests automatizados** (como se detalla en la [auditoría](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md)). Cualquier modificación en la lógica de las escenas (`updateGuest`, colisiones con cajas, etc.) debe ser probada rigurosamente con QA manual de 2 a 4 clientes reales.

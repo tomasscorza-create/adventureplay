@@ -69,7 +69,7 @@ instancie y valide compatibilidad.
 | Constante / Tipo | Valor / Forma |
 |---|---|
 | `COOP_PROTOCOL_VERSION` | `12`. Agrega `inputSeqBySlot` para confirmar inputs y reconciliar; conserva interpolación v11, seguridad v10 y reconexión v9. |
-| `COOP_RECONNECT_WINDOW_MS` | `10000`. Ventana para recuperar el mismo slot antes de convertir la ausencia en salida definitiva. |
+| `COOP_RECONNECT_WINDOW_MS` | `30000`. Ventana para recuperar el mismo slot antes de convertir la ausencia en salida definitiva. |
 | `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
 | `CoopStartMessage` | `{ levelId, roster: { slot, characterId }[] }` — roster autoritativo del host. |
@@ -141,7 +141,7 @@ GUEST                              HOST (CoopSceneLink)
   velocidad vertical. El historial se limita a 96 paquetes realmente enviados.
 - La predicción no resuelve daño, vida, cargas, enemigos, cajas, puertas, resultados ni proyectiles.
   Cerca de plataformas móviles/hundibles o cajas se degrada temporalmente a render autoritativo;
-  también se recupera desde snapshot si el guest cae fuera del mundo.
+  también se recupera desde snapshot si el guest cae fuera del mundo. **Nota:** La predicción local carece de una convergencia completa con el host (ver Problemas Conocidos).
 - El `seq` (por slot en el input, global en el snapshot) descarta mensajes fuera de orden.
 
 Detalle de la aplicación por escena en `integracion-en-escenas.md`.
@@ -149,9 +149,20 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 ## Reconexión automática
 
 - Presence conserva una identidad estable mientras vive `CoopSession`; una resuscripción reutiliza esa identidad.
-- Al desaparecer un participante durante la partida, su slot queda reservado 10 segundos. Ningún late join puede ocuparlo.
+- Al desaparecer un participante durante la partida, su slot queda reservado 30 segundos. Ningún late join puede ocuparlo.
 - El host neutraliza inmediatamente el último input remoto para evitar movimiento atascado y las escenas ocultan/congelan la entidad sin destruir su vida, cargas ni posición.
 - Si vuelve con protocolo v12 dentro de la ventana, se reactiva la misma entidad, se limpia el historial predictivo y el host fuerza el siguiente snapshot como keyframe completo.
 - Si la partida terminó durante la ausencia, el host repite `end("won" | "lost")` al detectar el regreso.
 - Si vence la ventana, se emite la salida definitiva, se elimina la reserva y el host rechaza inputs posteriores de ese slot.
 - No hay migración de host. Un refresh completo de página tampoco recupera la escena: esta fase cubre cortes transitorios mientras la sesión y la escena siguen vivas.
+
+## Problemas Conocidos Actuales (Auditoría v12)
+
+⚠️ **Importante:** El modelo descrito arriba tiene fallas en la implementación actual que deben consultarse en [auditoria-y-plan-2026-07.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md). Los fallos principales incluyen:
+
+1. **Bug REST (R1):** El input del guest viaja por fallback REST HTTP silenciosamente porque no se suscribe al canal, causando posibles pérdidas y desorden.
+2. **Divergencia de Predicción (R2):** Hay simulación dual sin reconciliación. El guest ignora la posición autoritativa en modo seguro, por lo que las caídas a pozos y otros daños en el host causan bajadas de vida inexplicables en la pantalla del guest.
+3. **Degradación Brusca (R3 y R4):** Cerca de cajas/plataformas, el guest salta al último snapshot crudo (teleports y tirones) en vez de interpolar, y atraviesa cuerpos congelados.
+4. **Fuga entre sesiones (R5):** `CoopSecurityGuard` no se resetea al salir de una sala, lo que bloquea a los guests en la segunda sala creada en la misma pestaña.
+
+**Limitación de los Tests:** La suite actual (`npm run test:coop`) usa un transporte simulado (`SimulatedTransport`) con latencia cero y no cubre el transporte real (REST vs WS), la seguridad entre sesiones, ni la semántica de predicción en las escenas de Phaser.

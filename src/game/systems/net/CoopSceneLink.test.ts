@@ -20,6 +20,7 @@ interface TestSnapshot {
   value: string;
   enemies?: Array<[number, number, number]>;
   platforms?: Array<[number, number, number]>;
+  inputSeqBySlot?: number[];
 }
 
 class FakeTransport implements CoopLinkTransport {
@@ -32,6 +33,11 @@ class FakeTransport implements CoopLinkTransport {
   readonly sentInputs: CoopInputMessage[] = [];
   readonly sentSnapshots: unknown[] = [];
   readonly sentEnds: { reason: CoopEndReason; slot?: number }[] = [];
+  readonly sentInputMetrics: Array<{ seq: number; sentAtMs: number }> = [];
+  readonly echoedInputMetrics: Array<{ ackSeq: number; receivedAtMs: number }> = [];
+  readonly snapshotAgeMetrics: number[] = [];
+  readonly divergenceMetrics: number[] = [];
+  readonly correctionMetrics: string[] = [];
   leaveCalls = 0;
   throwOnInputSend = false;
   private inputSeq = 0;
@@ -75,6 +81,21 @@ class FakeTransport implements CoopLinkTransport {
   }
   sendEnd(reason: CoopEndReason, slot?: number): void {
     this.sentEnds.push({ reason, slot });
+  }
+  recordInputSent(seq: number, sentAtMs: number): void {
+    this.sentInputMetrics.push({ seq, sentAtMs });
+  }
+  recordInputEcho(ackSeq: number, receivedAtMs: number): void {
+    this.echoedInputMetrics.push({ ackSeq, receivedAtMs });
+  }
+  recordSnapshotAge(ageMs: number): void {
+    this.snapshotAgeMetrics.push(ageMs);
+  }
+  recordDivergence(distancePx: number): void {
+    this.divergenceMetrics.push(distancePx);
+  }
+  recordCorrection(reason: string): void {
+    this.correctionMetrics.push(reason);
   }
   leave(): void {
     this.leaveCalls += 1;
@@ -506,6 +527,32 @@ describe("CoopSceneLink guest", () => {
 
     transport.emitSnapshot({ seq: 3, value: "c", platforms: [[2, 5, 5]] } as TestSnapshot);
     expect(link.latestSnapshot).toEqual({ seq: 3, hostTimeMs: 150, value: "c", enemies: [[1, 10, 20]], platforms: [[2, 5, 5]] });
+  });
+
+  it("conecta inputs enviados, ACK y metricas del snapshot sin alterar su estado", () => {
+    const transport = new FakeTransport();
+    const link = makeGuest(transport);
+    link.bind(noopHooks);
+
+    link.sendLocalInput(101, asFrame({ right: true }));
+    transport.emitSnapshot({
+      seq: 1,
+      hostTimeMs: performance.now() - 20,
+      inputSeqBySlot: [0, 1],
+      value: "estado",
+    });
+    const latest = link.latestSnapshot!;
+    link.recordGuestSnapshotMetrics(latest as TestSnapshot & { hostTimeMs: number }, 3, 4, 0, 0);
+    link.recordGuestCorrection("authoritative");
+
+    expect(transport.sentInputMetrics).toHaveLength(1);
+    expect(transport.sentInputMetrics[0].seq).toBe(1);
+    expect(transport.echoedInputMetrics).toHaveLength(1);
+    expect(transport.echoedInputMetrics[0].ackSeq).toBe(1);
+    expect(transport.snapshotAgeMetrics).toHaveLength(1);
+    expect(transport.divergenceMetrics).toEqual([5]);
+    expect(transport.correctionMetrics).toEqual(["authoritative"]);
+    expect(link.latestSnapshot).toBe(latest);
   });
 });
 

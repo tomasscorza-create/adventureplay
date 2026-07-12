@@ -195,6 +195,26 @@ class CoopSession {
     this.diagnostics.recordInputApplied(latencyMs);
   }
 
+  recordInputSent(seq: number, sentAtMs: number): void {
+    this.diagnostics.recordInputSent(seq, sentAtMs);
+  }
+
+  recordInputEcho(ackSeq: number, receivedAtMs: number): void {
+    this.diagnostics.recordInputEcho(ackSeq, receivedAtMs);
+  }
+
+  recordSnapshotAge(ageMs: number): void {
+    this.diagnostics.recordSnapshotAge(ageMs);
+  }
+
+  recordDivergence(distancePx: number): void {
+    this.diagnostics.recordDivergence(distancePx);
+  }
+
+  recordCorrection(reason: string): void {
+    this.diagnostics.recordCorrection(reason);
+  }
+
   recordDesync(): void {
     this.diagnostics.recordDesync();
   }
@@ -426,7 +446,7 @@ class CoopSession {
   private configureDiagnostics(): void {
     const storageEnabled = typeof localStorage !== "undefined"
       && localStorage.getItem("cd") === "1";
-    this.setDiagnosticsEnabled(storageEnabled);
+    this.setDiagnosticsEnabled(import.meta.env.DEV || storageEnabled);
     if (typeof window === "undefined") return;
     const diagnosticWindow = window as Window & {
       __COOP_DIAG__?: () => CoopDiagnosticsSnapshot;

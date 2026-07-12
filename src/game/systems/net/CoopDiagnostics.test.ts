@@ -26,6 +26,14 @@ describe("CoopDiagnostics", () => {
     diagnostics.recordSnapshot(false);
     diagnostics.recordInputApplied(12);
     diagnostics.recordInputApplied(28);
+    diagnostics.recordInputSent(10, 1200);
+    diagnostics.recordInputSent(11, 1300);
+    diagnostics.recordInputEcho(11, 1450);
+    diagnostics.recordSnapshotAge(15);
+    diagnostics.recordSnapshotAge(45);
+    diagnostics.recordDivergence(10);
+    diagnostics.recordDivergence(50);
+    diagnostics.recordCorrection("authoritative");
     diagnostics.recordDesync();
     diagnostics.recordReconnect(true);
     diagnostics.recordReconnect(false);
@@ -39,10 +47,33 @@ describe("CoopDiagnostics", () => {
     expect(report.inputs).toEqual({
       applied: 2,
       averageApplyLatencyMs: 20,
+      inputToEchoMs: { samples: 1, average: 150, p50: 150, p95: 150, max: 150 },
+      pendingEchoes: 0,
     });
+    expect(report.snapshotAgeMs).toEqual({ samples: 2, average: 30, p50: 15, p95: 45, max: 45 });
+    expect(report.divergencePx).toEqual({ samples: 2, average: 30, p50: 10, p95: 50, max: 50 });
+    expect(report.corrections).toEqual({ total: 1, byReason: { authoritative: 1 } });
     expect(report.desyncsDetected).toBe(1);
     expect(report.reconnects).toEqual({ successful: 1, failed: 1 });
     expect(report.sent.bytes).toBeGreaterThan(0);
+  });
+
+  it("conserva inputs pendientes hasta que un ACK los confirma", () => {
+    const diagnostics = new CoopDiagnostics(() => 1000);
+    diagnostics.setEnabled(true);
+    diagnostics.recordInputSent(20, 100);
+    diagnostics.recordInputSent(21, 200);
+    diagnostics.recordInputEcho(20, 300);
+
+    const report = diagnostics.snapshot(new CoopSecurityGuard().metrics());
+    expect(report.inputs.inputToEchoMs).toEqual({
+      samples: 1,
+      average: 200,
+      p50: 200,
+      p95: 200,
+      max: 200,
+    });
+    expect(report.inputs.pendingEchoes).toBe(1);
   });
 
   it("reinicia contadores al volver a activarse", () => {
