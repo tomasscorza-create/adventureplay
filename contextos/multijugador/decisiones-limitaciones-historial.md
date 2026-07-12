@@ -4,7 +4,7 @@
 
 | Decisión | Por qué |
 |---|---|
-| **Host-autoritativo** (no P2P lockstep, no predicción de cliente) | Simple y robusto para co-op de exploración/ingenio; una sola fuente de verdad para físicas. |
+| **Host-autoritativo** (no P2P lockstep; predicción local limitada) | El host conserva una sola fuente de verdad para gameplay y físicas; el guest predice solo su movimiento y converge por snapshots. |
 | **Supabase Realtime** como transporte | Ya estaba configurado; cero infraestructura nueva, sin tablas/RLS/servidor. |
 | **Cámara independiente por dispositivo** | Permite que cada jugador explore libremente sin que la cámara del otro lo limite. Reemplazó a una cámara de punto medio compartida (ver historial). |
 | **Fin de partida compartido** | Co-op cooperativo: si uno cae o se agota el tiempo, ambos pierden; la meta se gana juntos. |
@@ -17,6 +17,7 @@
 | **Versión de protocolo + presence por clientId** | La versión evita que builds incompatibles emparejen en silencio (aviso claro). La key por clientId (no por rol) permite más de un guest y evita colisiones. |
 | **Modelo de slots (protocolo N-ready antes que gameplay N)** | Separar la generalización del protocolo (slots, `players[]`, input con emisor) del render de 3-4 jugadores permite subir versión una sola vez y validar el modelo con tests, manteniendo el gameplay de 2 idéntico. |
 | **Plumbing en `CoopSceneLink`** | Deduplicación, flancos, throttling y guardas de fin viven en un solo lugar testeable, no duplicados en cada escena. |
+| **R4: zonas degradadas con histéresis** | Sin métricas reales que justifiquen replicar colisiones dinámicas, se conserva el modo autoritativo cerca de cajas/plataformas: entra a 120/140 px, sale a 180 px y usa blend interpolado. La colisión local queda diferida. |
 
 ## Decisiones reemplazadas (Obsoletas)
 
@@ -28,7 +29,9 @@
 
 ## Limitaciones conocidas
 
-- **Convergencia incompleta de la predicción:** El guest posee predicción local, pero ignora la posición autoritativa en modo seguro. Por esto, existen divergencias sin reconciliar (ej: caídas en el host que restan vida inexplicablemente en el guest).
+- **Predicción local con convergencia:** El guest corrige deriva en modo seguro y degrada con
+  histéresis cerca de cuerpos dinámicos. Los umbrales siguen pendientes de calibración manual y la
+  integración Phaser necesita QA real antes de considerarse cerrada para producción.
 - **Poses finas de M2/M3 en el guest son aproximadas:** se sincroniza posición y `flipX`, no cada
   pose de ataque. El **daño es autoritativo del host**, así que la jugabilidad es correcta aunque
   la animación puntual difiera.
@@ -108,7 +111,7 @@
 
 - **Costo y robustez:** revisar cuotas de Supabase Realtime con salas de 4, reconexión después de refresh, pausa co-op acordada y expulsión por el host. La reconexión transitoria quedó cubierta en v9.
 - **HUD del compañero:** mostrar ícono y vida de los demás jugadores en una esquina secundaria.
-- **Predicción de cliente** para el personaje del guest (reduce la latencia percibida).
+- **Calibración de predicción:** medir divergencia, transiciones y rubber-banding con dos o más clientes reales antes de ajustar umbrales.
 - **Estados de animación finos** de enemigos complejos en el guest.
 
 ## Archivos clave (para retomar)

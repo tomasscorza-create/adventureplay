@@ -39,7 +39,8 @@ export class CoopLocalPrediction {
     this.trace("edge", { action });
   }
 
-  traceCorrection(kind: "authoritative" | "out-of-world" | "soft" | "snap" | "none"): void {
+  traceCorrection(kind: "authoritative" | "out-of-world" | "soft" | "snap"
+    | "degraded-enter" | "degraded-exit" | "none"): void {
     this.trace("correction", { kind });
   }
 

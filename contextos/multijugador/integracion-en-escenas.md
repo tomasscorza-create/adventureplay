@@ -129,6 +129,18 @@ objetivos en simultáneo sin conflicto.
   single-player conserva el respawn anclado a la vista.
 - **Sin checkpoint persistente** en co-op: ambos arrancan en el inicio del nivel.
 
+## Predicción y degradación del guest
+
+- En zona segura, el guest simula una vez por frame y aplica la convergencia posicional de Fase 3.
+- Cerca de cajas entra en modo degradado a 120 px; cerca de plataformas móviles/hundibles, a
+  140 px. Una vez dentro, no vuelve a predicción hasta superar 180 px: esta histéresis evita
+  alternancias en el borde.
+- El modo degradado deshabilita física local y sigue el frame autoritativo interpolado mediante
+  blend continuo. La distancia por sí sola no provoca snap durante la transición; respawn,
+  teleport autoritativo y salida del mundo sí conservan recuperación directa.
+- R4 mantiene por ahora esta solución de zonas degradadas. No se implementó colisión local contra
+  cuerpos dinámicos replicados.
+
 ## ⚠️ Advertencia sobre Pruebas (Test Coverage)
 
 La función pura de corrección posicional está cubierta por tests, pero la integración Phaser de la predicción local, degradación de colisiones e interpolación todavía requiere QA manual. Cualquier modificación en `updateGuest`, colisiones con cajas o transiciones de modo debe probarse rigurosamente con 2 a 4 clientes reales.

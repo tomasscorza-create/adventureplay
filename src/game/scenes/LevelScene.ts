@@ -62,6 +62,7 @@ import { CoopLocalPrediction } from "../systems/net/CoopLocalPrediction";
 import {
   computeGuestPositionCorrection,
   isAuthoritativeTeleport,
+  shouldUseDegradedMode,
   type CoopPosition,
 } from "../systems/net/coopGuestReconciliation";
 
@@ -145,6 +146,7 @@ export class LevelScene extends Phaser.Scene {
   private lastAppliedSnapshotSeq = -1;
   private lastReconciledSnapshotSeq = -1;
   private guestPredictionActive = false;
+  private guestPredictionDegraded = false;
   private guestLastAuthoritativePosition?: CoopPosition;
   private coopPressureX = 0;
   // Cooldown de dano por presion del slot 0 (los slots remotos usan el arreglo).
@@ -160,6 +162,7 @@ export class LevelScene extends Phaser.Scene {
     this.lastReconciledSnapshotSeq = -1;
     this.lastAppliedSnapshotSeq = -1;
     this.guestPredictionActive = false;
+    this.guestPredictionDegraded = false;
     this.guestLastAuthoritativePosition = undefined;
     const requestedLevelId = data.levelId ?? "meadowOutpost";
     this.level = levelDefinitions[requestedLevelId] ?? levelDefinitions.meadowOutpost;
@@ -432,7 +435,7 @@ export class LevelScene extends Phaser.Scene {
 
   private enablePredictedPlayer(target: Player): void {
     const body = target.body as Phaser.Physics.Arcade.Body;
-    body.enable = true;
+    body.reset(target.x, target.y);
     body.setAllowGravity(true);
   }
 
@@ -2389,18 +2392,42 @@ export class LevelScene extends Phaser.Scene {
     }
     if (localPlayer) {
       const authoritative = latest?.players[this.coopSelfSlot];
-      const safe = this.isGuestPredictionSafe(localPlayer, authoritative);
-      if (!safe && authoritative) {
-        if (this.guestPredictionActive) {
-          const reason = localPlayer.y > GAME_HEIGHT + 60 ? "out-of-world" : "authoritative";
+      const outOfWorld = localPlayer.y > GAME_HEIGHT + 60;
+      const degraded = this.shouldGuestUseDegradedMode(localPlayer, authoritative, outOfWorld);
+      const degradedTarget = forceAuthoritativeSnap || outOfWorld
+        ? authoritative
+        : renderedSelf ?? authoritative;
+      if (degraded && degradedTarget) {
+        if (!this.guestPredictionDegraded) {
+          const reason = outOfWorld ? "out-of-world" : "degraded-enter";
           this.guestPrediction.traceCorrection(reason);
           this.coopLink?.recordGuestCorrection(reason);
+          this.guestPredictionMovement.reset();
         }
+        this.guestPredictionDegraded = true;
         this.guestPredictionActive = false;
         this.freezePuppet(localPlayer);
-        applyNetPlayer(localPlayer, authoritative);
-        this.guestPredictionMovement.reset();
+        const correction = computeGuestPositionCorrection(
+          localPlayer,
+          degradedTarget,
+          delta,
+          forceAuthoritativeSnap || outOfWorld,
+          false,
+          0,
+        );
+        applyNetPlayer(localPlayer, degradedTarget);
+        localPlayer.x = correction.x;
+        localPlayer.y = correction.y;
+        if (correction.kind !== "none") {
+          this.guestPrediction.traceCorrection(correction.kind);
+          this.coopLink?.recordGuestCorrection(correction.kind);
+        }
       } else {
+        if (this.guestPredictionDegraded) {
+          this.guestPredictionDegraded = false;
+          this.guestPrediction.traceCorrection("degraded-exit");
+          this.coopLink?.recordGuestCorrection("degraded-exit");
+        }
         if (!this.guestPredictionActive) {
           this.enablePredictedPlayer(localPlayer);
           this.guestPredictionActive = true;
@@ -2444,20 +2471,27 @@ export class LevelScene extends Phaser.Scene {
     this.guestPredictionMovement.reset();
     this.lastReconciledSnapshotSeq = -1;
     this.guestPredictionActive = false;
+    this.guestPredictionDegraded = false;
     this.guestLastAuthoritativePosition = undefined;
   }
 
-  private isGuestPredictionSafe(
+  private shouldGuestUseDegradedMode(
     player: Player,
     authoritative: LevelSnapshot["players"][number] | undefined,
+    outOfWorld: boolean,
   ): boolean {
-    if (player.y > GAME_HEIGHT + 60) return false;
+    if (outOfWorld) return true;
     const points = [[player.x, player.y], [authoritative?.x ?? player.x, authoritative?.y ?? player.y]];
     const dynamicGroups = [this.movingPlatforms, this.sinkingPlatforms];
-    return !dynamicGroups.some((group) => group.getChildren().some((object) => {
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    dynamicGroups.forEach((group) => group.getChildren().forEach((object) => {
       const target = object as Phaser.GameObjects.GameObject & { x: number; y: number; active: boolean };
-      return target.active && points.some(([x, y]) => Math.hypot(target.x - x, target.y - y) < 140);
+      if (!target.active) return;
+      for (const [x, y] of points) {
+        nearestDistance = Math.min(nearestDistance, Math.hypot(target.x - x, target.y - y));
+      }
     }));
+    return shouldUseDegradedMode(nearestDistance, this.guestPredictionDegraded, 140);
   }
 
   private playPredictedActions(player: Player, input: GameplayInputFrame): void {

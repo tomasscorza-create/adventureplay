@@ -165,7 +165,7 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 
 1. **Bug REST (R1):** Corregido en código con topics WebSocket por slot en v13; pendiente confirmar en QA manual que no aparezcan warnings de fallback ni `old-sequence` en juego normal.
 2. **Divergencia de Predicción (R2):** Corregida en código con convergencia suave y snaps autoritativos; pendiente validar p95, respawns y ausencia de rubber-banding con dos clientes reales.
-3. **Degradación Brusca (R3 y R4):** Cerca de cajas/plataformas, el guest salta al último snapshot crudo (teleports y tirones) en vez de interpolar, y atraviesa cuerpos congelados.
+3. **Degradación (R3/R4):** R3 está corregido en código con frame interpolado, blend e histéresis 120/140→180 px. Para R4 se mantienen deliberadamente las zonas degradadas; la colisión local con cuerpos dinámicos queda diferida hasta disponer de métricas y QA real.
 4. **Fuga entre sesiones (R5):** Corregida en código: cada `connect()` reinicia conjuntamente `CoopSecurityGuard` y `globalInputSeq`; pendiente confirmar dos salas consecutivas en QA manual.
 
 **Limitación de los Tests:** La suite actual (`npm run test:coop`) usa un transporte simulado (`SimulatedTransport`) con latencia cero y no cubre el transporte real (REST vs WS), la seguridad entre sesiones, ni la semántica de predicción en las escenas de Phaser.

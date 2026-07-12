@@ -2,6 +2,7 @@ export const COOP_RECONCILIATION_START_PX = 32;
 export const COOP_RECONCILIATION_SNAP_PX = 160;
 export const COOP_AUTHORITATIVE_TELEPORT_PX = 96;
 export const COOP_RECONCILIATION_RATE_PER_SECOND = 8;
+export const COOP_DEGRADED_EXIT_PX = 180;
 const MAX_RECONCILIATION_DELTA_MS = 50;
 
 export interface CoopPosition {
@@ -27,6 +28,16 @@ export function isAuthoritativeTeleport(
     && positionDistance(previous, current) >= COOP_AUTHORITATIVE_TELEPORT_PX;
 }
 
+export function shouldUseDegradedMode(
+  nearestDynamicDistancePx: number,
+  currentlyDegraded: boolean,
+  enterDistancePx: number,
+  exitDistancePx = COOP_DEGRADED_EXIT_PX,
+): boolean {
+  const threshold = currentlyDegraded ? exitDistancePx : enterDistancePx;
+  return nearestDynamicDistancePx < threshold;
+}
+
 // Correccion exclusivamente posicional: no recibe ni devuelve velocidades y
 // por lo tanto no puede restaurar vy, repetir MovementSystem ni reejecutar
 // flancos. El delta se limita para que reanudar una pestaña no parezca un snap.
@@ -35,9 +46,11 @@ export function computeGuestPositionCorrection(
   authoritative: CoopPosition,
   deltaMs: number,
   forceSnap = false,
+  snapAtExtremeDistance = true,
+  correctionStartPx = COOP_RECONCILIATION_START_PX,
 ): CoopPositionCorrection {
   const divergencePx = positionDistance(local, authoritative);
-  if (forceSnap || divergencePx >= COOP_RECONCILIATION_SNAP_PX) {
+  if (forceSnap || (snapAtExtremeDistance && divergencePx >= COOP_RECONCILIATION_SNAP_PX)) {
     return {
       x: authoritative.x,
       y: authoritative.y,
@@ -46,7 +59,7 @@ export function computeGuestPositionCorrection(
       appliedPx: divergencePx,
     };
   }
-  if (divergencePx <= COOP_RECONCILIATION_START_PX) {
+  if (divergencePx <= correctionStartPx) {
     return { ...local, kind: "none", divergencePx, appliedPx: 0 };
   }
 

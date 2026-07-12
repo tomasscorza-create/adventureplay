@@ -72,8 +72,8 @@ no cubren donde viven los problemas restantes (ver §5).
 |---|---|---|---|
 | **R1** | **Input del guest viaja por REST HTTP**: el guest crea el canal de input pero nunca se suscribe, y publica igual; `realtime-js` 2.108.2 cae al fallback REST cuando el canal no está `joined`. Un POST por input (10–30/s), `console.warn` por mensaje, ruta deprecada y **sin orden garantizado** → un input viejo que llega tarde se descarta por seq → taps perdidos + anomalías hacia el umbral de expulsión | `CoopSession.ts:398-404` y `sendInput`; `RealtimeChannel.js:519` + `channelAdapter.js:65-67` (`canPush()` exige `joined`) | **P0/P1** |
 | **R2** | **Simulación dual sin reconciliación**: hallazgo original corregido en código con convergencia posicional suave hacia el snapshot interpolado, snap por divergencia extrema y detección de discontinuidades autoritativas | `coopGuestReconciliation.ts` + integración en ambas escenas | ✅ Código; calibración/QA pendiente |
-| **R3** | **Degradación brusca**: dentro del radio de seguridad (120 px cajas / 140 px plataformas móviles) se congela el cuerpo y se aplica el **último snapshot crudo** (no el interpolado) en asignación dura → teleport de toda la divergencia acumulada + escalonado 20 Hz + flapping en el borde. En PuzzleScene empujar cajas (mecánica central) vive dentro del radio | `LevelScene.ts:2402-2413`, `PuzzleScene.ts:2020-2028`, rama `!safe` de `updateGuest` | **P1** |
-| **R4** | El jugador predicho **atraviesa cuerpos dinámicos congelados** (cajas, plataformas móviles/hundibles tienen `body.enable=false` en el guest); el radio de seguridad solo lo enmascara | `PuzzleScene.ts:623`, `LevelScene.ts:345-349` | P2 |
+| **R3** | **Degradación brusca**: hallazgo original corregido en código; el modo degradado sigue el snapshot interpolado con blend, entra a 120/140 px y sale a 180 px | helper puro + integración en ambas escenas | ✅ Código; QA pendiente |
+| **R4** | El jugador predicho puede atravesar cuerpos dinámicos congelados; decisión vigente: conservar zonas degradadas con histéresis y postergar colisión local hasta tener métricas reales | `PuzzleScene` / `LevelScene` | Decisión (a); opción (b) diferida |
 | **R5** | **Guard sin reset entre sesiones**: hallazgo original corregido; `connect()` reinicia ahora el guard y `globalInputSeq` como una sola frontera de sesión | `CoopSession.ts` + test de segunda sesión desde seq 1 | ✅ Código; QA pendiente |
 | — | Métricas insuficientes: sin RTT, edad de snapshot, input-to-photon ni divergencia; `clockOffsetMs` existe pero no se expone; diagnóstico detrás de `cd=1` | `CoopDiagnostics.ts` | **P1** |
 | — | Duplicación creció: `updateGuest`, `isGuestPredictionSafe`, `playPredictedActions`, `interpolateSnapshot`, `resetGuestPrediction` duplicados (~150 líneas nuevas) entre escenas | ambas escenas | **P1** |
@@ -102,7 +102,8 @@ no cubren donde viven los problemas restantes (ver §5).
 > clientes pendiente antes de dar por cumplidos sus criterios de éxito. Fase 2 implementada y
 > validada automáticamente; falta comprobar dos salas consecutivas en el QA manual. Fase 3
 > implementada con umbrales provisionales 32/160 px y validada automáticamente; requiere
-> calibración y QA real antes de cerrar sus criterios de éxito.
+> calibración y QA real antes de cerrar sus criterios de éxito. Fase 4 implementada con
+> histéresis 120/140→180 px y blend interpolado; QA de PuzzleScene pendiente.
 
 Dificultad: 🟢 simple · 🟡 delicada · 🔴 asignar a agente fuerte (Codex).
 Regla transversal: **cada fase se valida contra las métricas de la Fase 0** (por eso va primera).
@@ -166,7 +167,7 @@ Todo cambio de mensajes exige subir `COOP_PROTOCOL_VERSION` (rompe PWAs cacheada
   clientes, red degradada y host en segundo plano.
 - **No tocar**: radios de seguridad y modo degradado (F4).
 
-#### Fase 4 — Degradación suave con histéresis (R3) + decisión sobre R4 🟡
+#### Fase 4 — Degradación suave con histéresis (R3) + decisión sobre R4 🟡 — código implementado
 - **Objetivo**: eliminar teleports y escalonado cerca de cajas/plataformas.
 - **Archivos**: `isGuestPredictionSafe` y rama degradada de `updateGuest` en ambas escenas.
 - **Cambios**: modo degradado alimentado por el frame **interpolado** (`renderSnapshot()`);
@@ -178,6 +179,11 @@ Todo cambio de mensajes exige subir `COOP_PROTOCOL_VERSION` (rompe PWAs cacheada
   un dígito; sin escalonado 20 Hz en modo degradado.
 - **Pruebas**: QA manual 2+ clientes centrado en PuzzleScene y niveles con plataformas móviles.
 - **No tocar**: implementación de R4-(b); unificación de escenas.
+
+**Decisión R4 vigente:** se adopta (a), zonas degradadas con histéresis. No existen aún métricas
+manuales F0/F4 que justifiquen el costo y riesgo de (b), colisión local contra cuerpos dinámicos
+replicados. La opción (b) queda explícitamente diferida hasta medir transiciones, divergencia y feel
+en PuzzleScene; no forma parte de esta fase.
 
 ### Bloque C — Deuda técnica
 
