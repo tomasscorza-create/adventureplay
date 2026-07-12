@@ -74,7 +74,7 @@ no cubren donde viven los problemas restantes (ver §5).
 | **R2** | **Simulación dual sin reconciliación**: el host simula al guest desde sus inputs y el guest se simula localmente; mientras es "seguro", el guest **ignora por completo** la posición autoritativa (`applySnapshot` salta su slot) y nada converge. Todo el gameplay real (monedas, daño, línea de presión, pozos, meta) se evalúa en la **posición del host**. Escenario confirmado: la copia del host cae a un pozo → respawn + daño → el guest ve su vida bajar "sin razón" mientras camina normal, sin mecanismo que lo corrija | `updateGuest` en ambas escenas; `CoopLocalPrediction.acknowledge` solo poda; `handlePitFall` | **P0** |
 | **R3** | **Degradación brusca**: dentro del radio de seguridad (120 px cajas / 140 px plataformas móviles) se congela el cuerpo y se aplica el **último snapshot crudo** (no el interpolado) en asignación dura → teleport de toda la divergencia acumulada + escalonado 20 Hz + flapping en el borde. En PuzzleScene empujar cajas (mecánica central) vive dentro del radio | `LevelScene.ts:2402-2413`, `PuzzleScene.ts:2020-2028`, rama `!safe` de `updateGuest` | **P1** |
 | **R4** | El jugador predicho **atraviesa cuerpos dinámicos congelados** (cajas, plataformas móviles/hundibles tienen `body.enable=false` en el guest); el radio de seguridad solo lo enmascara | `PuzzleScene.ts:623`, `LevelScene.ts:345-349` | P2 |
-| **R5** | **Guard sin reset entre sesiones**: `security.reset()` no se llama nunca, pero `leave()` sí resetea `globalInputSeq` → la segunda sala hosteada en la misma pestaña produce tormenta "old-sequence" → guests bloqueados y expulsados (mismo mecanismo que B2, otra escala) | `CoopSession.ts:719` + grep sin llamadas a `security.reset()` | **P1** |
+| **R5** | **Guard sin reset entre sesiones**: hallazgo original corregido; `connect()` reinicia ahora el guard y `globalInputSeq` como una sola frontera de sesión | `CoopSession.ts` + test de segunda sesión desde seq 1 | ✅ Código; QA pendiente |
 | — | Métricas insuficientes: sin RTT, edad de snapshot, input-to-photon ni divergencia; `clockOffsetMs` existe pero no se expone; diagnóstico detrás de `cd=1` | `CoopDiagnostics.ts` | **P1** |
 | — | Duplicación creció: `updateGuest`, `isGuestPredictionSafe`, `playPredictedActions`, `interpolateSnapshot`, `resetGuestPrediction` duplicados (~150 líneas nuevas) entre escenas | ambas escenas | **P1** |
 | — | Menores abiertos: B9 (HUD compañeros), `runTracker` guest en 0, `activations.reset()` a 60 Hz en PuzzleScene, allocations por frame de `interpolateSnapshot`, `console.warn` debug (`LevelScene.ts:338`), handlers muertos de charges, doble `hostTimeMs`, curación sin eco local | ver auditoría | P2/P3 |
@@ -99,7 +99,8 @@ no cubren donde viven los problemas restantes (ver §5).
 
 > Estado de ejecución local: Fase 0 implementada y validada automáticamente; línea base manual
 > pendiente. Fase 1 implementada en protocolo v13 y validada automáticamente; QA real de dos
-> clientes pendiente antes de dar por cumplidos sus criterios de éxito.
+> clientes pendiente antes de dar por cumplidos sus criterios de éxito. Fase 2 implementada y
+> validada automáticamente; falta comprobar dos salas consecutivas en el QA manual.
 
 Dificultad: 🟢 simple · 🟡 delicada · 🔴 asignar a agente fuerte (Codex).
 Regla transversal: **cada fase se valida contra las métricas de la Fase 0** (por eso va primera).
@@ -134,7 +135,7 @@ Todo cambio de mensajes exige subir `COOP_PROTOCOL_VERSION` (rompe PWAs cacheada
 - **Pruebas**: QA manual 2 clientes con throttling; revisar `droppedByReason` al final.
 - **No tocar**: predicción, escenas.
 
-#### Fase 2 — `security.reset()` entre sesiones (R5) 🟢
+#### Fase 2 — `security.reset()` entre sesiones (R5) 🟢 — código implementado
 - **Objetivo**: que la segunda sala en la misma pestaña funcione.
 - **Archivos**: `CoopSession.ts` (`connect()`/`leave()`), `coopSecurity.test.ts`.
 - **Cambios**: `security.reset()` en `connect()`; decidir conscientemente el reseteo de

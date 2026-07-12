@@ -163,6 +163,6 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 1. **Bug REST (R1):** Corregido en código con topics WebSocket por slot en v13; pendiente confirmar en QA manual que no aparezcan warnings de fallback ni `old-sequence` en juego normal.
 2. **Divergencia de Predicción (R2):** Hay simulación dual sin reconciliación. El guest ignora la posición autoritativa en modo seguro, por lo que las caídas a pozos y otros daños en el host causan bajadas de vida inexplicables en la pantalla del guest.
 3. **Degradación Brusca (R3 y R4):** Cerca de cajas/plataformas, el guest salta al último snapshot crudo (teleports y tirones) en vez de interpolar, y atraviesa cuerpos congelados.
-4. **Fuga entre sesiones (R5):** `CoopSecurityGuard` no se resetea al salir de una sala, lo que bloquea a los guests en la segunda sala creada en la misma pestaña.
+4. **Fuga entre sesiones (R5):** Corregida en código: cada `connect()` reinicia conjuntamente `CoopSecurityGuard` y `globalInputSeq`; pendiente confirmar dos salas consecutivas en QA manual.
 
 **Limitación de los Tests:** La suite actual (`npm run test:coop`) usa un transporte simulado (`SimulatedTransport`) con latencia cero y no cubre el transporte real (REST vs WS), la seguridad entre sesiones, ni la semántica de predicción en las escenas de Phaser.

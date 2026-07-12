@@ -97,6 +97,21 @@ describe("CoopSecurityGuard input autoritativo", () => {
       .toBe("old-sequence");
   });
 
+  it("acepta desde seq 1 al comenzar una segunda sesion", () => {
+    const guard = new CoopSecurityGuard();
+    expect(guard.validateInput({ slot: 1, seq: 500, bits: 1 }, guest1, 0).accepted)
+      .toBe(true);
+    expect(guard.validateInput({ slot: 1, seq: 1, bits: 1 }, guest1, 40).reason)
+      .toBe("old-sequence");
+
+    guard.reset();
+
+    expect(guard.validateInput({ slot: 1, seq: 1, bits: 1 }, guest1, 80).accepted)
+      .toBe(true);
+    expect(guard.metrics().oldSequences).toBe(0);
+    expect(guard.metrics().discarded).toBe(0);
+  });
+
   it("tolera jitter normal a treinta mensajes por segundo", () => {
     const guard = new CoopSecurityGuard();
     for (let seq = 1; seq <= 120; seq += 1) {

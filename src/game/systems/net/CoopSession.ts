@@ -260,6 +260,11 @@ class CoopSession {
     }
     const realtime = supabase;
     this.leave();
+    // El guard y la secuencia saliente pertenecen a una sala, no a la vida de
+    // la pestaña. Reiniciarlos juntos evita que la segunda sesión herede el
+    // lastSeq o anomalías de participantes de la anterior.
+    this.security.reset();
+    this.globalInputSeq = 0;
     this._role = role;
     this._code = code;
     this.localHello = { ...hello, protocol: COOP_PROTOCOL_VERSION };
