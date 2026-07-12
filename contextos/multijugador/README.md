@@ -3,7 +3,7 @@
 Documentación completa y de continuidad del **modo cooperativo online** de Adventure Play.
 Optimizada para agentes de IA: lee esta guía y sigue los enlaces antes de tocar código.
 
-> **Estado (Julio 2026):** co-op online **funcional** de **2 a 4 jugadores** en **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Protocolo **v12** con predicción/reconciliación local del guest, interpolación temporal de entidades remotas, y reconexión automática de 30 segundos.
+> **Estado (Julio 2026):** co-op online **funcional** de **2 a 4 jugadores** en **Desafío** (`PuzzleScene`) y **Explorar** (`LevelScene`). Protocolo **v13** con input WebSocket por slot, predicción local del guest, interpolación temporal de entidades remotas y reconexión automática de 30 segundos.
 > **Advertencia:** Existen problemas conocidos de divergencia y fallos de transporte documentados en la auditoría.
 
 ## ⚖️ Jerarquía de Verdad (¡Importante!)

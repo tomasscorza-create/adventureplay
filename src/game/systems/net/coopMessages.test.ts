@@ -7,6 +7,7 @@ import {
   COOP_PROTOCOL_VERSION,
   COOP_RECONNECT_WINDOW_MS,
   generateRoomCode,
+  getCoopInputTopic,
   isValidRoomCode,
   normalizeRoomCode,
   packInputState,
@@ -69,11 +70,16 @@ describe("coopMessages room codes", () => {
     expect(normalizeRoomCode("A0I1O")).toBe("A");
     expect(normalizeRoomCode("ABCDEFG")).toBe("ABCD");
   });
+
+  it("genera un topic de input exclusivo por slot", () => {
+    expect(getCoopInputTopic(" abcd ", 1)).toBe("coop-room-ABCD-input-1");
+    expect(getCoopInputTopic("ABCD", 3)).toBe("coop-room-ABCD-input-3");
+  });
 });
 
 describe("coopMessages presence", () => {
   it("expone la version vigente del protocolo", () => {
-    expect(COOP_PROTOCOL_VERSION).toBe(12);
+    expect(COOP_PROTOCOL_VERSION).toBe(13);
     expect(COOP_RECONNECT_WINDOW_MS).toBe(30_000);
   });
 

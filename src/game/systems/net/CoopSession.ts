@@ -8,6 +8,7 @@ import {
   COOP_PROTOCOL_VERSION,
   COOP_RECONNECT_WINDOW_MS,
   generateRoomCode,
+  getCoopInputTopic,
   HOST_SLOT,
   normalizeRoomCode,
   type CoopChargesMessage,
@@ -27,6 +28,7 @@ import {
   type CoopWireEnvelope,
 } from "./coopSecurity";
 import { CoopDiagnostics, type CoopDiagnosticsSnapshot } from "./CoopDiagnostics";
+import { CoopInputChannelTracker } from "./CoopInputChannelTracker";
 
 export type CoopConnectionState =
   | "idle"
@@ -78,6 +80,10 @@ class CoopSession {
   private readonly diagnostics = new CoopDiagnostics(() => this.nowMs());
   private channel: RealtimeChannel | null = null;
   private inputChannel: RealtimeChannel | null = null;
+  private inputChannels: RealtimeChannel[] = [];
+  private inputChannelReady = false;
+  private inputChannelSlot = HOST_SLOT;
+  private ensureGuestInputChannel: (() => void) | null = null;
   private _role: CoopRole | null = null;
   private _code = "";
   private _connectionState: CoopConnectionState = "idle";
@@ -252,6 +258,7 @@ class CoopSession {
       this.setConnectionState("error");
       throw new Error("Supabase no esta configurado; el co-op online requiere conexion.");
     }
+    const realtime = supabase;
     this.leave();
     this._role = role;
     this._code = code;
@@ -261,15 +268,15 @@ class CoopSession {
     this.protocolMismatch = false;
     this.roomFull = false;
     this.clientKey = generateClientKey();
-    // Slot provisional segun el rol; syncPresence lo confirma con el roster real.
-    this._localSlot = role === "host" ? HOST_SLOT : HOST_SLOT + 1;
+    // El guest no abre su topic de input hasta que Presence confirma su slot.
+    this._localSlot = HOST_SLOT;
     this._participants = [];
     this.setConnectionState("connecting");
     this.configureDiagnostics();
 
     document.addEventListener("visibilitychange", this.boundVisibilityListener);
 
-    const channel = supabase.channel(`coop-room-${code}`, {
+    const channel = realtime.channel(`coop-room-${code}`, {
       config: {
         broadcast: { self: false, ack: false },
         presence: { key: this.clientKey },
@@ -277,10 +284,16 @@ class CoopSession {
     });
     this.channel = channel;
 
-    const inputChannel = supabase.channel(`coop-room-${code}-input`, {
-      config: { broadcast: { self: false, ack: false } },
-    });
-    this.inputChannel = inputChannel;
+    const createInputChannel = (slot: number) => realtime.channel(
+      getCoopInputTopic(code, slot),
+      { config: { broadcast: { self: false, ack: false } } },
+    );
+    if (role === "host") {
+      this.inputChannels = Array.from(
+        { length: COOP_MAX_PLAYERS - 1 },
+        (_, index) => createInputChannel(index + 1),
+      );
+    }
 
     channel.on("broadcast", { event: COOP_EVENTS.hello }, ({ payload }) => {
       this.trackStat("received", COOP_EVENTS.hello, payload);
@@ -294,7 +307,9 @@ class CoopSession {
     });
     
     if (role === "host") {
-      inputChannel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
+      this.inputChannels.forEach((inputChannel, index) => {
+        const topicSlot = index + 1;
+        inputChannel.on("broadcast", { event: COOP_EVENTS.input }, ({ payload }) => {
         const nowMs = this.nowMs();
         const parsed = this.security.parseEnvelope(payload, this._participants, 512, nowMs);
         if (!parsed.accepted || !parsed.value?.sender) {
@@ -306,7 +321,7 @@ class CoopSession {
           parsed.value.sender,
           nowMs,
         );
-        if (!decision.accepted || !decision.value
+        if (!decision.accepted || !decision.value || decision.value.slot !== topicSlot
           || !this.acceptsActiveSlot(decision.value.slot)) {
           this.handleSecurityReject(decision, parsed.value.sender);
           return;
@@ -314,6 +329,7 @@ class CoopSession {
         this.trackStat("received", COOP_EVENTS.input, payload, decision.value.slot);
         const receivedMessage = { ...decision.value, receivedAtMs: nowMs };
         this.callbacks.input.forEach((cb) => cb(receivedMessage));
+        });
       });
     }
 
@@ -383,9 +399,10 @@ class CoopSession {
     channel.on("presence", { event: "leave" }, () => this.syncPresence());
 
     let mainEverSubscribed = false;
-    let inputEverSubscribed = false;
     let mainReady = false;
     let inputReady = false;
+    const expectedInputChannels = role === "host" ? COOP_MAX_PLAYERS - 1 : 1;
+    let inputTracker = new CoopInputChannelTracker<RealtimeChannel>(expectedInputChannels);
     const restoreIfReady = () => {
       if (mainReady && inputReady && this._connectionState === "reconnecting") {
         this.finishLocalReconnect();
@@ -415,25 +432,51 @@ class CoopSession {
         });
       }),
       new Promise<void>((resolve, reject) => {
-        if (role !== "host") {
-          inputReady = true;
-          inputEverSubscribed = true;
-          resolve();
-          restoreIfReady();
-          return;
-        }
-        inputChannel.subscribe((status) => {
+        let initialResolved = false;
+        const subscribeInputChannel = (inputChannel: RealtimeChannel) => {
+          inputChannel.subscribe((status) => {
+          if (role === "guest" && this.inputChannel !== inputChannel) return;
+          const state = inputTracker.update(inputChannel, status);
           if (status === "SUBSCRIBED") {
-            inputReady = true;
-            inputEverSubscribed = true;
-            resolve();
+            inputReady = state.ready;
+            this.inputChannelReady = inputReady;
+            if (inputReady && !initialResolved) {
+              initialResolved = true;
+              resolve();
+            }
             restoreIfReady();
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             inputReady = false;
-            if (inputEverSubscribed) this.beginLocalReconnect();
+            this.inputChannelReady = false;
+            if (state.reconnectRequired || initialResolved) this.beginLocalReconnect();
             else reject(new Error(`No se pudo conectar al canal de input (${status}).`));
           }
-        });
+          });
+        };
+
+        if (role === "host") {
+          this.inputChannels.forEach(subscribeInputChannel);
+          return;
+        }
+
+        this.ensureGuestInputChannel = () => {
+          if (this._localSlot <= HOST_SLOT || this.inputChannelSlot === this._localSlot) return;
+          if (this.inputChannel) {
+            const previousInputChannel = this.inputChannel;
+            this.inputChannel = null;
+            void previousInputChannel.unsubscribe();
+            realtime.removeChannel(previousInputChannel);
+          }
+          inputTracker = new CoopInputChannelTracker<RealtimeChannel>(1);
+          inputReady = false;
+          this.inputChannelReady = false;
+          const guestInputChannel = createInputChannel(this._localSlot);
+          this.inputChannel = guestInputChannel;
+          this.inputChannelSlot = this._localSlot;
+          this.inputChannels = [guestInputChannel];
+          subscribeInputChannel(guestInputChannel);
+        };
+        this.ensureGuestInputChannel();
       })
     ]).then(() => {
       if (this._connectionState === "connecting") this.setConnectionState("waiting");
@@ -525,6 +568,7 @@ class CoopSession {
     this._localSlot = this.authorizedParticipants.get(this.clientKey)?.slot
       ?? liveRoster.find((entry) => entry.key === this.clientKey)?.slot
       ?? this._localSlot;
+    this.ensureGuestInputChannel?.();
 
     if (this.authorizedParticipantKeys) {
       const liveKeys = new Set(liveRoster.map((entry) => entry.key));
@@ -630,7 +674,7 @@ class CoopSession {
   }
 
   sendInput(message: CoopInputMessage): void {
-    if (!this.inputChannel || this._role !== "guest") return;
+    if (!this.inputChannel || !this.inputChannelReady || this._role !== "guest") return;
     const safeMessage: CoopInputMessage = {
       slot: this._localSlot,
       seq: message.seq,
@@ -719,11 +763,15 @@ class CoopSession {
       supabase?.removeChannel(this.channel);
       this.channel = null;
     }
-    if (this.inputChannel) {
-      void this.inputChannel.unsubscribe();
-      supabase?.removeChannel(this.inputChannel);
-      this.inputChannel = null;
+    for (const inputChannel of this.inputChannels) {
+      void inputChannel.unsubscribe();
+      supabase?.removeChannel(inputChannel);
     }
+    this.inputChannels = [];
+    this.inputChannel = null;
+    this.inputChannelReady = false;
+    this.inputChannelSlot = HOST_SLOT;
+    this.ensureGuestInputChannel = null;
     this._role = null;
     this._code = "";
     this._peerPresent = false;

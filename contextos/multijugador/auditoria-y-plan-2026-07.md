@@ -97,6 +97,10 @@ no cubren donde viven los problemas restantes (ver §5).
 
 ## 4. Plan de acción por fases
 
+> Estado de ejecución local: Fase 0 implementada y validada automáticamente; línea base manual
+> pendiente. Fase 1 implementada en protocolo v13 y validada automáticamente; QA real de dos
+> clientes pendiente antes de dar por cumplidos sus criterios de éxito.
+
 Dificultad: 🟢 simple · 🟡 delicada · 🔴 asignar a agente fuerte (Codex).
 Regla transversal: **cada fase se valida contra las métricas de la Fase 0** (por eso va primera).
 Todo cambio de mensajes exige subir `COOP_PROTOCOL_VERSION` (rompe PWAs cacheadas: agrupar rupturas).
@@ -118,7 +122,7 @@ Todo cambio de mensajes exige subir `COOP_PROTOCOL_VERSION` (rompe PWAs cacheada
 - **Pruebas**: unit tests en `CoopDiagnostics.test.ts` + una sesión de 2 clientes.
 - **No tocar**: predicción, transporte, escenas más allá de los hooks.
 
-#### Fase 1 — Input del guest de vuelta a WebSocket (R1) 🟡
+#### Fase 1 — Input del guest de vuelta a WebSocket (R1) 🟡 — código implementado en v13
 - **Objetivo**: eliminar el fallback REST por mensaje.
 - **Archivos**: `CoopSession.ts` (`connect`, `sendInput`), `coopMessages.ts` (bump), tests.
 - **Cambios** (preferencia): **(1)** topic de input por guest (`coop-room-<CODE>-input-<slot>`):

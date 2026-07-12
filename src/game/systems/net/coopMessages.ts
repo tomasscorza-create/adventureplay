@@ -28,8 +28,11 @@ export const COOP_INPUT_KEEPALIVE_MS = 100;
 //     las compras del guest viajan como delta `charges` hacia el host.
 // v8: canal de input separado y snapshots con delta en arrays (secciones opcionales).
 // v9: reserva temporal de identidad/slot y recuperacion por snapshot completo.
+// v10: envelope autenticado, validacion estricta y guard de seguridad.
+// v11: snapshots con reloj del host para interpolacion temporal.
 // v12: ACK de input por slot para prediccion y reconciliacion del guest.
-export const COOP_PROTOCOL_VERSION = 12;
+// v13: cada guest publica input por WebSocket en un topic exclusivo por slot.
+export const COOP_PROTOCOL_VERSION = 13;
 
 // Tiempo durante el cual una ausencia de presence en partida se considera una
 // desconexion recuperable. Al vencer, la salida se vuelve definitiva.
@@ -40,6 +43,10 @@ export type CoopRole = "host" | "guest";
 // Cantidad maxima de jugadores por sala (host + guests). El modelo de slots
 // admite crecer; este tope acota el gameplay y el lobby.
 export const COOP_MAX_PLAYERS = 4;
+
+export function getCoopInputTopic(code: string, slot: number): string {
+  return `coop-room-${normalizeRoomCode(code)}-input-${slot}`;
+}
 
 // Slot fijo del anfitrion. Los guests ocupan slots 1..N segun `assignSlots`.
 export const HOST_SLOT = 0;

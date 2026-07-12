@@ -23,7 +23,7 @@ No hay sockets acoplados dentro de escenas ni entidades.
 
 ## Transporte: Supabase Realtime
 
-- Dos canales por sala: `supabase.channel("coop-room-<CÓDIGO>")` (para broadcast general y presence) y `supabase.channel("coop-room-<CÓDIGO>-input")` (exclusivo para que los guests envien input al host, evitando broadcast cruzado entre guests).
+- Un canal general por sala, `supabase.channel("coop-room-<CÓDIGO>")`, para broadcast y presence; y un topic WebSocket de input por slot guest, `coop-room-<CÓDIGO>-input-<SLOT>`. Cada guest se une solo al suyo y el host a los slots 1–3, sin fan-out entre guests ni fallback REST.
 - Config: `broadcast: { self: false, ack: false }` + `presence: { key: clientId }`. La key es un
   **clientId único por dispositivo** (no el rol): admite más de un guest y evita colisiones. El rol
   viaja dentro del payload de presence junto con `characterId`, `protocol` y las **cargas reales
@@ -68,7 +68,7 @@ instancie y valide compatibilidad.
 
 | Constante / Tipo | Valor / Forma |
 |---|---|
-| `COOP_PROTOCOL_VERSION` | `12`. Agrega `inputSeqBySlot` para confirmar inputs y reconciliar; conserva interpolación v11, seguridad v10 y reconexión v9. |
+| `COOP_PROTOCOL_VERSION` | `13`. Separa el input en topics WebSocket por slot; conserva ACK v12, interpolación v11, seguridad v10 y reconexión v9. |
 | `COOP_RECONNECT_WINDOW_MS` | `30000`. Ventana para recuperar el mismo slot antes de convertir la ausencia en salida definitiva. |
 | `CoopChargesMessage` | `{ slot, healingDelta, powerDelta }` — compra durante la partida; el host suma el delta a los contadores vivos de ese slot. |
 | `COOP_MAX_PLAYERS` | `4` (tope de jugadores por sala). |
@@ -151,16 +151,16 @@ Detalle de la aplicación por escena en `integracion-en-escenas.md`.
 - Presence conserva una identidad estable mientras vive `CoopSession`; una resuscripción reutiliza esa identidad.
 - Al desaparecer un participante durante la partida, su slot queda reservado 30 segundos. Ningún late join puede ocuparlo.
 - El host neutraliza inmediatamente el último input remoto para evitar movimiento atascado y las escenas ocultan/congelan la entidad sin destruir su vida, cargas ni posición.
-- Si vuelve con protocolo v12 dentro de la ventana, se reactiva la misma entidad, se limpia el historial predictivo y el host fuerza el siguiente snapshot como keyframe completo.
+- Si vuelve con protocolo v13 dentro de la ventana, se reactiva la misma entidad, se limpia el historial predictivo y el host fuerza el siguiente snapshot como keyframe completo.
 - Si la partida terminó durante la ausencia, el host repite `end("won" | "lost")` al detectar el regreso.
 - Si vence la ventana, se emite la salida definitiva, se elimina la reserva y el host rechaza inputs posteriores de ese slot.
 - No hay migración de host. Un refresh completo de página tampoco recupera la escena: esta fase cubre cortes transitorios mientras la sesión y la escena siguen vivas.
 
-## Problemas Conocidos Actuales (Auditoría v12)
+## Problemas Conocidos Actuales (Auditoría v12, implementación v13)
 
 ⚠️ **Importante:** El modelo descrito arriba tiene fallas en la implementación actual que deben consultarse en [auditoria-y-plan-2026-07.md](file:///c:/Users/usuario/Desktop/adventureplay/contextos/multijugador/auditoria-y-plan-2026-07.md). Los fallos principales incluyen:
 
-1. **Bug REST (R1):** El input del guest viaja por fallback REST HTTP silenciosamente porque no se suscribe al canal, causando posibles pérdidas y desorden.
+1. **Bug REST (R1):** Corregido en código con topics WebSocket por slot en v13; pendiente confirmar en QA manual que no aparezcan warnings de fallback ni `old-sequence` en juego normal.
 2. **Divergencia de Predicción (R2):** Hay simulación dual sin reconciliación. El guest ignora la posición autoritativa en modo seguro, por lo que las caídas a pozos y otros daños en el host causan bajadas de vida inexplicables en la pantalla del guest.
 3. **Degradación Brusca (R3 y R4):** Cerca de cajas/plataformas, el guest salta al último snapshot crudo (teleports y tirones) en vez de interpolar, y atraviesa cuerpos congelados.
 4. **Fuga entre sesiones (R5):** `CoopSecurityGuard` no se resetea al salir de una sala, lo que bloquea a los guests en la segunda sala creada en la misma pestaña.
